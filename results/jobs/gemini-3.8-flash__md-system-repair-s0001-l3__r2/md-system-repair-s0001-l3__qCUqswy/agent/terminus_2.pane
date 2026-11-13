@@ -1,0 +1,3616 @@
+[?2004hroot@359b42c9c43e:/task# ls -la /task /task/input
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 12 03:50 .
+drwxr-xr-x 1 root root 4096 Nov 12 19:05 ..
+dr-xr-xr-x 1 root root 4096 Nov 11 20:06 input
+drwxr-xr-x 2 root root 4096 Nov 12 03:50 output
+drwxr-xr-x 1 root root 4096 Nov 11 20:06 software
+
+/task/input:
+total 52
+dr-xr-xr-x 1 root root  4096 Nov 11 20:06 .
+drwxr-xr-x 1 root root  4096 Nov 12 03:50 ..
+-r--r--r-- 1 root root  3279 Nov 11 20:06 simulation_sop.md
+-r--r--r-- 1 root root 39441 Nov 11 20:06 structure.pdb
+[?2004hroot@359b42c9c43e:/task# cat /task/input/simulation_sop.md
+[?2004l# SOP MD-07 - preparing crystallographic protein models for explicit-solvent MD (Amber)
+
+Revision 4. Applies to every single-chain protein job routed to the production queue. The SOP is
+general; not every clause applies to every entry.
+
+## 1. What is simulated
+
+1.1 The polypeptide is simulated exactly as far as it was resolved in the experimental model.
+    Residues without coordinates are not modelled (no loop building, no template grafting).
+1.2 Ends of the polypeptide that are true ends of the expressed construct (per the sequence
+    record of the entry) are simulated in their charged forms.
+1.3 Ends that exist only because neighbouring residues are unresolved are blocked with neutral
+    groups: an acetyl group (ACE) on an N-terminal end, an N-methylamide group (NME) on a
+    C-terminal end.
+1.4 Every resolved residue is simulated with the complete side chain of the amino acid given by
+    the sequence record; atoms without coordinates are rebuilt.
+1.5 Where more than one conformer was modelled, the conformer with the highest occupancy is
+    used. Apart from a rigid-body placement in the cell, resolved atoms start from their deposited
+    coordinates.
+1.6 Residues that were chemically modified only to solve the structure or as an expression
+    artefact (selenomethionine and the like) are simulated as their parent standard amino acid.
+1.7 Covalent links between residues that exist in the crystal (disulfide bridges) exist in the
+    topology.
+1.8 Nothing else from the crystal is simulated: ordered water, buffer and precipitant molecules,
+    cryoprotectants and crystallographic ions are discarded. (Cofactors and ligands need a
+    separate sign-off and do not occur in jobs routed through this SOP.)
+1.9 Protonation corresponds to pH 7 with standard pKa values: Asp and Glu deprotonated, Lys and
+    Arg protonated, His neutral (either tautomer), Cys in a disulfide without thiol hydrogen.
+
+## 2. Force field, solvent, ions
+
+2.1 Protein: Amber ff14SB. Water: TIP3P. Ions: Na+ / Cl- with parameters matched to TIP3P.
+2.2 Periodic cell: rectangular (all angles 90 degrees). Solvent padding: 8.0 Å. On every cell axis
+    the edge is at least the extent of the solute along that axis (all solute atoms, hydrogens
+    included) plus twice the padding. More than 5 Å of excess padding on a side is not accepted
+    (queue cost).
+2.3 The system is neutralised with Na+ or Cl- (whichever is needed, never both for this
+    purpose). In addition 0.15 M NaCl is added; the number of added NaCl pairs is
+    N = 0.15 x N_water / 55.5, rounded, where N_water is the number of water molecules in
+    the final system.
+
+## 3. Equilibration (short pre-production)
+
+3.1 Energy minimisation until the worst contacts are removed (a few hundred steps).
+3.2 Thermalisation at constant volume: 300 K, at least 0.5 ps.
+3.3 Constant pressure: 300 K, 1 bar, at least 3 ps and until the density of the cell has levelled off.
+3.4 Bonds to hydrogen constrained, 2 fs time step, particle-mesh Ewald, direct-space cut-off 8-9 Å.
+
+## 4. Hand-over
+
+The system as built (before any minimisation) and the last frame of step 3.3 (coordinates,
+velocities, cell) are handed over together with a short machine-readable report. File names and
+formats are fixed by the job ticket.
+[?2004hroot@359b42c9c43e:/task# head -n 50 /task/input/structure.pdb
+[?2004lHEADER    UNKNOWN FUNCTION                                    XXXX
+TITLE     REFINED MODEL, CRYSTAL FORM I (IN-HOUSE DATA SET)
+REMARK   2 RESOLUTION.    1.50 ANGSTROMS.
+REMARK   3 PROGRAM     : REFMAC
+REMARK 465
+REMARK 465 MISSING RESIDUES
+REMARK 465 THE FOLLOWING RESIDUES WERE NOT LOCATED IN THE
+REMARK 465 EXPERIMENT. (M=MODEL NUMBER; RES=RESIDUE NAME; C=CHAIN
+REMARK 465 IDENTIFIER; SSSEQ=SEQUENCE NUMBER; I=INSERTION CODE.)
+REMARK 465
+REMARK 465   M RES C SSSEQI
+REMARK 465     ARG P    37
+REMARK 465     TYR P    38
+REMARK 465     PHE P    39
+REMARK 465     TYR P    40
+REMARK 470
+REMARK 470 MISSING ATOM
+REMARK 470 THE FOLLOWING RESIDUES HAVE MISSING ATOMS (M=MODEL NUMBER;
+REMARK 470 RES=RESIDUE NAME; C=CHAIN IDENTIFIER; SSEQ=SEQUENCE NUMBER;
+REMARK 470 I=INSERTION CODE):
+REMARK 470   M RES CSSEQI  ATOMS
+REMARK 470     TYR P  52    CG   CD1  CD2  CE1  CE2  CZ   OH
+REMARK 470     ASN P  60    CG   OD1  ND2
+REMARK 470     ASN P  61    CG   OD1  ND2
+SEQRES   1 P   58  ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR THR GLY PRO
+SEQRES   2 P   58  CYS LYS ALA ARG ILE ILE ARG TYR PHE TYR ASN ALA LYS
+SEQRES   3 P   58  ALA GLY LEU CYS GLN THR PHE VAL TYR GLY GLY CYS ARG
+SEQRES   4 P   58  ALA LYS ARG ASN ASN PHE LYS SER ALA GLU ASP CYS MSE
+SEQRES   5 P   58  ARG THR CYS GLY GLY ALA
+MODRES XXXX MSE P   67B MET  SELENOMETHIONINE
+HETNAM     CL CHLORIDE ION
+HETNAM     EDO 1,2-ETHANEDIOL
+HETNAM     GOL GLYCEROL
+HETNAM     MSE SELENOMETHIONINE
+HETNAM     NA SODIUM ION
+HETNAM     SO4 SULFATE ION
+CRYST1   43.100   22.900   48.600  90.00  90.00  90.00 P 21 21 21    4
+ATOM      1  N   ARG P  18      26.465  27.452  -2.490  1.00 25.18           N
+ATOM      2  CA  ARG P  18      25.497  26.862  -1.573  1.00 17.63           C
+ATOM      3  C   ARG P  18      26.193  26.179  -0.437  1.00 17.26           C
+ATOM      4  O   ARG P  18      27.270  25.549  -0.624  1.00 21.07           O
+ATOM      5  CB  ARG P  18      24.583  25.804  -2.239  1.00 23.27           C
+ATOM      6  CG  ARG P  18      25.091  24.375  -2.409  1.00 13.42           C
+ATOM      7  CD  ARG P  18      24.019  23.428  -2.996  1.00 17.32           C
+ATOM      8  NE  ARG P  18      23.591  24.028  -4.287  1.00 17.90           N
+ATOM      9  CZ  ARG P  18      24.299  23.972  -5.389  1.00 19.71           C
+ATOM     10  NH1 ARG P  18      25.432  23.261  -5.440  1.00 24.10           N
+ATOM     11  NH2 ARG P  18      23.721  24.373  -6.467  1.00 14.01           N
+ATOM     12  N   PRO P  19      25.667  26.396   0.708  1.00 10.92           N
+ATOM     13  CA  PRO P  19      26.222  25.760   1.891  1.00  9.21           C
+[?2004hroot@359b42c9c43e:/task# grep -E '^(SEQRES|MODRES|SSBOND|REMARK 465|CONECT|LINK)' /task/input/structure.pdb | head -n 40
+[?2004lREMARK 465
+REMARK 465 MISSING RESIDUES
+REMARK 465 THE FOLLOWING RESIDUES WERE NOT LOCATED IN THE
+REMARK 465 EXPERIMENT. (M=MODEL NUMBER; RES=RESIDUE NAME; C=CHAIN
+REMARK 465 IDENTIFIER; SSSEQ=SEQUENCE NUMBER; I=INSERTION CODE.)
+REMARK 465
+REMARK 465   M RES C SSSEQI
+REMARK 465     ARG P    37
+REMARK 465     TYR P    38
+REMARK 465     PHE P    39
+REMARK 465     TYR P    40
+SEQRES   1 P   58  ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR THR GLY PRO
+SEQRES   2 P   58  CYS LYS ALA ARG ILE ILE ARG TYR PHE TYR ASN ALA LYS
+SEQRES   3 P   58  ALA GLY LEU CYS GLN THR PHE VAL TYR GLY GLY CYS ARG
+SEQRES   4 P   58  ALA LYS ARG ASN ASN PHE LYS SER ALA GLU ASP CYS MSE
+SEQRES   5 P   58  ARG THR CYS GLY GLY ALA
+MODRES XXXX MSE P   67B MET  SELENOMETHIONINE
+[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> for line in lines:
+[?2004l[?2004h>     if not line.startswith(("ATOM", "HETATM")):
+[?2004l[?2004h>         print(line.rstrip())
+[?2004l[?2004h> '
+[?2004lHEADER    UNKNOWN FUNCTION                                    XXXX
+TITLE     REFINED MODEL, CRYSTAL FORM I (IN-HOUSE DATA SET)
+REMARK   2 RESOLUTION.    1.50 ANGSTROMS.
+REMARK   3 PROGRAM     : REFMAC
+REMARK 465
+REMARK 465 MISSING RESIDUES
+REMARK 465 THE FOLLOWING RESIDUES WERE NOT LOCATED IN THE
+REMARK 465 EXPERIMENT. (M=MODEL NUMBER; RES=RESIDUE NAME; C=CHAIN
+REMARK 465 IDENTIFIER; SSSEQ=SEQUENCE NUMBER; I=INSERTION CODE.)
+REMARK 465
+REMARK 465   M RES C SSSEQI
+REMARK 465     ARG P    37
+REMARK 465     TYR P    38
+REMARK 465     PHE P    39
+REMARK 465     TYR P    40
+REMARK 470
+REMARK 470 MISSING ATOM
+REMARK 470 THE FOLLOWING RESIDUES HAVE MISSING ATOMS (M=MODEL NUMBER;
+REMARK 470 RES=RESIDUE NAME; C=CHAIN IDENTIFIER; SSEQ=SEQUENCE NUMBER;
+REMARK 470 I=INSERTION CODE):
+REMARK 470   M RES CSSEQI  ATOMS
+REMARK 470     TYR P  52    CG   CD1  CD2  CE1  CE2  CZ   OH
+REMARK 470     ASN P  60    CG   OD1  ND2
+REMARK 470     ASN P  61    CG   OD1  ND2
+SEQRES   1 P   58  ARG PRO ASP PHE CYS LEU GLU PRO PRO TYR THR GLY PRO
+SEQRES   2 P   58  CYS LYS ALA ARG ILE ILE ARG TYR PHE TYR ASN ALA LYS
+SEQRES   3 P   58  ALA GLY LEU CYS GLN THR PHE VAL TYR GLY GLY CYS ARG
+SEQRES   4 P   58  ALA LYS ARG ASN ASN PHE LYS SER ALA GLU ASP CYS MSE
+SEQRES   5 P   58  ARG THR CYS GLY GLY ALA
+MODRES XXXX MSE P   67B MET  SELENOMETHIONINE
+HETNAM     CL CHLORIDE ION
+HETNAM     EDO 1,2-ETHANEDIOL
+HETNAM     GOL GLYCEROL
+HETNAM     MSE SELENOMETHIONINE
+HETNAM     NA SODIUM ION
+HETNAM     SO4 SULFATE ION
+CRYST1   43.100   22.900   48.600  90.00  90.00  90.00 P 21 21 21    4
+TER     410      ALA P  73
+END
+[?2004hroot@359b42c9c43e:/task# 
+[?2004l[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> seqres = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith("SEQRES"):
+[?2004l[?2004h>         seqres.extend(l[19:].split())
+[?2004l[?2004h> print(f"SEQRES ({len(seqres)}):", seqres)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Get all residues in ATOM records
+[?2004l[?2004h> res_seen = []
+[?2004l[?2004h> alt_locs = set()
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith("ATOM"):
+[?2004l[?2004h>         resname = l[17:20].strip()
+[?2004l[?2004h>         chain = l[21]
+[?2004l[?2004h>         resseq = l[22:26].strip()
+[?2004l[?2004h>         icode = l[26].strip()
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         if alt != " ":
+[?2004l[?2004h>             alt_locs.add(alt)
+[?2004l[?2004h>         key = (resname, chain, resseq, icode)
+[?2004l[?2004h>         if not res_seen or res_seen[-1] != key:
+[?2004l[?2004h>             res_seen.append(key)
+[?2004l[?2004h> print("Residues in ATOM:")
+[?2004l[?2004h> for r in res_seen:
+[?2004l[?2004h>     print(r)
+[?2004l[?2004h> print("Alt locs:", alt_locs)
+[?2004l[?2004h> '
+[?2004lSEQRES (58): ['ARG', 'PRO', 'ASP', 'PHE', 'CYS', 'LEU', 'GLU', 'PRO', 'PRO', 'TYR', 'THR', 'GLY', 'PRO', 'CYS', 'LYS', 'ALA', 'ARG', 'ILE', 'ILE', 'ARG', 'TYR', 'PHE', 'TYR', 'ASN', 'ALA', 'LYS', 'ALA', 'GLY', 'LEU', 'CYS', 'GLN', 'THR', 'PHE', 'VAL', 'TYR', 'GLY', 'GLY', 'CYS', 'ARG', 'ALA', 'LYS', 'ARG', 'ASN', 'ASN', 'PHE', 'LYS', 'SER', 'ALA', 'GLU', 'ASP', 'CYS', 'MSE', 'ARG', 'THR', 'CYS', 'GLY', 'GLY', 'ALA']
+Residues in ATOM:
+('ARG', 'P', '18', '')
+('PRO', 'P', '19', '')
+('ASP', 'P', '20', '')
+('PHE', 'P', '21', '')
+('CYS', 'P', '22', '')
+('LEU', 'P', '23', '')
+('GLU', 'P', '24', '')
+('PRO', 'P', '25', '')
+('PRO', 'P', '26', '')
+('TYR', 'P', '27', '')
+('THR', 'P', '28', '')
+('GLY', 'P', '29', '')
+('PRO', 'P', '30', '')
+('CYS', 'P', '31', '')
+('LYS', 'P', '32', '')
+('ALA', 'P', '33', '')
+('ARG', 'P', '34', '')
+('ILE', 'P', '35', '')
+('ILE', 'P', '36', '')
+('ASN', 'P', '41', '')
+('ALA', 'P', '42', '')
+('LYS', 'P', '43', '')
+('ALA', 'P', '44', '')
+('GLY', 'P', '45', '')
+('LEU', 'P', '46', '')
+('CYS', 'P', '47', '')
+('GLN', 'P', '48', '')
+('THR', 'P', '49', '')
+('PHE', 'P', '50', '')
+('VAL', 'P', '51', '')
+('TYR', 'P', '52', '')
+('GLY', 'P', '53', '')
+('GLY', 'P', '54', '')
+('CYS', 'P', '55', '')
+('ARG', 'P', '56', '')
+('ALA', 'P', '57', '')
+('LYS', 'P', '58', '')
+('ARG', 'P', '59', '')
+('ASN', 'P', '60', '')
+('ASN', 'P', '61', '')
+('PHE', 'P', '62', '')
+('LYS', 'P', '63', '')
+('SER', 'P', '64', '')
+('ALA', 'P', '65', '')
+('GLU', 'P', '66', '')
+('ASP', 'P', '67', '')
+('CYS', 'P', '67', 'A')
+('ARG', 'P', '68', '')
+('THR', 'P', '69', '')
+('CYS', 'P', '70', '')
+('GLY', 'P', '71', '')
+('GLY', 'P', '72', '')
+('ALA', 'P', '73', '')
+Alt locs: {'B', 'A'}
+[?2004hroot@359b42c9c43e:/task# grep -E '67B|HETATM' /task/input/structure.pdb | head -n 30
+[?2004lMODRES XXXX MSE P   67B MET  SELENOMETHIONINE
+HETATM  364  N   MSE P  67B     15.384  28.062  -1.870  1.00  4.57           N
+HETATM  365  CA  MSE P  67B     16.192  28.302  -3.048  1.00  8.29           C
+HETATM  366  C   MSE P  67B     17.171  29.453  -2.841  1.00 12.61           C
+HETATM  367  O   MSE P  67B     18.246  29.474  -3.490  1.00 11.74           O
+HETATM  368  CB  MSE P  67B     15.267  28.571  -4.266  1.00  9.41           C
+HETATM  369  CG  MSE P  67B     14.634  27.261  -4.708  1.00  9.44           C
+HETATM  370 SE   MSE P  67B     15.759  25.962  -5.253  1.00 11.63          SE
+HETATM  371  CE  MSE P  67B     16.307  26.625  -6.805  1.00  9.61           C
+HETATM  411  C1  GOL P 201       4.335  30.080   7.837  1.00 41.63           C
+HETATM  412  O1  GOL P 201       3.723  29.527   6.674  1.00 41.63           O
+HETATM  413  C2  GOL P 201       4.345  31.592   7.731  1.00 41.63           C
+HETATM  414  O2  GOL P 201       5.049  31.958   6.555  1.00 41.63           O
+HETATM  415  C3  GOL P 201       5.017  32.209   8.953  1.00 41.63           C
+HETATM  416  O3  GOL P 201       5.036  33.632   8.839  1.00 41.63           O
+HETATM  417  S   SO4 P 202       5.231  26.538  11.627  1.00 30.33           S
+HETATM  418  O1  SO4 P 202       6.613  26.012  11.660  1.00 30.33           O
+HETATM  419  O2  SO4 P 202       4.276  25.410  11.569  1.00 30.33           O
+HETATM  420  O3  SO4 P 202       4.978  27.335  12.847  1.00 30.33           O
+HETATM  421  O4  SO4 P 202       5.057  27.394  10.434  1.00 30.33           O
+HETATM  422  C1  EDO P 203      11.863  25.567  14.998  1.00 33.81           C
+HETATM  423  O1  EDO P 203      12.969  24.828  15.482  1.00 33.81           O
+HETATM  424  C2  EDO P 203      10.763  24.769  14.350  1.00 33.81           C
+HETATM  425  O2  EDO P 203       9.657  25.507  13.867  1.00 33.81           O
+HETATM  426 CL    CL P 204      20.608  29.238   6.548  1.00 34.59          CL
+HETATM  427 NA    NA P 205      24.222  21.976  -8.624  1.00 39.17          NA
+HETATM  428  O   HOH P 206      14.483  32.405  -3.949  1.00 16.73           O
+HETATM  429  O   HOH P 207       5.350  14.061  18.456  1.00 25.35           O
+HETATM  430  O   HOH P 208      18.785  30.833  -6.010  1.00 30.52           O
+HETATM  431  O   HOH P 209      25.258  31.756  -3.598  1.00 34.15           O
+[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> seqres = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith("SEQRES"):
+[?2004l[?2004h>         seqres.extend(l[19:].split())
+[?2004l[?2004h> 
+[?2004l[?2004h> # Get all residues in order
+[?2004l[?2004h> seen = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith(("ATOM", "HETATM")):
+[?2004l[?2004h>         rname = l[17:20].strip()
+[?2004l[?2004h>         chain = l[21]
+[?2004l[?2004h>         rseq = l[22:26].strip()
+[?2004l[?2004h>         icode = l[26].strip()
+[?2004l[?2004h>         if rname in ["GOL", "SO4", "EDO", "CL", "NA", "HOH"]:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         key = (chain, rseq, icode)
+[?2004l[?2004h>         if key not in seen:
+[?2004l[?2004h>             seen[key] = rname
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Total SEQRES:", len(seqres))
+[?2004l[?2004h> print("Total resolved in structure:", len(seen))
+[?2004l[?2004h> for k, v in seen.items():
+[?2004l[?2004h>     print(k, v)
+[?2004l[?2004h> '
+[?2004lTotal SEQRES: 58
+Total resolved in structure: 54
+('P', '18', '') ARG
+('P', '19', '') PRO
+('P', '20', '') ASP
+('P', '21', '') PHE
+('P', '22', '') CYS
+('P', '23', '') LEU
+('P', '24', '') GLU
+('P', '25', '') PRO
+('P', '26', '') PRO
+('P', '27', '') TYR
+('P', '28', '') THR
+('P', '29', '') GLY
+('P', '30', '') PRO
+('P', '31', '') CYS
+('P', '32', '') LYS
+('P', '33', '') ALA
+('P', '34', '') ARG
+('P', '35', '') ILE
+('P', '36', '') ILE
+('P', '41', '') ASN
+('P', '42', '') ALA
+('P', '43', '') LYS
+('P', '44', '') ALA
+('P', '45', '') GLY
+('P', '46', '') LEU
+('P', '47', '') CYS
+('P', '48', '') GLN
+('P', '49', '') THR
+('P', '50', '') PHE
+('P', '51', '') VAL
+('P', '52', '') TYR
+('P', '53', '') GLY
+('P', '54', '') GLY
+('P', '55', '') CYS
+('P', '56', '') ARG
+('P', '57', '') ALA
+('P', '58', '') LYS
+('P', '59', '') ARG
+('P', '60', '') ASN
+('P', '61', '') ASN
+('P', '62', '') PHE
+('P', '63', '') LYS
+('P', '64', '') SER
+('P', '65', '') ALA
+('P', '66', '') GLU
+('P', '67', '') ASP
+('P', '67', 'A') CYS
+('P', '67', 'B') MSE
+('P', '68', '') ARG
+('P', '69', '') THR
+('P', '70', '') CYS
+('P', '71', '') GLY
+('P', '72', '') GLY
+('P', '73', '') ALA
+[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> import math
+[?2004l[?2004h> 
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check altlocs
+[?2004l[?2004h> alt_records = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith(("ATOM", "HETATM")):
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         if alt != " ":
+[?2004l[?2004h>             res = (l[17:20].strip(), l[21], l[22:26].strip(), l[26].strip())
+[?2004l[?2004h>             name = l[12:16].strip()
+[?2004l[?2004h>             occ = float(l[54:60])
+[?2004l[?2004h>             alt_records.setdefault(res, {}).setdefault(name, []).append((alt, occ))
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Altlocs:")
+[?2004l[?2004h> for res, atoms in alt_records.items():
+[?2004l[?2004h>     print(res, atoms)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check CYS SG atoms
+[?2004l[?2004h> sg_atoms = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith("ATOM") and l[12:16].strip() == "SG":
+[?2004l[?2004h>         res = l[17:20].strip()
+[?2004l[?2004h>         resseq = l[22:26].strip() + l[26].strip()
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         x = float(l[30:38])
+[?2004l[?2004h>         y = float(l[38:46])
+[?2004l[?2004h>         z = float(l[46:54])
+[?2004l[?2004h>         sg_atoms.append((resseq, alt, x, y, z))
+[?2004l[?2004h> 
+[?2004l[?2004h> print("\nSG atoms:", sg_atoms)
+[?2004l[?2004h> print("\nSG-SG distances:")
+[?2004l[?2004h> for i in range(len(sg_atoms)):
+[?2004l[?2004h>     for j in range(i+1, len(sg_atoms)):
+[?2004l[?2004h>         r1, alt1, x1, y1, z1 = sg_atoms[i]
+[?2004l[?2004h>         r2, alt2, x2, y2, z2 = sg_atoms[j]
+[?2004l[?2004h>         d = math.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
+[?2004l[?2004h>         if d < 3.0:
+[?2004l[?2004h>             print(f"{r1} ({alt1}) - {r2} ({alt2}): {d:.3f} A")
+[?2004l[?2004h> '
+[?2004lAltlocs:
+('LYS', 'P', '32', '') {'CG': [('A', 0.32), ('B', 0.68)], 'CD': [('A', 0.32), ('B', 0.68)], 'CE': [('A', 0.32), ('B', 0.68)], 'NZ': [('A', 0.32), ('B', 0.68)]}
+('ARG', 'P', '34', '') {'CG': [('A', 0.35), ('B', 0.65)], 'CD': [('A', 0.35), ('B', 0.65)], 'NE': [('A', 0.35), ('B', 0.65)], 'CZ': [('A', 0.35), ('B', 0.65)], 'NH1': [('A', 0.35), ('B', 0.65)], 'NH2': [('A', 0.35), ('B', 0.65)]}
+('LYS', 'P', '43', '') {'CG': [('A', 0.7), ('B', 0.3)], 'CD': [('A', 0.7), ('B', 0.3)], 'CE': [('A', 0.7), ('B', 0.3)], 'NZ': [('A', 0.7), ('B', 0.3)]}
+
+SG atoms: [('22', ' ', 22.145, 24.592, 0.888), ('31', ' ', 9.221, 15.735, 18.49), ('47', ' ', 14.977, 24.433, -2.196), ('55', ' ', 11.154, 16.283, 17.922), ('67A', ' ', 15.047, 24.53, -0.176), ('70', ' ', 20.128, 24.914, 0.713)]
+
+SG-SG distances:
+22 ( ) - 70 ( ): 2.050 A
+31 ( ) - 55 ( ): 2.088 A
+47 ( ) - 67A ( ): 2.024 A
+[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> his_res = [l for l in lines if l.startswith(("ATOM", "HETATM")) and l[17:20] == "HIS"]
+[?2004l[?2004h> print("His residues:", len(his_res))
+[?2004l[?2004h> '
+[?2004lHis residues: 0
+[?2004hroot@359b42c9c43e:/task# which tleap pdb4amber sander parmed python3
+[?2004l/opt/tools/bin/tleap
+/opt/tools/bin/pdb4amber
+/opt/tools/bin/sander
+/opt/tools/bin/parmed
+/opt/tools/bin/python3
+[?2004hroot@359b42c9c43e:/task# grep -E '(TYR P  52|ASN P  60|ASN P  61)' /task/input/structure.pdb
+[?2004lREMARK 470     TYR P  52    CG   CD1  CD2  CE1  CE2  CZ   OH
+REMARK 470     ASN P  60    CG   OD1  ND2
+REMARK 470     ASN P  61    CG   OD1  ND2
+ATOM    245  N   TYR P  52       7.953  17.509   8.095  1.00 10.23           N
+ATOM    246  CA  TYR P  52       8.816  17.659   9.286  1.00  8.02           C
+ATOM    247  C   TYR P  52       7.941  17.294  10.498  1.00 14.45           C
+ATOM    248  O   TYR P  52       6.818  17.832  10.661  1.00  8.91           O
+ATOM    249  CB  TYR P  52       9.260  19.136   9.274  1.00  7.63           C
+ATOM    300  N   ASN P  60      18.870  21.715   6.474  1.00  6.57           N
+ATOM    301  CA  ASN P  60      18.210  21.713   5.169  1.00  6.83           C
+ATOM    302  C   ASN P  60      16.671  21.559   5.372  1.00  8.89           C
+ATOM    303  O   ASN P  60      16.068  20.466   5.197  1.00  9.74           O
+ATOM    304  CB  ASN P  60      18.745  20.506   4.379  1.00  9.70           C
+ATOM    305  N   ASN P  61      16.097  22.643   5.820  1.00  9.34           N
+ATOM    306  CA  ASN P  61      14.676  22.662   6.349  1.00 10.77           C
+ATOM    307  C   ASN P  61      14.157  24.102   6.384  1.00 10.38           C
+ATOM    308  O   ASN P  61      14.715  24.959   7.120  1.00 12.54           O
+ATOM    309  CB  ASN P  61      14.577  21.951   7.736  1.00 14.67           C
+[?2004hroot@359b42c9c43e:/task# python3 -c '
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = [l for l in f if l.startswith(("ATOM", "HETATM"))]
+[?2004l[?2004h> 
+[?2004l[?2004h> # Group atoms by residue
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> res_atoms = defaultdict(list)
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     rname = l[17:20].strip()
+[?2004l[?2004h>     chain = l[21]
+[?2004l[?2004h>     rnum = l[22:26].strip() + l[26].strip()
+[?2004l[?2004h>     aname = l[12:16].strip()
+[?2004l[?2004h>     alt = l[16]
+[?2004l[?2004h>     res_atoms[(rname, chain, rnum)].append((aname, alt))
+[?2004l[?2004h> 
+[?2004l[?2004h> for k, atoms in res_atoms.items():
+[?2004l[?2004h>     if k[0] in ["GOL", "SO4", "EDO", "CL", "NA", "HOH"]:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     print(k, [a[0] for a in atoms])
+[?2004l[?2004h> '
+[?2004l('ARG', 'P', '18') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2']
+('PRO', 'P', '19') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD']
+('ASP', 'P', '20') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'OD1', 'OD2']
+('PHE', 'P', '21') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ']
+('CYS', 'P', '22') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('LEU', 'P', '23') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2']
+('GLU', 'P', '24') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'OE1', 'OE2']
+('PRO', 'P', '25') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD']
+('PRO', 'P', '26') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD']
+('TYR', 'P', '27') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ', 'OH']
+('THR', 'P', '28') ['N', 'CA', 'C', 'O', 'CB', 'OG1', 'CG2']
+('GLY', 'P', '29') ['N', 'CA', 'C', 'O']
+('PRO', 'P', '30') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD']
+('CYS', 'P', '31') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('LYS', 'P', '32') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CG', 'CD', 'CD', 'CE', 'CE', 'NZ', 'NZ']
+('ALA', 'P', '33') ['N', 'CA', 'C', 'O', 'CB']
+('ARG', 'P', '34') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CG', 'CD', 'CD', 'NE', 'NE', 'CZ', 'CZ', 'NH1', 'NH1', 'NH2', 'NH2']
+('ILE', 'P', '35') ['N', 'CA', 'C', 'O', 'CB', 'CG1', 'CG2', 'CD1']
+('ILE', 'P', '36') ['N', 'CA', 'C', 'O', 'CB', 'CG1', 'CG2', 'CD1']
+('ASN', 'P', '41') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'OD1', 'ND2']
+('ALA', 'P', '42') ['N', 'CA', 'C', 'O', 'CB']
+('LYS', 'P', '43') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CG', 'CD', 'CD', 'CE', 'CE', 'NZ', 'NZ']
+('ALA', 'P', '44') ['N', 'CA', 'C', 'O', 'CB']
+('GLY', 'P', '45') ['N', 'CA', 'C', 'O']
+('LEU', 'P', '46') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2']
+('CYS', 'P', '47') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('GLN', 'P', '48') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'OE1', 'NE2']
+('THR', 'P', '49') ['N', 'CA', 'C', 'O', 'CB', 'OG1', 'CG2']
+('PHE', 'P', '50') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ']
+('VAL', 'P', '51') ['N', 'CA', 'C', 'O', 'CB', 'CG1', 'CG2']
+('TYR', 'P', '52') ['N', 'CA', 'C', 'O', 'CB']
+('GLY', 'P', '53') ['N', 'CA', 'C', 'O']
+('GLY', 'P', '54') ['N', 'CA', 'C', 'O']
+('CYS', 'P', '55') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('ARG', 'P', '56') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2']
+('ALA', 'P', '57') ['N', 'CA', 'C', 'O', 'CB']
+('LYS', 'P', '58') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'CE', 'NZ']
+('ARG', 'P', '59') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2']
+('ASN', 'P', '60') ['N', 'CA', 'C', 'O', 'CB']
+('ASN', 'P', '61') ['N', 'CA', 'C', 'O', 'CB']
+('PHE', 'P', '62') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ']
+('LYS', 'P', '63') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'CE', 'NZ']
+('SER', 'P', '64') ['N', 'CA', 'C', 'O', 'CB', 'OG']
+('ALA', 'P', '65') ['N', 'CA', 'C', 'O', 'CB']
+('GLU', 'P', '66') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'OE1', 'OE2']
+('ASP', 'P', '67') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'OD1', 'OD2']
+('CYS', 'P', '67A') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('MSE', 'P', '67B') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'SE', 'CE']
+('ARG', 'P', '68') ['N', 'CA', 'C', 'O', 'CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2']
+('THR', 'P', '69') ['N', 'CA', 'C', 'O', 'CB', 'OG1', 'CG2']
+('CYS', 'P', '70') ['N', 'CA', 'C', 'O', 'CB', 'SG']
+('GLY', 'P', '71') ['N', 'CA', 'C', 'O']
+('GLY', 'P', '72') ['N', 'CA', 'C', 'O']
+('ALA', 'P', '73') ['N', 'CA', 'C', 'O', 'CB', 'OXT']
+[?2004hroot@359b42c9c43e:/task# mkdir -p /task/test && cd /task/test
+[?2004l[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > test_sidechain.py
+[?2004l[?2004h> # Test creating a test pdb with missing sidechain atoms for TYR and ASN and capped ends
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# cd /task/test
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 -c '
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> with open("test.leap", "w") as f:
+[?2004l[?2004h>     f.write("source leaprc.protein.ff14SB\nmol = sequence { NTYR }\nsavepdb mol seq.pdb\nquit\n")
+[?2004l[?2004h> subprocess.run(["tleap", "-f", "test.leap"])
+[?2004l[?2004h> '
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Writing pdb file: seq.pdb
+
+/opt/tools/bin/teLeap: Warning!
+ Converting N-terminal residue name to PDB format: NTYR -> TYR
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 1; Notes = 0.
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_tyr.pdb", "w").write("ATOM      1  N   TYR A   1       7.953  17.509   8.095  1.00 10.23           N\nATOM      2  CA  TYR A   1       8.816  17.659   9.286  1.00  8.02           C\nATOM      3  C   TYR A   1       7.941  17.294  10.498  1.00 14.45           C\nATOM      4  O   TYR A   1       6.818  17.832  10.661  1.00  8.91           O\nATOM      5  CB  TYR A   1       9.260  19.136   9.274  1.00  7.63           C\nTER\nEND\n"); open("test_tyr.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb test_tyr.pdb\ncheck mol\nsavepdb mol tyr_out.pdb\nquit\n"); res = subprocess.run(["tleap", "-f", "test_tyr.leap"], capture_output=True, text=True); print(res.stdout); print(open("tyr_out.pdb").read())'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_tyr.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_tyr.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./test_tyr.pdb
+  Added missing heavy atom: .R<CTYR 1>.A<OXT 22>
+  Added missing heavy atom: .R<CTYR 1>.A<CG 8>
+  Added missing heavy atom: .R<CTYR 1>.A<CD1 9>
+  Added missing heavy atom: .R<CTYR 1>.A<CD2 18>
+  Added missing heavy atom: .R<CTYR 1>.A<CE1 11>
+  Added missing heavy atom: .R<CTYR 1>.A<CE2 16>
+  Added missing heavy atom: .R<CTYR 1>.A<CZ 13>
+  Added missing heavy atom: .R<CTYR 1>.A<OH 14>
+  total atoms in file: 5
+  Leap added 17 missing atoms according to residue templates:
+       8 Heavy
+       9 H / lone pairs
+Checking 'mol'....
+
+/opt/tools/bin/teLeap: Warning!
+The unperturbed charge of the unit (-1.000000) is not zero.
+Checking parameters for unit 'mol'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Warnings: 1
+Unit is OK.
+Writing pdb file: tyr_out.pdb
+
+/opt/tools/bin/teLeap: Warning!
+ Converting C-terminal residue name to PDB format: CTYR -> TYR
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 2; Notes = 0.
+
+ATOM      1  N   TYR     1       7.953  17.509   8.095  1.00  0.00
+ATOM      2  H   TYR     1       6.995  17.220   8.231  1.00  0.00
+ATOM      3  CA  TYR     1       8.816  17.659   9.286  1.00  0.00
+ATOM      4  HA  TYR     1       9.703  17.029   9.356  1.00  0.00
+ATOM      5  CB  TYR     1       9.260  19.136   9.274  1.00  0.00
+ATOM      6  HB2 TYR     1       9.902  19.316   8.411  1.00  0.00
+ATOM      7  HB3 TYR     1       8.382  19.779   9.214  1.00  0.00
+ATOM      8  CG  TYR     1      10.022  19.443  10.541  1.00  0.00
+ATOM      9  CD1 TYR     1      10.530  20.729  10.758  1.00  0.00
+ATOM     10  HD1 TYR     1      10.374  21.510  10.013  1.00  0.00
+ATOM     11  CE1 TYR     1      11.236  21.014  11.933  1.00  0.00
+ATOM     12  HE1 TYR     1      11.631  22.015  12.103  1.00  0.00
+ATOM     13  CZ  TYR     1      11.436  20.011  12.890  1.00  0.00
+ATOM     14  OH  TYR     1      12.123  20.288  14.031  1.00  0.00
+ATOM     15  HH  TYR     1      12.424  21.198  14.076  1.00  0.00
+ATOM     16  CE2 TYR     1      10.929  18.725  12.672  1.00  0.00
+ATOM     17  HE2 TYR     1      11.084  17.944  13.417  1.00  0.00
+ATOM     18  CD2 TYR     1      10.222  18.440  11.498  1.00  0.00
+ATOM     19  HD2 TYR     1       9.827  17.439  11.328  1.00  0.00
+ATOM     20  C   TYR     1       7.941  17.294  10.498  1.00  0.00
+ATOM     21  O   TYR     1       6.818  17.832  10.661  1.00  0.00
+ATOM     22  OXT TYR     1       8.381  16.572  11.390  1.00  0.00
+TER   
+END   
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_cap.pdb", "w").write("ATOM      1  CA  ACE A   0       7.000  17.000   8.000  1.00  0.00           C\nATOM      2  N   ALA A   1       7.953  17.509   8.095  1.00 10.23           N\nATOM      3  CA  ALA A   1       8.816  17.659   9.286  1.00  8.02           C\nATOM      4  C   ALA A   1       7.941  17.294  10.498  1.00 14.45           C\nATOM      5  O   ALA A   1       6.818  17.832  10.661  1.00  8.91           O\nATOM      6  CB  ALA A   1       9.260  19.136   9.274  1.00  7.63           C\nATOM      7  N   NME A   2       8.000  17.000  11.000  1.00  0.00           N\nTER\nEND\n"); open("test_cap.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb test_cap.pdb\ncheck mol\nsavepdb mol cap_out.pdb\nquit\n"); res = subprocess.run(["tleap", "-f", "test_cap.leap"], capture_output=True, text=True); print(res.stdout); print(open("cap_out.pdb").read())'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_cap.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_cap.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./test_cap.pdb
+Created a new atom named: CA within residue: .R<ACE 0>
+  Added missing heavy atom: .R<ACE 0>.A<O 6>
+  Added missing heavy atom: .R<ACE 0>.A<C 5>
+  Added missing heavy atom: .R<ACE 0>.A<CH3 2>
+  Added missing heavy atom: .R<NME 2>.A<C 3>
+  total atoms in file: 7
+  Leap added 16 missing atoms according to residue templates:
+       4 Heavy
+       12 H / lone pairs
+  The file contained 1 atoms not in residue templates
+Checking 'mol'....
+
+/opt/tools/bin/teLeap: Warning!
+There is a bond of 20.428 angstroms between C and N atoms:
+-------  .R<ACE 0>.A<C 5> and .R<ALA 1>.A<N 1>
+FATAL:  Atom .R<ACE 0>.A<CA 7> does not have a type.
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.085 angstroms between nonbonded atoms CA and N
+-------  .R<ACE 0>.A<CA 7> and .R<ALA 1>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.277 angstroms between nonbonded atoms O and H1
+-------  .R<ALA 1>.A<O 10> and .R<NME 2>.A<H1 4>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.485 angstroms between nonbonded atoms O and N
+-------  .R<ALA 1>.A<O 10> and .R<NME 2>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.397 angstroms between nonbonded atoms C and H
+-------  .R<ALA 1>.A<C 9> and .R<NME 2>.A<H 2>
+Checking parameters for unit 'mol'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Errors:  1   Warnings: 5
+Writing pdb file: cap_out.pdb
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 5; Notes = 0.
+
+ATOM      1  H1  ACE     1       1.328   2.173  -0.000  1.00  0.00
+ATOM      2  CH3 ACE     1       2.006   1.318  -0.000  1.00  0.00
+ATOM      3  H2  ACE     1       2.634   1.352   0.890  1.00  0.00
+ATOM      4  H3  ACE     1       2.634   1.352  -0.890  1.00  0.00
+ATOM      5  C   ACE     1       1.229   0.000   0.000  1.00  0.00
+ATOM      6  O   ACE     1       0.000   0.000   0.000  1.00  0.00
+ATOM      7  CA  ACE     1       7.000  17.000   8.000  1.00  0.00
+ATOM      8  N   ALA     2       7.953  17.509   8.095  1.00  0.00
+ATOM      9  H   ALA     2       7.656  18.344   7.611  1.00  0.00
+ATOM     10  CA  ALA     2       8.816  17.659   9.286  1.00  0.00
+ATOM     11  HA  ALA     2       9.703  17.029   9.356  1.00  0.00
+ATOM     12  CB  ALA     2       9.260  19.136   9.274  1.00  0.00
+ATOM     13  HB1 ALA     2       8.382  19.779   9.214  1.00  0.00
+ATOM     14  HB2 ALA     2       9.810  19.358  10.188  1.00  0.00
+ATOM     15  HB3 ALA     2       9.902  19.316   8.411  1.00  0.00
+ATOM     16  C   ALA     2       7.941  17.294  10.498  1.00  0.00
+ATOM     17  O   ALA     2       6.818  17.832  10.661  1.00  0.00
+ATOM     18  N   NME     3       8.000  17.000  11.000  1.00  0.00
+ATOM     19  H   NME     3       8.885  16.573  11.234  1.00  0.00
+ATOM     20  C   NME     3       6.905  16.859  11.938  1.00  0.00
+ATOM     21  H1  NME     3       6.024  17.370  11.549  1.00  0.00
+ATOM     22  H2  NME     3       6.679  15.802  12.078  1.00  0.00
+ATOM     23  H3  NME     3       7.186  17.299  12.895  1.00  0.00
+TER   
+END   
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("cap_names.leap", "w").write("source leaprc.protein.ff14SB\ndesc ACE\ndesc NME\nquit\n"); res = subprocess.run(["tleap", "-f", "cap_names.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source cap_names.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./cap_names.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+UNIT name: ACE
+Head atom: null
+Tail atom: .R<ACE 1>.A<C 5>
+Contents: 
+R<ACE 1>
+UNIT name: NME
+Head atom: .R<NME 1>.A<N 1>
+Tail atom: null
+Contents: 
+R<NME 1>
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("cap_atoms.leap", "w").write("source leaprc.protein.ff14SB\ndesc ACE.1\ndesc NME.1\nquit\n"); res = subprocess.run(["tleap", "-f", "cap_atoms.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source cap_atoms.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./cap_atoms.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+RESIDUE name: ACE
+RESIDUE sequence number: 1
+RESIDUE PDB sequence number: 0
+Type: protein
+Connection atoms:
+ Connect atom 0: A<H1 1>
+ Connect atom 1: A<C 5>
+Improper torsions:
+Contents: 
+A<H1 1>
+A<CH3 2>
+A<H2 3>
+A<H3 4>
+A<C 5>
+A<O 6>
+RESIDUE name: NME
+RESIDUE sequence number: 1
+RESIDUE PDB sequence number: 0
+Type: protein
+Connection atoms:
+ Connect atom 0: A<N 1>
+ Connect atom 1: A<C 3>
+Improper torsions:
+Contents: 
+A<N 1>
+A<H 2>
+A<C 3>
+A<H1 4>
+A<H2 5>
+A<H3 6>
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import pdbfixer; print(dir(pdbfixer.PDBFixer))'
+[?2004l['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__format__', '__ge__', '__getattribute__', '__getstate__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', '__weakref__', '_addAtomsToTopology', '_addMissingResiduesToChain', '_computeResidueCenter', '_createForceField', '_describeVariant', '_downloadCCDDefinition', '_downloadFormalCharges', '_downloadNonstandardDefinitions', '_findNearestDistance', '_getTemplate', '_initializeFromPDB', '_initializeFromPDBx', '_renameNewChains', 'addMembrane', 'addMissingAtoms', 'addMissingHydrogens', 'addSolvent', 'applyMutations', 'downloadTemplate', 'findMissingAtoms', 'findMissingResidues', 'findNonstandardResidues', 'registerTemplate', 'removeChains', 'removeHeterogens', 'replaceNonstandardResidues']
+[?2004hroot@359b42c9c43e:/task/test# 
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_cap2.pdb", "w").write("ATOM      1  C   ACE A   0       7.000  17.000   8.000  1.00  0.00           C\nATOM      2  N   ALA A   1       7.953  17.509   8.095  1.00 10.23           N\nATOM      3  CA  ALA A   1       8.816  17.659   9.286  1.00  8.02           C\nATOM      4  C   ALA A   1       7.941  17.294  10.498  1.00 14.45           C\nATOM      5  O   ALA A   1       6.818  17.832  10.661  1.00  8.91           O\nATOM      6  CB  ALA A   1       9.260  19.136   9.274  1.00  7.63           C\nATOM      7  N   NME A   2       8.000  17.000  11.000  1.00  0.00           N\nTER\nEND\n"); open("test_cap2.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb test_cap2.pdb\ncheck mol\nsavepdb mol cap2_out.pdb\nquit\n"); res = subprocess.run(["tleap", "-f", "test_cap2.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_cap2.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_cap2.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./test_cap2.pdb
+  Added missing heavy atom: .R<ACE 0>.A<CH3 2>
+  Added missing heavy atom: .R<ACE 0>.A<O 6>
+  Added missing heavy atom: .R<NME 2>.A<C 3>
+  total atoms in file: 7
+  Leap added 15 missing atoms according to residue templates:
+       3 Heavy
+       12 H / lone pairs
+Checking 'mol'....
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.097 angstroms between nonbonded atoms H2 and HA
+-------  .R<ACE 0>.A<H2 3> and .R<ALA 1>.A<HA 4>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.250 angstroms between nonbonded atoms H2 and CA
+-------  .R<ACE 0>.A<H2 3> and .R<ALA 1>.A<CA 3>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.473 angstroms between nonbonded atoms CH3 and CA
+-------  .R<ACE 0>.A<CH3 2> and .R<ALA 1>.A<CA 3>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.232 angstroms between nonbonded atoms CH3 and H
+-------  .R<ACE 0>.A<CH3 2> and .R<ALA 1>.A<H 2>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 0.775 angstroms between nonbonded atoms CH3 and N
+-------  .R<ACE 0>.A<CH3 2> and .R<ALA 1>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.339 angstroms between nonbonded atoms H1 and CA
+-------  .R<ACE 0>.A<H1 1> and .R<ALA 1>.A<CA 3>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.023 angstroms between nonbonded atoms H1 and H
+-------  .R<ACE 0>.A<H1 1> and .R<ALA 1>.A<H 2>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.099 angstroms between nonbonded atoms H1 and N
+-------  .R<ACE 0>.A<H1 1> and .R<ALA 1>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.277 angstroms between nonbonded atoms O and H1
+-------  .R<ALA 1>.A<O 10> and .R<NME 2>.A<H1 4>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.485 angstroms between nonbonded atoms O and N
+-------  .R<ALA 1>.A<O 10> and .R<NME 2>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.397 angstroms between nonbonded atoms C and H
+-------  .R<ALA 1>.A<C 9> and .R<NME 2>.A<H 2>
+Checking parameters for unit 'mol'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Warnings: 11
+Unit is OK.
+Writing pdb file: cap2_out.pdb
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 11; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_seq.leap", "w").write("source leaprc.protein.ff14SB\ns1 = sequence { NARG PRO CALA }\nsavepdb s1 s1.pdb\nquit\n"); subprocess.run(["tleap", "-f", "test_seq.leap"])'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_seq.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_seq.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Writing pdb file: s1.pdb
+
+/opt/tools/bin/teLeap: Warning!
+ Converting N-terminal residue name to PDB format: NARG -> ARG
+
+/opt/tools/bin/teLeap: Warning!
+ Converting C-terminal residue name to PDB format: CALA -> ALA
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 2; Notes = 0.
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import inspect, pdbfixer; print(inspect.getsource(pdbfixer.PDBFixer.findMissingResidues))'
+[?2004l    def findMissingResidues(self):
+        """Find residues that are missing from the structure.
+
+        The results are stored into the missingResidues field, which is a dict.  Each key is a tuple consisting of
+        the index of a chain, and the residue index within that chain at which new residues should be inserted.
+        The corresponding value is a list of the names of residues to insert there.
+
+        Examples
+        --------
+
+        >>> fixer = PDBFixer(pdbid='1VII')
+        >>> fixer.findMissingResidues()
+        >>> missing_residues = fixer.missingResidues
+
+        """
+        chains = [c for c in self.topology.chains() if len(list(c.residues())) > 0]
+        chainWithGaps = {}
+
+        # Find the sequence of each chain, with gaps for missing residues.
+
+        for chain in chains:
+            residues = list(chain.residues())
+            ids = [int(r.id) for r in residues]
+            for i, res in enumerate(residues):
+                if res.insertionCode not in ('', ' '):
+                    for j in range(i, len(residues)):
+                        ids[j] += 1
+            minResidue = min(ids)
+            maxResidue = max(ids)
+            chainWithGaps[chain] = [None]*(maxResidue-minResidue+1)
+            for r, id in zip(residues, ids):
+                chainWithGaps[chain][id-minResidue] = r.name
+
+        # Try to find the chain that matches each sequence.
+
+        chainSequence = {}
+        chainOffset = {}
+        for sequence in self.sequences:
+            for chain in chains:
+                if chain.id != sequence.chainId:
+                    continue
+                if chain in chainSequence:
+                    continue
+                for offset in range(len(sequence.residues)-len(chainWithGaps[chain])+1):
+                    if all(a == b or b == None for a,b in zip(sequence.residues[offset:], chainWithGaps[chain])):
+                        chainSequence[chain] = sequence
+                        chainOffset[chain] = offset
+                        break
+                if chain in chainSequence:
+                    break
+
+        # Now build the list of residues to add.
+
+        self.missingResidues = {}
+        for chain in self.topology.chains():
+            if chain in chainSequence:
+                offset = chainOffset[chain]
+                sequence = chainSequence[chain].residues
+                gappedSequence = chainWithGaps[chain]
+                index = 0
+                for i in range(len(sequence)):
+                    if i < offset or i >= len(gappedSequence)+offset or gappedSequence[i-offset] is None:
+                        key = (chain.index, index)
+                        if key not in self.missingResidues:
+                            self.missingResidues[key] = []
+                        residueName = sequence[i]
+                        if residueName in substitutions:
+                            residueName = substitutions[sequence[i]]
+                        self.missingResidues[key].append(residueName)
+                    else:
+                        index += 1
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import inspect, pdbfixer; print(inspect.getsource(pdbfixer.PDBFixer.findMissingAtoms))'
+[?2004l    def findMissingAtoms(self):
+        """Find heavy atoms that are missing from the structure.
+
+        The results are stored into two fields: missingAtoms and missingTerminals.  Each of these is a dict whose keys
+        are Residue objects and whose values are lists of atom names.  missingAtoms contains standard atoms that should
+        be present in any residue of that type.  missingTerminals contains terminal atoms that should be present at the
+        start or end of a chain.
+
+        Notes
+        -----
+        You must have first called findMissingResidues().
+
+        Examples
+        --------
+
+        Find missing heavy atoms in Abl kinase structure.
+
+        >>> fixer = PDBFixer(pdbid='2F4J')
+        >>> fixer.findMissingResidues()
+        >>> fixer.findMissingAtoms()
+        >>> # Retrieve missing atoms.
+        >>> missingAtoms = fixer.missingAtoms
+        >>> # Retrieve missing terminal atoms.
+        >>> missingTerminals = fixer.missingTerminals
+
+        """
+        missingAtoms = {}
+        missingTerminals = {}
+
+        # Determine which atoms have an external bond to another residue.
+
+        hasExternal = defaultdict(bool)
+        for atom1, atom2 in self.topology.bonds():
+            if atom1.residue != atom2.residue:
+                hasExternal[(atom1.residue, atom1.name)] = True
+                hasExternal[(atom2.residue, atom2.name)] = True
+        for chain in self.topology.chains():
+            chainResidues = list(chain.residues())
+            for residue in chain.residues():
+                atomNames = [atom.name for atom in residue.atoms()]
+                if all(name in atomNames for name in ['C', 'O', 'CA']):
+                    # We'll be adding peptide bonds.
+                    if residue != chainResidues[0]:
+                        hasExternal[(residue, 'N')] = True
+                    if residue != chainResidues[-1]:
+                        hasExternal[(residue, 'C')] = True
+
+        # Loop over residues.
+
+        for chain in self.topology.chains():
+            nucleic = any(res.name in dnaResidues or res.name in rnaResidues for res in chain.residues())
+            chainResidues = list(chain.residues())
+            for residue in chain.residues():
+                template = self._getTemplate(residue.name)
+                if template is not None:
+                    # If an atom is marked as terminal only, and if it is bonded to any atom that has an external bond
+                    # to another residue, we need to omit that atom and any other terminal-only atom bonded to it.
+
+                    bondedTo = defaultdict(set)
+                    for atom1, atom2 in template.topology.bonds():
+                        bondedTo[atom1].add(atom2)
+                        bondedTo[atom2].add(atom1)
+                    skip = set()
+                    for atom, terminal in zip(template.topology.atoms(), template.terminal):
+                        if terminal:
+                            for atom2 in bondedTo[atom]:
+                                if hasExternal[(residue, atom2.name)]:
+                                    skip.add(atom)
+                    for atom, terminal in zip(template.topology.atoms(), template.terminal):
+                        if terminal:
+                            for atom2 in bondedTo[atom]:
+                                if atom2 in skip:
+                                    skip.add(atom)
+                    atomNames = set(atom.name for atom in residue.atoms())
+                    templateAtoms = [atom for atom in template.topology.atoms() if atom not in skip]
+                    if nucleic and residue == chainResidues[0] and (chain.index, 0) not in self.missingResidues:
+                        templateAtoms = [atom for atom in templateAtoms if atom.name not in ('P', 'OP1', 'OP2')]
+
+                    # Add atoms from the template that are missing.
+
+                    missing = []
+                    for atom in templateAtoms:
+                        if atom.name not in atomNames and atom.element != app.element.hydrogen:
+                            missing.append(atom)
+                    if len(missing) > 0:
+                        missingAtoms[residue] = missing
+
+                    # Add missing terminal atoms.
+
+                    terminals = []
+                    if residue == chainResidues[-1] and (chain.index, len(chainResidues)) not in self.missingResidues:
+                        templateNames = set(atom.name for atom in template.topology.atoms())
+                        if 'OXT' not in atomNames and all(name in templateNames for name in ['C', 'O', 'CA']):
+                            terminals.append('OXT')
+                        if len(terminals) > 0:
+                            missingTerminals[residue] = terminals
+        self.missingAtoms = missingAtoms
+        self.missingTerminals = missingTerminals
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_solv.leap", "w").write("source leaprc.protein.ff14SB\nsource leaprc.water.tip3p\nmol = sequence { NALA ALA CALA }\nsolvatebox mol TIP3PBOX 8.0\nsaveamberparm mol test_solv.prmtop test_solv.inpcrd\nquit\n"); subprocess.run(["tleap", "-f", "test_solv.leap"])'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_solv.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_solv.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+----- Source: /opt/tools/dat/leap/cmd/leaprc.water.tip3p
+----- Source of /opt/tools/dat/leap/cmd/leaprc.water.tip3p done
+Loading library: /opt/tools/dat/leap/lib/atomic_ions.lib
+Loading library: /opt/tools/dat/leap/lib/solvents.lib
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+This is the additional/replacement parameter set for TIP3P water
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions1lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of monovalent ions for TIP3P water model (12-6 normal usage set)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ionsjc_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Monovalent ion parameters for Ewald and TIP3P water from Joung & Cheatham JPCB (2008)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions234lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of divalent to tetravalent ions for TIP3P water model (12-6 normal usage set)
+  Solute vdw bounding box:              13.047 10.225 7.236
+  Total bounding box for atom centers:  29.047 26.225 23.236
+  Solvent unit box:                     18.774 18.774 18.774
+  Total vdw box size:                   32.221 29.147 26.192 angstroms.
+  Volume: 24597.427 A^3 
+  Total mass 8878.936 amu,  Density 0.599 g/cc
+  Added 480 residues.
+Checking Unit.
+Building topology.
+Building atom parameters.
+Building bond parameters.
+Building angle parameters.
+Building proper torsion parameters.
+Building improper torsion parameters.
+ total 5 improper torsions applied
+Building H-Bond parameters.
+Incorporating Non-Bonded adjustments.
+Not Marking per-residue atom chain types.
+Marking per-residue atom chain types.
+  (Residues lacking connect0/connect1 - 
+   these don't have chain types marked:
+
+	res	total affected
+
+	CALA	1
+	NALA	1
+	WAT	480
+  )
+ (no restraints)
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+[?2004hroot@359b42c9c43e:/task/test# tail -n 2 test_solv.inpcrd
+[?2004l   6.8863220  15.1928690  12.0182810
+  32.2205370  29.1471220  26.1915520  90.0000000  90.0000000  90.0000000
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/inspect_pdb.py
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> print(f'Total lines: {len(lines)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/inspect_pdb.py
+[?2004lTotal lines: 518
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/dump_protein.py
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         if line.startswith(('ATOM', 'HETATM')):
+[?2004l[?2004h>             rname = line[17:20].strip()
+[?2004l[?2004h>             if rname not in ['GOL', 'SO4', 'EDO', 'CL', 'NA', 'HOH']:
+[?2004l[?2004h>                 print(line.rstrip())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/dump_protein.py | head -n 40
+[?2004lATOM      1  N   ARG P  18      26.465  27.452  -2.490  1.00 25.18           N
+ATOM      2  CA  ARG P  18      25.497  26.862  -1.573  1.00 17.63           C
+ATOM      3  C   ARG P  18      26.193  26.179  -0.437  1.00 17.26           C
+ATOM      4  O   ARG P  18      27.270  25.549  -0.624  1.00 21.07           O
+ATOM      5  CB  ARG P  18      24.583  25.804  -2.239  1.00 23.27           C
+ATOM      6  CG  ARG P  18      25.091  24.375  -2.409  1.00 13.42           C
+ATOM      7  CD  ARG P  18      24.019  23.428  -2.996  1.00 17.32           C
+ATOM      8  NE  ARG P  18      23.591  24.028  -4.287  1.00 17.90           N
+ATOM      9  CZ  ARG P  18      24.299  23.972  -5.389  1.00 19.71           C
+ATOM     10  NH1 ARG P  18      25.432  23.261  -5.440  1.00 24.10           N
+ATOM     11  NH2 ARG P  18      23.721  24.373  -6.467  1.00 14.01           N
+ATOM     12  N   PRO P  19      25.667  26.396   0.708  1.00 10.92           N
+ATOM     13  CA  PRO P  19      26.222  25.760   1.891  1.00  9.21           C
+ATOM     14  C   PRO P  19      26.207  24.242   1.830  1.00 12.15           C
+ATOM     15  O   PRO P  19      25.400  23.576   1.139  1.00 14.46           O
+ATOM     16  CB  PRO P  19      25.260  26.207   3.033  1.00 13.09           C
+ATOM     17  CG  PRO P  19      24.512  27.428   2.493  1.00 11.42           C
+ATOM     18  CD  PRO P  19      24.606  27.382   0.978  1.00 11.88           C
+ATOM     19  N   ASP P  20      27.170  23.634   2.462  1.00 18.23           N
+ATOM     20  CA  ASP P  20      27.284  22.163   2.498  1.00 10.58           C
+ATOM     21  C   ASP P  20      26.043  21.506   3.085  1.00 15.62           C
+ATOM     22  O   ASP P  20      25.752  20.350   2.705  1.00 12.96           O
+ATOM     23  CB  ASP P  20      28.425  21.747   3.461  1.00 18.87           C
+ATOM     24  CG  ASP P  20      29.791  21.886   2.787  1.00 34.90           C
+ATOM     25  OD1 ASP P  20      29.875  22.104   1.543  1.00 26.81           O
+ATOM     26  OD2 ASP P  20      30.806  21.501   3.431  1.00 30.82           O
+ATOM     27  N   PHE P  21      25.394  22.184   4.041  1.00 11.71           N
+ATOM     28  CA  PHE P  21      24.172  21.585   4.618  1.00 17.01           C
+ATOM     29  C   PHE P  21      23.009  21.375   3.624  1.00 10.30           C
+ATOM     30  O   PHE P  21      22.082  20.603   3.921  1.00 13.86           O
+ATOM     31  CB  PHE P  21      23.692  22.331   5.862  1.00  7.95           C
+ATOM     32  CG  PHE P  21      23.192  23.779   5.639  1.00 13.77           C
+ATOM     33  CD1 PHE P  21      21.961  24.002   5.060  1.00 16.46           C
+ATOM     34  CD2 PHE P  21      23.951  24.841   6.050  1.00 14.06           C
+ATOM     35  CE1 PHE P  21      21.497  25.281   4.869  1.00 19.88           C
+ATOM     36  CE2 PHE P  21      23.510  26.124   5.854  1.00 23.77           C
+ATOM     37  CZ  PHE P  21      22.277  26.363   5.249  1.00 21.73           C
+ATOM     38  N   CYS P  22      23.095  22.004   2.522  1.00  7.84           N
+ATOM     39  CA  CYS P  22      22.106  21.863   1.467  1.00  9.61           C
+ATOM     40  C   CYS P  22      22.192  20.518   0.830  1.00 10.97           C
+Traceback (most recent call last):
+  File "/task/test/dump_protein.py", line 6, in <module>
+    print(line.rstrip())
+BrokenPipeError: [Errno 32] Broken pipe
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/dump_break.py
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         if line.startswith(('ATOM', 'HETATM')):
+[?2004l[?2004h>             rseq = line[22:26].strip() + line[26].strip()
+[?2004l[?2004h>             if rseq in ['35', '36', '41', '42', '66', '67', '67A', '67B', '68']:
+[?2004l[?2004h>                 print(line.rstrip())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/dump_break.py
+[?2004lATOM    146  N   ILE P  35       4.154  19.110   9.817  1.00 15.43           N
+ATOM    147  CA  ILE P  35       4.595  20.444   9.391  1.00 13.44           C
+ATOM    148  C   ILE P  35       5.249  20.388   8.012  1.00 12.23           C
+ATOM    149  O   ILE P  35       6.193  19.612   7.834  1.00 13.07           O
+ATOM    150  CB  ILE P  35       5.590  20.988  10.452  1.00 12.22           C
+ATOM    151  CG1 ILE P  35       4.792  21.062  11.815  1.00 15.59           C
+ATOM    152  CG2 ILE P  35       5.985  22.451  10.085  1.00 11.08           C
+ATOM    153  CD1 ILE P  35       5.689  21.536  12.955  1.00 21.94           C
+ATOM    154  N   ILE P  36       4.586  20.956   7.035  1.00 10.43           N
+ATOM    155  CA  ILE P  36       5.154  20.879   5.697  1.00  7.64           C
+ATOM    156  C   ILE P  36       6.286  21.912   5.572  1.00  8.62           C
+ATOM    157  O   ILE P  36       6.156  23.146   5.785  1.00 12.56           O
+ATOM    158  CB  ILE P  36       4.095  21.205   4.648  1.00 13.10           C
+ATOM    159  CG1 ILE P  36       2.836  20.317   4.886  1.00 18.92           C
+ATOM    160  CG2 ILE P  36       4.655  20.930   3.250  1.00 14.39           C
+ATOM    161  CD1 ILE P  36       3.122  18.814   4.850  1.00 20.69           C
+ATOM    162  N   ASN P  41      16.913  19.453  -2.726  1.00  9.79           N
+ATOM    163  CA  ASN P  41      17.295  18.160  -3.291  1.00  9.31           C
+ATOM    164  C   ASN P  41      18.406  18.332  -4.341  1.00 11.20           C
+ATOM    165  O   ASN P  41      18.166  18.843  -5.464  1.00 10.96           O
+ATOM    166  CB  ASN P  41      16.052  17.558  -3.946  1.00  9.63           C
+ATOM    167  CG  ASN P  41      16.354  16.227  -4.626  1.00 22.83           C
+ATOM    168  OD1 ASN P  41      17.531  15.754  -4.725  1.00 15.68           O
+ATOM    169  ND2 ASN P  41      15.234  15.549  -4.870  1.00 21.16           N
+ATOM    170  N   ALA P  42      19.655  18.124  -3.871  1.00 11.55           N
+ATOM    171  CA  ALA P  42      20.851  18.420  -4.681  1.00 15.09           C
+ATOM    172  C   ALA P  42      20.920  17.650  -6.010  1.00 11.71           C
+ATOM    173  O   ALA P  42      21.385  18.257  -6.997  1.00 18.95           O
+ATOM    174  CB  ALA P  42      22.112  18.071  -3.866  1.00 13.47           C
+ATOM    341  N   GLU P  66      10.966  29.570  -1.682  1.00  7.01           N
+ATOM    342  CA  GLU P  66      11.751  30.764  -1.998  1.00  6.16           C
+ATOM    343  C   GLU P  66      12.900  30.964  -1.040  1.00 12.66           C
+ATOM    344  O   GLU P  66      14.032  31.282  -1.463  1.00  9.69           O
+ATOM    345  CB  GLU P  66      10.871  32.022  -2.024  1.00  7.14           C
+ATOM    346  CG  GLU P  66       9.868  32.069  -3.200  1.00  5.98           C
+ATOM    347  CD  GLU P  66       8.525  31.417  -2.847  1.00 11.21           C
+ATOM    348  OE1 GLU P  66       7.573  31.562  -3.638  1.00 11.30           O
+ATOM    349  OE2 GLU P  66       8.368  30.637  -1.865  1.00 10.01           O
+ATOM    350  N   ASP P  67      12.658  30.686   0.225  1.00 11.55           N
+ATOM    351  CA  ASP P  67      13.804  30.775   1.163  1.00 10.77           C
+ATOM    352  C   ASP P  67      14.824  29.667   0.941  1.00 11.13           C
+ATOM    353  O   ASP P  67      16.058  29.904   1.049  1.00 14.83           O
+ATOM    354  CB  ASP P  67      13.347  30.500   2.601  1.00 12.07           C
+ATOM    355  CG  ASP P  67      12.813  31.776   3.236  1.00 31.36           C
+ATOM    356  OD1 ASP P  67      12.716  32.875   2.613  1.00 29.45           O
+ATOM    357  OD2 ASP P  67      12.096  31.598   4.247  1.00 40.90           O
+ATOM    358  N   CYS P  67A     14.305  28.478   0.644  1.00  9.98           N
+ATOM    359  CA  CYS P  67A     15.128  27.301   0.379  1.00 12.87           C
+ATOM    360  C   CYS P  67A     16.006  27.523  -0.852  1.00 13.35           C
+ATOM    361  O   CYS P  67A     17.248  27.267  -0.809  1.00  8.69           O
+ATOM    362  CB  CYS P  67A     14.238  26.045   0.259  1.00  9.24           C
+ATOM    363  SG  CYS P  67A     15.047  24.530  -0.176  1.00  8.50           S
+HETATM  364  N   MSE P  67B     15.384  28.062  -1.870  1.00  4.57           N
+HETATM  365  CA  MSE P  67B     16.192  28.302  -3.048  1.00  8.29           C
+HETATM  366  C   MSE P  67B     17.171  29.453  -2.841  1.00 12.61           C
+HETATM  367  O   MSE P  67B     18.246  29.474  -3.490  1.00 11.74           O
+HETATM  368  CB  MSE P  67B     15.267  28.571  -4.266  1.00  9.41           C
+HETATM  369  CG  MSE P  67B     14.634  27.261  -4.708  1.00  9.44           C
+HETATM  370 SE   MSE P  67B     15.759  25.962  -5.253  1.00 11.63          SE
+HETATM  371  CE  MSE P  67B     16.307  26.625  -6.805  1.00  9.61           C
+ATOM    372  N   ARG P  68      16.776  30.470  -2.099  1.00 10.38           N
+ATOM    373  CA  ARG P  68      17.652  31.617  -1.869  1.00 11.60           C
+ATOM    374  C   ARG P  68      18.910  31.126  -1.141  1.00 23.55           C
+ATOM    375  O   ARG P  68      20.050  31.470  -1.556  1.00 19.87           O
+ATOM    376  CB  ARG P  68      16.934  32.595  -0.930  1.00 12.91           C
+ATOM    377  CG  ARG P  68      17.721  33.839  -0.540  1.00 29.13           C
+ATOM    378  CD  ARG P  68      16.741  35.039  -0.291  1.00 33.78           C
+ATOM    379  NE  ARG P  68      15.472  34.668   0.404  1.00 23.43           N
+ATOM    380  CZ  ARG P  68      14.256  34.890  -0.074  1.00 18.89           C
+ATOM    381  NH1 ARG P  68      13.983  35.465  -1.233  1.00 27.14           N
+ATOM    382  NH2 ARG P  68      13.260  34.543   0.660  1.00 29.31           N
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/test_capping_geom.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(v):
+[?2004l[?2004h>     return v / np.linalg.norm(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> def place_atom(p1, p2, p3, length, angle_deg, dihedral_deg):
+[?2004l[?2004h>     # p1 -> p2 -> p3 -> new_atom
+[?2004l[?2004h>     # length: dist(p3, new_atom)
+[?2004l[?2004h>     # angle: angle(p2, p3, new_atom) in degrees
+[?2004l[?2004h>     # dihedral: dihedral(p1, p2, p3, new_atom) in degrees
+[?2004l[?2004h>     v21 = norm(p1 - p2)
+[?2004l[?2004h>     v23 = norm(p3 - p2)
+[?2004l[?2004h>     n = norm(np.cross(v21, v23))
+[?2004l[?2004h>     # vector in plane perpendicular to v23 towards p1
+[?2004l[?2004h>     u = norm(np.cross(n, v23))
+[?2004l[?2004h>     
+[?2004l[?2004h>     theta = np.radians(angle_deg)
+[?2004l[?2004h>     phi = np.radians(dihedral_deg)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # in local frame where v23 is -x (or z), let's define:
+[?2004l[?2004h>     # z_axis = v23
+[?2004l[?2004h>     # x_axis = u (in plane with p1)
+[?2004l[?2004h>     # y_axis = n (orthogonal)
+[?2004l[?2004h>     # We want angle between -v23 and v3_new to be theta.
+[?2004l[?2004h>     # So dot(-v23, v3_new) = cos(theta)
+[?2004l[?2004h>     # and components along x_axis is sin(theta)*cos(phi), y_axis is sin(theta)*sin(phi)
+[?2004l[?2004h>     d = length * (-np.cos(theta) * v23 + np.sin(theta) * (np.cos(phi) * u + np.sin(phi) * n))
+[?2004l[?2004h>     return p3 + d
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's verify place_atom
+[?2004l[?2004h> p1 = np.array([0., 0., 0.])
+[?2004l[?2004h> p2 = np.array([1., 0., 0.])
+[?2004l[?2004h> p3 = np.array([1., 1., 0.])
+[?2004l[?2004h> new_p = place_atom(p1, p2, p3, 1.0, 90.0, 0.0)
+[?2004l[?2004h> print("verify place_atom:", new_p)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/test_capping_geom.py
+[?2004lverify place_atom: [2. 1. 0.]
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/build_clean_pdb.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(v):
+[?2004l[?2004h>     return v / np.linalg.norm(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> def place_atom(p1, p2, p3, length, angle_deg, dihedral_deg):
+[?2004l[?2004h>     v21 = norm(p1 - p2)
+[?2004l[?2004h>     v23 = norm(p3 - p2)
+[?2004l[?2004h>     n = norm(np.cross(v21, v23))
+[?2004l[?2004h>     u = norm(np.cross(n, v23))
+[?2004l[?2004h>     theta = np.radians(angle_deg)
+[?2004l[?2004h>     phi = np.radians(dihedral_deg)
+[?2004l[?2004h>     d = length * (-np.cos(theta) * v23 + np.sin(theta) * (np.cos(phi) * u + np.sin(phi) * n))
+[?2004l[?2004h>     return p3 + d
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> filtered_atoms = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith(('ATOM', 'HETATM')):
+[?2004l[?2004h>         rname = l[17:20].strip()
+[?2004l[?2004h>         chain = l[21]
+[?2004l[?2004h>         rnum = l[22:26].strip()
+[?2004l[?2004h>         icode = l[26].strip()
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         aname = l[12:16].strip()
+[?2004l[?2004h>         if rname in ['GOL', 'SO4', 'EDO', 'CL', 'NA', 'HOH']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         full_res = rnum + icode
+[?2004l[?2004h>         if full_res == '32' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '34' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '43' and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res not in ['32', '34', '43'] and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if rname == 'MSE':
+[?2004l[?2004h>             rname = 'MET'
+[?2004l[?2004h>             if aname == 'SE':
+[?2004l[?2004h>                 aname = 'SD'
+[?2004l[?2004h>         if rname == 'CYS' and full_res in ['22', '31', '47', '55', '67A', '70']:
+[?2004l[?2004h>             rname = 'CYX'
+[?2004l[?2004h>         x = float(l[30:38])
+[?2004l[?2004h>         y = float(l[38:46])
+[?2004l[?2004h>         z = float(l[46:54])
+[?2004l[?2004h>         filtered_atoms.append({
+[?2004l[?2004h>             'aname': aname, 'rname': rname, 'chain': chain,
+[?2004l[?2004h>             'rnum': rnum, 'icode': icode, 'coord': np.array([x, y, z])
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> seg1 = [a for a in filtered_atoms if int(a['rnum']) <= 36]
+[?2004l[?2004h> seg2 = [a for a in filtered_atoms if int(a['rnum']) >= 41]
+[?2004l[?2004h> 
+[?2004l[?2004h> ile36_ca = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> ile36_c  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'C'][0]
+[?2004l[?2004h> ile36_o  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'O'][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> nme_n = place_atom(ile36_o, ile36_ca, ile36_c, 1.335, 116.6, 180.0)
+[?2004l[?2004h> nme_c = place_atom(ile36_ca, ile36_c, nme_n, 1.45, 121.9, 180.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> nme_atoms = [
+[?2004l[?2004h>     {'aname': 'N', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_n},
+[?2004l[?2004h>     {'aname': 'C', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_c}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> asn41_n  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'N'][0]
+[?2004l[?2004h> asn41_ca = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> asn41_c  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'C'][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_c   = place_atom(asn41_c, asn41_ca, asn41_n, 1.335, 121.9, 180.0)
+[?2004l[?2004h> ace_ch3 = place_atom(asn41_ca, asn41_n, ace_c, 1.50, 116.6, 180.0)
+[?2004l[?2004h> ace_o   = place_atom(asn41_ca, asn41_n, ace_c, 1.23, 122.9, 0.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_atoms = [
+[?2004l[?2004h>     {'aname': 'CH3', 'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_ch3},
+[?2004l[?2004h>     {'aname': 'C',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_c},
+[?2004l[?2004h>     {'aname': 'O',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_o}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> atom_idx = 1
+[?2004l[?2004h> with open('/task/test/clean_protein.pdb', 'w') as out:
+[?2004l[?2004h>     for a in seg1:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in nme_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write("TER\n")
+[?2004l[?2004h>     for a in ace_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in seg2:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write("TER\nEND\n")
+[?2004l[?2004h> print('Clean PDB built successfully!')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/build_clean_pdb.py
+[?2004lClean PDB built successfully!
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_load.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb clean_protein.pdb\ndesc mol\nquit\n"); res = subprocess.run(["tleap", "-f", "test_load.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_load.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_load.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./clean_protein.pdb
+  Added missing heavy atom: .R<TYR 50>.A<CG 8>
+  Added missing heavy atom: .R<TYR 50>.A<CD1 9>
+  Added missing heavy atom: .R<TYR 50>.A<CD2 18>
+  Added missing heavy atom: .R<TYR 50>.A<CE1 11>
+  Added missing heavy atom: .R<TYR 50>.A<CE2 16>
+  Added missing heavy atom: .R<TYR 50>.A<CZ 13>
+  Added missing heavy atom: .R<TYR 50>.A<OH 14>
+  Added missing heavy atom: .R<ASN 58>.A<CG 8>
+  Added missing heavy atom: .R<ASN 58>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 58>.A<ND2 10>
+  Added missing heavy atom: .R<ASN 59>.A<CG 8>
+  Added missing heavy atom: .R<ASN 59>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 59>.A<ND2 10>
+  total atoms in file: 400
+  Leap added 418 missing atoms according to residue templates:
+       13 Heavy
+       405 H / lone pairs
+UNIT name: default_name
+Head atom: null
+Tail atom: null
+Contents: 
+R<NARG 18>
+R<PRO 19>
+R<ASP 20>
+R<PHE 21>
+R<CYX 22>
+R<LEU 23>
+R<GLU 24>
+R<PRO 25>
+R<PRO 26>
+R<TYR 27>
+R<THR 28>
+R<GLY 29>
+R<PRO 30>
+R<CYX 31>
+R<LYS 32>
+R<ALA 33>
+R<ARG 34>
+R<ILE 35>
+R<ILE 36>
+R<NME 37>
+R<ACE 38>
+R<ASN 39>
+R<ALA 40>
+R<LYS 41>
+R<ALA 42>
+R<GLY 43>
+R<LEU 44>
+R<CYX 45>
+R<GLN 46>
+R<THR 47>
+R<PHE 48>
+R<VAL 49>
+R<TYR 50>
+R<GLY 51>
+R<GLY 52>
+R<CYX 53>
+R<ARG 54>
+R<ALA 55>
+R<LYS 56>
+R<ARG 57>
+R<ASN 58>
+R<ASN 59>
+R<PHE 60>
+R<LYS 61>
+R<SER 62>
+R<ALA 63>
+R<GLU 64>
+R<ASP 65>
+R<CYX 66>
+R<MET 67>
+R<ARG 68>
+R<THR 69>
+R<CYX 70>
+R<GLY 71>
+R<GLY 72>
+R<CALA 73>
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_bond.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb clean_protein.pdb\nbond mol.22.SG mol.70.SG\nbond mol.31.SG mol.53.SG\nbond mol.45.SG mol.66.SG\ncheck mol\nquit\n"); res = subprocess.run(["tleap", "-f", "test_bond.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_bond.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_bond.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./clean_protein.pdb
+  Added missing heavy atom: .R<TYR 50>.A<CG 8>
+  Added missing heavy atom: .R<TYR 50>.A<CD1 9>
+  Added missing heavy atom: .R<TYR 50>.A<CD2 18>
+  Added missing heavy atom: .R<TYR 50>.A<CE1 11>
+  Added missing heavy atom: .R<TYR 50>.A<CE2 16>
+  Added missing heavy atom: .R<TYR 50>.A<CZ 13>
+  Added missing heavy atom: .R<TYR 50>.A<OH 14>
+  Added missing heavy atom: .R<ASN 58>.A<CG 8>
+  Added missing heavy atom: .R<ASN 58>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 58>.A<ND2 10>
+  Added missing heavy atom: .R<ASN 59>.A<CG 8>
+  Added missing heavy atom: .R<ASN 59>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 59>.A<ND2 10>
+  total atoms in file: 400
+  Leap added 418 missing atoms according to residue templates:
+       13 Heavy
+       405 H / lone pairs
+Checking 'mol'....
+
+/opt/tools/bin/teLeap: Warning!
+The unperturbed charge of the unit (5.000000) is not zero.
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.466 angstroms between nonbonded atoms HH11 and HD3
+-------  .R<ARG 34>.A<HH11 18> and .R<ARG 34>.A<HD3 13>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 0.916 angstroms between nonbonded atoms O and H
+-------  .R<ILE 36>.A<O 19> and .R<NME 37>.A<H 2>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 0.197 angstroms between nonbonded atoms O and N
+-------  .R<ILE 36>.A<O 19> and .R<NME 37>.A<N 1>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.255 angstroms between nonbonded atoms H3 and O
+-------  .R<ACE 38>.A<H3 4> and .R<ASN 39>.A<O 14>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.316 angstroms between nonbonded atoms HD2 and H
+-------  .R<TYR 50>.A<HD2 19> and .R<GLY 51>.A<H 2>
+Checking parameters for unit 'mol'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Warnings: 6
+Unit is OK.
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 6; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import numpy as np
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = [l for l in f if l.startswith("ATOM")]
+[?2004l[?2004h> coords = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     r = l[22:26].strip()
+[?2004l[?2004h>     a = l[12:16].strip()
+[?2004l[?2004h>     coords[(r, a)] = np.array([float(l[30:38]), float(l[38:46]), float(l[46:54])])
+[?2004l[?2004h> # Look at residue 19 PRO and 20 ASP, or 20 ASP and 21 PHE
+[?2004l[?2004h> ca = coords[("20", "CA")]
+[?2004l[?2004h> c  = coords[("20", "C")]
+[?2004l[?2004h> o  = coords[("20", "O")]
+[?2004l[?2004h> n  = coords[("21", "N")]
+[?2004l[?2004h> print("dist C-N:", np.linalg.norm(c - n))
+[?2004l[?2004h> print("dist O-N:", np.linalg.norm(o - n))
+[?2004l[?2004h> print("angle CA-C-N:", np.degrees(np.arccos(np.dot((ca-c)/np.linalg.norm(ca-c), (n-c)/np.linalg.norm(n-c)))))
+[?2004l[?2004h> print("angle O-C-N:", np.degrees(np.arccos(np.dot((o-c)/np.linalg.norm(o-c), (n-c)/np.linalg.norm(n-c)))))
+[?2004l[?2004h> '
+[?2004ldist C-N: 1.339709296825249
+dist O-N: 2.297088592109586
+angle CA-C-N: 116.85716955292077
+angle O-C-N: 124.86494085688103
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import numpy as np
+[?2004l[?2004h> with open("/task/input/structure.pdb") as f:
+[?2004l[?2004h>     lines = [l for l in f if l.startswith("ATOM")]
+[?2004l[?2004h> coords = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     r = l[22:26].strip()
+[?2004l[?2004h>     a = l[12:16].strip()
+[?2004l[?2004h>     coords[(r, a)] = np.array([float(l[30:38]), float(l[38:46]), float(l[46:54])])
+[?2004l[?2004h> c_prev = coords[("20", "C")]
+[?2004l[?2004h> n = coords[("21", "N")]
+[?2004l[?2004h> ca = coords[("21", "CA")]
+[?2004l[?2004h> c = coords[("21", "C")]
+[?2004l[?2004h> print("dist C_prev-N:", np.linalg.norm(c_prev - n))
+[?2004l[?2004h> print("angle C_prev-N-CA:", np.degrees(np.arccos(np.dot((c_prev-n)/np.linalg.norm(c_prev-n), (ca-n)/np.linalg.norm(ca-n)))))
+[?2004l[?2004h> print("dihedral C_prev-N-CA-C:", np.degrees(np.arctan2(np.dot(np.cross(c_prev-n, ca-n), np.cross(ca-n, c-ca)), np.dot(np.cross(c_prev-n, ca-n), np.cross(c_prev-n, ca-n)))))
+[?2004l[?2004h> '
+[?2004ldist C_prev-N: 1.339709296825249
+angle C_prev-N-CA: 118.29068938502044
+dihedral C_prev-N-CA-C: -28.512234411674463
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/test_solvation.py
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's test solvating mol in tleap with 8.0 padding
+[?2004l[?2004h> script = """
+[?2004l[?2004h> source leaprc.protein.ff14SB
+[?2004l[?2004h> source leaprc.water.tip3p
+[?2004l[?2004h> mol = loadpdb clean_protein.pdb
+[?2004l[?2004h> bond mol.22.SG mol.70.SG
+[?2004l[?2004h> bond mol.31.SG mol.53.SG
+[?2004l[?2004h> bond mol.45.SG mol.66.SG
+[?2004l[?2004h> solvatebox mol TIP3PBOX 8.0
+[?2004l[?2004h> saveamberparm mol solvated_init.prmtop solvated_init.inpcrd
+[?2004l[?2004h> quit
+[?2004l[?2004h> """
+[?2004l[?2004h> with open("test_solv.leap", "w") as f:
+[?2004l[?2004h>     f.write(script)
+[?2004l[?2004h> 
+[?2004l[?2004h> res = subprocess.run(["tleap", "-f", "test_solv.leap"], capture_output=True, text=True)
+[?2004l[?2004h> print(res.stdout)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/test_solvation.py
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_solv.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_solv.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+----- Source: /opt/tools/dat/leap/cmd/leaprc.water.tip3p
+----- Source of /opt/tools/dat/leap/cmd/leaprc.water.tip3p done
+Loading library: /opt/tools/dat/leap/lib/atomic_ions.lib
+Loading library: /opt/tools/dat/leap/lib/solvents.lib
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+This is the additional/replacement parameter set for TIP3P water
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions1lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of monovalent ions for TIP3P water model (12-6 normal usage set)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ionsjc_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Monovalent ion parameters for Ewald and TIP3P water from Joung & Cheatham JPCB (2008)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions234lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of divalent to tetravalent ions for TIP3P water model (12-6 normal usage set)
+Loading PDB file: ./clean_protein.pdb
+  Added missing heavy atom: .R<TYR 50>.A<CG 8>
+  Added missing heavy atom: .R<TYR 50>.A<CD1 9>
+  Added missing heavy atom: .R<TYR 50>.A<CD2 18>
+  Added missing heavy atom: .R<TYR 50>.A<CE1 11>
+  Added missing heavy atom: .R<TYR 50>.A<CE2 16>
+  Added missing heavy atom: .R<TYR 50>.A<CZ 13>
+  Added missing heavy atom: .R<TYR 50>.A<OH 14>
+  Added missing heavy atom: .R<ASN 58>.A<CG 8>
+  Added missing heavy atom: .R<ASN 58>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 58>.A<ND2 10>
+  Added missing heavy atom: .R<ASN 59>.A<CG 8>
+  Added missing heavy atom: .R<ASN 59>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 59>.A<ND2 10>
+  total atoms in file: 400
+  Leap added 418 missing atoms according to residue templates:
+       13 Heavy
+       405 H / lone pairs
+  Solute vdw bounding box:              36.493 30.822 36.279
+  Total bounding box for atom centers:  52.493 46.822 52.279
+  Solvent unit box:                     18.774 18.774 18.774
+  Total vdw box size:                   55.366 49.824 55.357 angstroms.
+  Volume: 152706.203 A^3 
+  Total mass 69484.396 amu,  Density 0.756 g/cc
+  Added 3526 residues.
+Checking Unit.
+
+/opt/tools/bin/teLeap: Warning!
+The unperturbed charge of the unit (5.000000) is not zero.
+
+/opt/tools/bin/teLeap: Note.
+Ignoring the warning from Unit Checking.
+
+Building topology.
+Building atom parameters.
+Building bond parameters.
+Building angle parameters.
+Building proper torsion parameters.
+Building improper torsion parameters.
+ total 171 improper torsions applied
+Building H-Bond parameters.
+Incorporating Non-Bonded adjustments.
+Not Marking per-residue atom chain types.
+Marking per-residue atom chain types.
+  (Residues lacking connect0/connect1 - 
+   these don't have chain types marked:
+
+	res	total affected
+
+	CALA	1
+	NARG	1
+	WAT	3526
+  )
+ (no restraints)
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 1; Notes = 1.
+
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/test_ions.py
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's test adding ions in tleap
+[?2004l[?2004h> script = """
+[?2004l[?2004h> source leaprc.protein.ff14SB
+[?2004l[?2004h> source leaprc.water.tip3p
+[?2004l[?2004h> mol = loadpdb clean_protein.pdb
+[?2004l[?2004h> bond mol.22.SG mol.70.SG
+[?2004l[?2004h> bond mol.31.SG mol.53.SG
+[?2004l[?2004h> bond mol.45.SG mol.66.SG
+[?2004l[?2004h> solvatebox mol TIP3PBOX 8.0
+[?2004l[?2004h> addionsrand mol Cl- 5
+[?2004l[?2004h> addionsrand mol Na+ 9 Cl- 9
+[?2004l[?2004h> saveamberparm mol solv_ions.prmtop solv_ions.inpcrd
+[?2004l[?2004h> quit
+[?2004l[?2004h> """
+[?2004l[?2004h> with open("test_ions.leap", "w") as f:
+[?2004l[?2004h>     f.write(script)
+[?2004l[?2004h> 
+[?2004l[?2004h> res = subprocess.run(["tleap", "-f", "test_ions.leap"], capture_output=True, text=True)
+[?2004l[?2004h> print(res.stdout)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/test_ions.py
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_ions.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_ions.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+----- Source: /opt/tools/dat/leap/cmd/leaprc.water.tip3p
+----- Source of /opt/tools/dat/leap/cmd/leaprc.water.tip3p done
+Loading library: /opt/tools/dat/leap/lib/atomic_ions.lib
+Loading library: /opt/tools/dat/leap/lib/solvents.lib
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+This is the additional/replacement parameter set for TIP3P water
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions1lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of monovalent ions for TIP3P water model (12-6 normal usage set)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ionsjc_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Monovalent ion parameters for Ewald and TIP3P water from Joung & Cheatham JPCB (2008)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions234lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of divalent to tetravalent ions for TIP3P water model (12-6 normal usage set)
+Loading PDB file: ./clean_protein.pdb
+  Added missing heavy atom: .R<TYR 50>.A<CG 8>
+  Added missing heavy atom: .R<TYR 50>.A<CD1 9>
+  Added missing heavy atom: .R<TYR 50>.A<CD2 18>
+  Added missing heavy atom: .R<TYR 50>.A<CE1 11>
+  Added missing heavy atom: .R<TYR 50>.A<CE2 16>
+  Added missing heavy atom: .R<TYR 50>.A<CZ 13>
+  Added missing heavy atom: .R<TYR 50>.A<OH 14>
+  Added missing heavy atom: .R<ASN 58>.A<CG 8>
+  Added missing heavy atom: .R<ASN 58>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 58>.A<ND2 10>
+  Added missing heavy atom: .R<ASN 59>.A<CG 8>
+  Added missing heavy atom: .R<ASN 59>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 59>.A<ND2 10>
+  total atoms in file: 400
+  Leap added 418 missing atoms according to residue templates:
+       13 Heavy
+       405 H / lone pairs
+  Solute vdw bounding box:              36.493 30.822 36.279
+  Total bounding box for atom centers:  52.493 46.822 52.279
+  Solvent unit box:                     18.774 18.774 18.774
+  Total vdw box size:                   55.366 49.824 55.357 angstroms.
+  Volume: 152706.203 A^3 
+  Total mass 69484.396 amu,  Density 0.756 g/cc
+  Added 3526 residues.
+Adding 5 counter ions to "mol". 3521 solvent molecules will remain.
+0: Placed Cl- in mol at (-13.73, -1.26, 8.23).
+0: Placed Cl- in mol at (-17.19, -17.16, 6.31).
+0: Placed Cl- in mol at (-3.96, -14.22, -3.46).
+0: Placed Cl- in mol at (-20.12, 0.57, 14.70).
+0: Placed Cl- in mol at (17.66, -22.53, -25.81).
+Adding 18 counter ions to "mol". 3503 solvent molecules will remain.
+0: Placed Na+ in mol at (8.32, -17.40, 9.67).
+Placed Cl- in mol at (-2.49, 19.73, 12.43).
+0: Placed Na+ in mol at (7.03, 5.25, 21.06).
+Placed Cl- in mol at (-15.14, -9.26, 17.46).
+0: Placed Na+ in mol at (-19.65, 18.08, 20.49).
+Placed Cl- in mol at (17.38, 21.71, 9.93).
+0: Placed Na+ in mol at (18.82, -9.88, 5.57).
+Placed Cl- in mol at (0.95, -12.69, 3.16).
+0: Placed Na+ in mol at (23.72, -13.65, 17.64).
+Placed Cl- in mol at (-21.41, -21.23, 18.89).
+0: Placed Na+ in mol at (-23.44, 12.67, 2.39).
+Placed Cl- in mol at (-20.56, 11.53, 19.75).
+0: Placed Na+ in mol at (-16.97, -4.02, -21.30).
+Placed Cl- in mol at (-7.64, -21.87, -12.35).
+0: Placed Na+ in mol at (21.16, -1.43, 20.34).
+Placed Cl- in mol at (10.32, -7.33, 24.63).
+0: Placed Na+ in mol at (-9.59, -10.70, -14.70).
+Placed Cl- in mol at (18.11, -17.42, 22.97).
+Checking Unit.
+Building topology.
+Building atom parameters.
+Building bond parameters.
+Building angle parameters.
+Building proper torsion parameters.
+Building improper torsion parameters.
+ total 171 improper torsions applied
+Building H-Bond parameters.
+Incorporating Non-Bonded adjustments.
+Not Marking per-residue atom chain types.
+Marking per-residue atom chain types.
+  (Residues lacking connect0/connect1 - 
+   these don't have chain types marked:
+
+	res	total affected
+
+	CALA	1
+	NARG	1
+	WAT	3503
+  )
+ (no restraints)
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_add0.leap", "w").write("source leaprc.protein.ff14SB\nsource leaprc.water.tip3p\nmol = sequence { NARG CALA }\nsolvatebox mol TIP3PBOX 8.0\naddionsrand mol Cl- 0\nquit\n"); res = subprocess.run(["tleap", "-f", "test_add0.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_add0.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_add0.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+----- Source: /opt/tools/dat/leap/cmd/leaprc.water.tip3p
+----- Source of /opt/tools/dat/leap/cmd/leaprc.water.tip3p done
+Loading library: /opt/tools/dat/leap/lib/atomic_ions.lib
+Loading library: /opt/tools/dat/leap/lib/solvents.lib
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+This is the additional/replacement parameter set for TIP3P water
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions1lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of monovalent ions for TIP3P water model (12-6 normal usage set)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ionsjc_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Monovalent ion parameters for Ewald and TIP3P water from Joung & Cheatham JPCB (2008)
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ions234lm_126_tip3p
+Reading force field modification type file (frcmod)
+Reading title:
+Li/Merz ion parameters of divalent to tetravalent ions for TIP3P water model (12-6 normal usage set)
+  Solute vdw bounding box:              10.052 11.301 9.876
+  Total bounding box for atom centers:  26.052 27.301 25.876
+  Solvent unit box:                     18.774 18.774 18.774
+  Total vdw box size:                   28.912 30.511 29.273 angstroms.
+  Volume: 25822.600 A^3 
+  Total mass 9416.444 amu,  Density 0.606 g/cc
+  Added 509 residues.
+1 Cl- ion required to neutralize.
+Adding 1 counter ions to "mol". 508 solvent molecules will remain.
+0: Placed Cl- in mol at (-7.20, 8.22, -7.62).
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 0; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/refine_caps.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(v):
+[?2004l[?2004h>     return v / np.linalg.norm(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> def place_atom(p1, p2, p3, length, angle_deg, dihedral_deg):
+[?2004l[?2004h>     v21 = norm(p1 - p2)
+[?2004l[?2004h>     v23 = norm(p3 - p2)
+[?2004l[?2004h>     n = norm(np.cross(v21, v23))
+[?2004l[?2004h>     u = norm(np.cross(n, v23))
+[?2004l[?2004h>     theta = np.radians(angle_deg)
+[?2004l[?2004h>     phi = np.radians(dihedral_deg)
+[?2004l[?2004h>     d = length * (-np.cos(theta) * v23 + np.sin(theta) * (np.cos(phi) * u + np.sin(phi) * n))
+[?2004l[?2004h>     return p3 + d
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     lines = [l for l in f if l.startswith('ATOM')]
+[?2004l[?2004h> 
+[?2004l[?2004h> coords = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     r = l[22:26].strip()
+[?2004l[?2004h>     a = l[12:16].strip()
+[?2004l[?2004h>     coords[(r, a)] = np.array([float(l[30:38]), float(l[38:46]), float(l[46:54])])
+[?2004l[?2004h> 
+[?2004l[?2004h> ca36 = coords[('36', 'CA')]
+[?2004l[?2004h> c36  = coords[('36', 'C')]
+[?2004l[?2004h> o36  = coords[('36', 'O')]
+[?2004l[?2004h> 
+[?2004l[?2004h> dir_n = norm(norm(c36 - ca36) + norm(c36 - o36))
+[?2004l[?2004h> nme_n = c36 + dir_n * 1.335
+[?2004l[?2004h> print('C36 - N dist:', np.linalg.norm(c36 - nme_n))
+[?2004l[?2004h> print('O36 - N dist:', np.linalg.norm(o36 - nme_n))
+[?2004l[?2004h> print('CA36 - N dist:', np.linalg.norm(ca36 - nme_n))
+[?2004l[?2004h> 
+[?2004l[?2004h> nme_c = place_atom(ca36, c36, nme_n, 1.45, 121.9, 180.0)
+[?2004l[?2004h> print('NME N - C dist:', np.linalg.norm(nme_n - nme_c))
+[?2004l[?2004h> 
+[?2004l[?2004h> n41  = coords[('41', 'N')]
+[?2004l[?2004h> ca41 = coords[('41', 'CA')]
+[?2004l[?2004h> c41  = coords[('41', 'C')]
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_c = place_atom(c41, ca41, n41, 1.335, 121.9, 180.0)
+[?2004l[?2004h> ace_ch3 = place_atom(ca41, n41, ace_c, 1.50, 116.6, 180.0)
+[?2004l[?2004h> ace_o   = place_atom(ca41, n41, ace_c, 1.23, 122.9, 0.0)
+[?2004l[?2004h> print('ACE C - N41 dist:', np.linalg.norm(ace_c - n41))
+[?2004l[?2004h> print('ACE C - CH3 dist:', np.linalg.norm(ace_c - ace_ch3))
+[?2004l[?2004h> print('ACE C - O dist:', np.linalg.norm(ace_c - ace_o))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/refine_caps.py
+[?2004lC36 - N dist: 1.335
+O36 - N dist: 2.219953924569987
+CA36 - N dist: 2.460229273128303
+NME N - C dist: 1.4499999999999986
+ACE C - N41 dist: 1.3350000000000004
+ACE C - CH3 dist: 1.4999999999999984
+ACE C - O dist: 1.2300000000000013
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/build_clean_pdb.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(v):
+[?2004l[?2004h>     return v / np.linalg.norm(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> def place_atom(p1, p2, p3, length, angle_deg, dihedral_deg):
+[?2004l[?2004h>     v21 = norm(p1 - p2)
+[?2004l[?2004h>     v23 = norm(p3 - p2)
+[?2004l[?2004h>     n = norm(np.cross(v21, v23))
+[?2004l[?2004h>     u = norm(np.cross(n, v23))
+[?2004l[?2004h>     theta = np.radians(angle_deg)
+[?2004l[?2004h>     phi = np.radians(dihedral_deg)
+[?2004l[?2004h>     d = length * (-np.cos(theta) * v23 + np.sin(theta) * (np.cos(phi) * u + np.sin(phi) * n))
+[?2004l[?2004h>     return p3 + d
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> filtered_atoms = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith(('ATOM', 'HETATM')):
+[?2004l[?2004h>         rname = l[17:20].strip()
+[?2004l[?2004h>         chain = l[21]
+[?2004l[?2004h>         rnum = l[22:26].strip()
+[?2004l[?2004h>         icode = l[26].strip()
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         aname = l[12:16].strip()
+[?2004l[?2004h>         if rname in ['GOL', 'SO4', 'EDO', 'CL', 'NA', 'HOH']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         full_res = rnum + icode
+[?2004l[?2004h>         if full_res == '32' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '34' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '43' and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res not in ['32', '34', '43'] and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if rname == 'MSE':
+[?2004l[?2004h>             rname = 'MET'
+[?2004l[?2004h>             if aname == 'SE':
+[?2004l[?2004h>                 aname = 'SD'
+[?2004l[?2004h>         if rname == 'CYS' and full_res in ['22', '31', '47', '55', '67A', '70']:
+[?2004l[?2004h>             rname = 'CYX'
+[?2004l[?2004h>         x = float(l[30:38])
+[?2004l[?2004h>         y = float(l[38:46])
+[?2004l[?2004h>         z = float(l[46:54])
+[?2004l[?2004h>         filtered_atoms.append({
+[?2004l[?2004h>             'aname': aname, 'rname': rname, 'chain': chain,
+[?2004l[?2004h>             'rnum': rnum, 'icode': icode, 'coord': np.array([x, y, z])
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> seg1 = [a for a in filtered_atoms if int(a['rnum']) <= 36]
+[?2004l[?2004h> seg2 = [a for a in filtered_atoms if int(a['rnum']) >= 41]
+[?2004l[?2004h> 
+[?2004l[?2004h> ca36 = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> c36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'C'][0]
+[?2004l[?2004h> o36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'O'][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> dir_n = norm(norm(c36 - ca36) + norm(c36 - o36))
+[?2004l[?2004h> nme_n = c36 + dir_n * 1.335
+[?2004l[?2004h> nme_c = place_atom(ca36, c36, nme_n, 1.45, 121.9, 180.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> nme_atoms = [
+[?2004l[?2004h>     {'aname': 'N', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_n},
+[?2004l[?2004h>     {'aname': 'C', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_c}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> n41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'N'][0]
+[?2004l[?2004h> ca41 = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> c41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'C'][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_c   = place_atom(c41, ca41, n41, 1.335, 121.9, 180.0)
+[?2004l[?2004h> ace_ch3 = place_atom(ca41, n41, ace_c, 1.50, 116.6, 180.0)
+[?2004l[?2004h> ace_o   = place_atom(ca41, n41, ace_c, 1.23, 122.9, 0.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_atoms = [
+[?2004l[?2004h>     {'aname': 'CH3', 'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_ch3},
+[?2004l[?2004h>     {'aname': 'C',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_c},
+[?2004l[?2004h>     {'aname': 'O',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_o}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> atom_idx = 1
+[?2004l[?2004h> with open('/task/test/clean_protein.pdb', 'w') as out:
+[?2004l[?2004h>     for a in seg1:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in nme_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write("TER\n")
+[?2004l[?2004h>     for a in ace_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in seg2:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write("TER\nEND\n")
+[?2004l[?2004h> print('Clean PDB rebuilt successfully!')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/build_clean_pdb.py
+[?2004lClean PDB rebuilt successfully!
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import subprocess; open("test_bond2.leap", "w").write("source leaprc.protein.ff14SB\nmol = loadpdb clean_protein.pdb\nbond mol.22.SG mol.70.SG\nbond mol.31.SG mol.53.SG\nbond mol.45.SG mol.66.SG\ncheck mol\nquit\n"); res = subprocess.run(["tleap", "-f", "test_bond2.leap"], capture_output=True, text=True); print(res.stdout)'
+[?2004l-I: Adding /opt/tools/dat/leap/prep to search path.
+-I: Adding /opt/tools/dat/leap/lib to search path.
+-I: Adding /opt/tools/dat/leap/parm to search path.
+-I: Adding /opt/tools/dat/leap/cmd to search path.
+-f: Source test_bond2.leap.
+
+Welcome to LEaP!
+(no leaprc in search path)
+Sourcing: ./test_bond2.leap
+----- Source: /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB
+----- Source of /opt/tools/dat/leap/cmd/leaprc.protein.ff14SB done
+Log file: ./leap.log
+Loading parameters: /opt/tools/dat/leap/parm/parm10.dat
+Reading title:
+PARM99 + frcmod.ff99SB + frcmod.parmbsc0 + OL3 for RNA
+Loading parameters: /opt/tools/dat/leap/parm/frcmod.ff14SB
+Reading force field modification type file (frcmod)
+Reading title:
+ff14SB protein backbone and sidechain parameters
+Loading library: /opt/tools/dat/leap/lib/amino12.lib
+Loading library: /opt/tools/dat/leap/lib/aminoct12.lib
+Loading library: /opt/tools/dat/leap/lib/aminont12.lib
+Loading PDB file: ./clean_protein.pdb
+  Added missing heavy atom: .R<TYR 50>.A<CG 8>
+  Added missing heavy atom: .R<TYR 50>.A<CD1 9>
+  Added missing heavy atom: .R<TYR 50>.A<CD2 18>
+  Added missing heavy atom: .R<TYR 50>.A<CE1 11>
+  Added missing heavy atom: .R<TYR 50>.A<CE2 16>
+  Added missing heavy atom: .R<TYR 50>.A<CZ 13>
+  Added missing heavy atom: .R<TYR 50>.A<OH 14>
+  Added missing heavy atom: .R<ASN 58>.A<CG 8>
+  Added missing heavy atom: .R<ASN 58>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 58>.A<ND2 10>
+  Added missing heavy atom: .R<ASN 59>.A<CG 8>
+  Added missing heavy atom: .R<ASN 59>.A<OD1 9>
+  Added missing heavy atom: .R<ASN 59>.A<ND2 10>
+  total atoms in file: 400
+  Leap added 418 missing atoms according to residue templates:
+       13 Heavy
+       405 H / lone pairs
+Checking 'mol'....
+
+/opt/tools/bin/teLeap: Warning!
+The unperturbed charge of the unit (5.000000) is not zero.
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.466 angstroms between nonbonded atoms HH11 and HD3
+-------  .R<ARG 34>.A<HH11 18> and .R<ARG 34>.A<HD3 13>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.417 angstroms between nonbonded atoms HA and H1
+-------  .R<ILE 36>.A<HA 4> and .R<NME 37>.A<H1 4>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.329 angstroms between nonbonded atoms H1 and O
+-------  .R<NME 37>.A<H1 4> and .R<PHE 48>.A<O 20>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.255 angstroms between nonbonded atoms H3 and O
+-------  .R<ACE 38>.A<H3 4> and .R<ASN 39>.A<O 14>
+
+/opt/tools/bin/teLeap: Warning!
+Close contact of 1.316 angstroms between nonbonded atoms HD2 and H
+-------  .R<TYR 50>.A<HD2 19> and .R<GLY 51>.A<H 2>
+Checking parameters for unit 'mol'.
+Checking for bond parameters.
+Checking for angle parameters.
+check:  Warnings: 6
+Unit is OK.
+	Quit
+
+Exiting LEaP: Errors = 0; Warnings = 6; Notes = 0.
+
+[?2004hroot@359b42c9c43e:/task/test# sander -help | head -n 10
+[?2004l
+     mdfil: Error unknown flag: -help                                                                                                                                                                                                                                                           
+
+     usage: sander  [-O|A] -i mdin -o mdout -p prmtop -c inpcrd -r restrt
+                   [-ref refc -x mdcrd -v mdvel -e mden -frc mdfrc -idip inpdip -rdip rstdip -mdip mddip 
+                   -inf mdinfo -radii radii -y inptraj -amd amd.log -scaledMD scaledMD.log] -cph-data -ce-data <file>-host ipi_hostname -port ipi_port
+Consult the manual for additional options.
+[?2004hroot@359b42c9c43e:/task/test# which pmemd pmemd.cuda sander.MPI
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import openmm; print(openmm.Platform.getNumPlatforms(), [openmm.Platform.getPlatform(i).getName() for i in range(openmm.Platform.getNumPlatforms())])'
+[?2004l2 ['Reference', 'CPU']
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd
+[?2004l[?2004h> print(dir(pmd.amber))
+[?2004l[?2004h> print(dir(pmd.amber.AmberRestart))
+[?2004l[?2004h> '
+[?2004l['AMBERHOME', 'AmberAsciiRestart', 'AmberFormat', 'AmberMask', 'AmberMdcrd', 'AmberOFFLibrary', 'AmberParameterSet', 'AmberParm', 'AmoebaParm', 'BeemanRestart', 'ChamberParm', 'ConvertFromPSF', 'FortranFormat', 'LoadParm', 'NetCDFRestart', 'NetCDFTraj', 'Rst7', '__all__', '__author__', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '_amberparm', '_chamberparm', '_tinkerparm', 'amberformat', 'asciicrd', 'mask', 'netcdffiles', 'offlib', 'parameters', 'readparm', 'titratable_residues']
+Traceback (most recent call last):
+  File "<string>", line 3, in <module>
+AttributeError: module 'parmed.amber' has no attribute 'AmberRestart'. Did you mean: 'AmberAsciiRestart'?
+[?2004hroot@359b42c9c43e:/task/test# 
+[?2004l[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/test_openmm_restart.py
+[?2004l[?2004h> import parmed as pmd
+[?2004l[?2004h> import openmm as mm
+[?2004l[?2004h> import openmm.app as app
+[?2004l[?2004h> import openmm.unit as u
+[?2004l[?2004h> 
+[?2004l[?2004h> # Load the test solvated system
+[?2004l[?2004h> prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+[?2004l[?2004h> inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+[?2004l[?2004h> 
+[?2004l[?2004h> system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+[?2004l[?2004h> sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+[?2004l[?2004h> sim.context.setPositions(inpcrd.positions)
+[?2004l[?2004h> if inpcrd.boxVectors is not None:
+[?2004l[?2004h>     sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Set random velocities at 300 K
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300*u.kelvin)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Take 10 steps
+[?2004l[?2004h> sim.step(10)
+[?2004l[?2004h> 
+[?2004l[?2004h> state = sim.context.getState(getPositions=True, getVelocities=True, enforcePeriodicBox=True)
+[?2004l[?2004h> parm = pmd.load_file("solv_ions.prmtop", "solv_ions.inpcrd")
+[?2004l[?2004h> parm.positions = state.getPositions(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> parm.velocities = state.getVelocities(asNumpy=True).value_in_unit(u.angstroms / u.picosecond)
+[?2004l[?2004h> box_vectors = state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> parm.box = [box_vectors[0][0], box_vectors[1][1], box_vectors[2][2], 90.0, 90.0, 90.0]
+[?2004l[?2004h> 
+[?2004l[?2004h> parm.save("test_equilibrated.rst7", overwrite=True)
+[?2004l[?2004h> print("Saved test_equilibrated.rst7 successfully!")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/test_openmm_restart.py
+[?2004lTraceback (most recent call last):
+  File "/task/test/test_openmm_restart.py", line 21, in <module>
+    sim.step(10)
+  File "/opt/tools/lib/python3.12/site-packages/openmm/app/simulation.py", line 149, in step
+    self._simulate(endStep=self.currentStep+steps)
+  File "/opt/tools/lib/python3.12/site-packages/openmm/app/simulation.py", line 232, in _simulate
+    self.integrator.step(stepsToGo)
+  File "/opt/tools/lib/python3.12/site-packages/openmm/openmm.py", line 16351, in step
+    return _openmm.LangevinMiddleIntegrator_step(self, steps)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+openmm.OpenMMException: Particle coordinate is NaN.  For more information, see https://github.com/openmm/openmm/wiki/Frequently-Asked-Questions#nan
+[?2004hroot@359b42c9c43e:/task/test# 
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u, parmed as pmd
+[?2004l[?2004h> prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+[?2004l[?2004h> inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+[?2004l[?2004h> system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+[?2004l[?2004h> sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+[?2004l[?2004h> sim.context.setPositions(inpcrd.positions)
+[?2004l[?2004h> if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+[?2004l[?2004h> print("Minimizing...")
+[?2004l[?2004h> sim.minimizeEnergy(maxIterations=500)
+[?2004l[?2004h> print("Minimized. Setting velocities...")
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300*u.kelvin)
+[?2004l[?2004h> sim.step(50)
+[?2004l[?2004h> print("50 steps done!")
+[?2004l[?2004h> '
+[?2004lMinimizing...
+
+^C
+^C
+^Z
+[1]+  Stopped                 python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u, parmed as pmd
+prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+sim.context.setPositions(inpcrd.positions)
+if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+print("Minimizing...")
+sim.minimizeEnergy(maxIterations=500)
+print("Minimized. Setting velocities...")
+sim.context.setVelocitiesToTemperature(300*u.kelvin)
+sim.step(50)
+print("50 steps done!")
+'
+[?2004hroot@359b42c9c43e:/task/test# kill -9 %1
+[?2004l
+[1]+  Stopped                 python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u, parmed as pmd
+prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+sim.context.setPositions(inpcrd.positions)
+if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+print("Minimizing...")
+sim.minimizeEnergy(maxIterations=500)
+print("Minimized. Setting velocities...")
+sim.context.setVelocitiesToTemperature(300*u.kelvin)
+sim.step(50)
+print("50 steps done!")
+'
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > min.in
+[?2004l[?2004h> Minimisation
+[?2004l[?2004h>  &cntrl
+[?2004l[?2004h>   imin=1, maxcyc=300, ncyc=150, ntb=1, cut=8.5, ntpr=50,
+[?2004l[?2004h>  /
+[?2004l[?2004h> EOF
+[?2004l[1]+  Killed                  python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u, parmed as pmd
+prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+sim.context.setPositions(inpcrd.positions)
+if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+print("Minimizing...")
+sim.minimizeEnergy(maxIterations=500)
+print("Minimized. Setting velocities...")
+sim.context.setVelocitiesToTemperature(300*u.kelvin)
+sim.step(50)
+print("50 steps done!")
+'
+[?2004hroot@359b42c9c43e:/task/test# time sander -O -i min.in -o min.out -p solv_ions.prmtop -c solv_ions.inpcrd -r min.rst7
+[?2004l
+real	0m27.297s
+user	0m59.593s
+sys	0m1.187s
+[?2004hroot@359b42c9c43e:/task/test# tail -n 25 min.out
+[?2004l|          Nonbond force             23.57 (98.85% of Force)
+|          Bond/Angle/Dihedral        0.26 ( 1.10% of Force)
+|          Other                      0.01 ( 0.05% of Force)
+|       Force time                23.84 (100.0% of Runmd)
+|    Runmd Time                23.84 (87.48% of Total)
+|    Other                      3.40 (12.48% of Total)
+| Total time                27.25 (100.0% of ALL  )
+
+| Number of list builds   :          7
+
+| Highest rstack allocated:     701692
+| Highest istack allocated:      11350
+|           Job began  at 19:13:06.316  on 11/12/2026
+|           Setup done at 19:13:06.552  on 11/12/2026
+|           Run   done at 19:13:33.571  on 11/12/2026
+|     wallclock() was called   11462 times
+
+|3D-RISM memory allocation summary
+|Type          Maximum        Current   
+|Integer       0.00000 GB     0.00000 GB
+|Real          0.00000 GB     0.00000 GB
+|Logical       0.00000 GB     0.00000 GB
+|Character     0.00000 GB     0.00000 GB
+|---------------------------------------
+|Total         0.00000 GB     0.00000 GB
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > nvt.in
+[?2004l[?2004h> Thermalisation NVT
+[?2004l[?2004h>  &cntrl
+[?2004l[?2004h>   imin=0, irest=0, ntx=1,
+[?2004l[?2004h>   nstlim=500, dt=0.002,
+[?2004l[?2004h>   ntc=2, ntf=2,
+[?2004l[?2004h>   cut=8.5, ntb=1,
+[?2004l[?2004h>   ntt=3, gamma_ln=2.0,
+[?2004l[?2004h>   tempi=100.0, temp0=300.0,
+[?2004l[?2004h>   ntpr=100, ntwx=0, ntwr=500,
+[?2004l[?2004h>   ioutfm=1,
+[?2004l[?2004h>  /
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# time sander -O -i nvt.in -o nvt.out -p solv_ions.prmtop -c min.rst7 -r nvt.rst7
+[?2004l
+real	0m31.585s
+user	0m28.522s
+sys	0m0.221s
+[?2004hroot@359b42c9c43e:/task/test# grep "TEMP(K)" nvt.out
+[?2004l NSTEP =        0   TIME(PS) =       0.000  TEMP(K) =   148.74  PRESS =     0.0
+ NSTEP =      100   TIME(PS) =       0.200  TEMP(K) =   174.29  PRESS =     0.0
+ NSTEP =      200   TIME(PS) =       0.400  TEMP(K) =   221.48  PRESS =     0.0
+ NSTEP =      300   TIME(PS) =       0.600  TEMP(K) =   246.11  PRESS =     0.0
+ NSTEP =      400   TIME(PS) =       0.800  TEMP(K) =   263.50  PRESS =     0.0
+ NSTEP =      500   TIME(PS) =       1.000  TEMP(K) =   276.80  PRESS =     0.0
+ NSTEP =      500   TIME(PS) =       1.000  TEMP(K) =   217.86  PRESS =     0.0
+ NSTEP =      500   TIME(PS) =       1.000  TEMP(K) =    53.20  PRESS =     0.0
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > npt_test.in
+[?2004l[?2004h> Equilibration NPT
+[?2004l[?2004h>  &cntrl
+[?2004l[?2004h>   imin=0, irest=1, ntx=5,
+[?2004l[?2004h>   nstlim=100, dt=0.002,
+[?2004l[?2004h>   ntc=2, ntf=2,
+[?2004l[?2004h>   cut=8.5, ntb=2, ntp=1,
+[?2004l[?2004h>   barostat=2, mcbarint=100,
+[?2004l[?2004h>   ntt=3, gamma_ln=2.0,
+[?2004l[?2004h>   temp0=300.0, pres0=1.01325,
+[?2004l[?2004h>   ntpr=50, ntwx=0, ntwr=100,
+[?2004l[?2004h>   ioutfm=1,
+[?2004l[?2004h>  /
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# sander -O -i npt_test.in -o npt_test.out -p solv_ions.prmtop -c nvt.rst7 -r npt_test.rst7
+[?2004l[?2004hroot@359b42c9c43e:/task/test# head -n 25 npt_test.out
+[?2004l
+          -------------------------------------------------------
+          Amber 24 SANDER                              2024
+          -------------------------------------------------------
+
+| Run on 11/12/2026 at 19:14:40
+
+|   Executable path: sander
+| Working directory: /task/test
+|          Hostname: 359b42c9c43e
+
+  [-O]verwriting output
+
+File Assignments:
+|  MDIN: npt_test.in                                                           
+| MDOUT: npt_test.out                                                          
+|INPCRD: nvt.rst7                                                              
+|  PARM: solv_ions.prmtop                                                      
+|RESTRT: npt_test.rst7                                                         
+|  REFC: refc                                                                  
+| MDVEL: mdvel                                                                 
+| MDFRC: mdfrc                                                                 
+|  MDEN: mden                                                                  
+| MDCRD: mdcrd                                                                 
+|MDINFO: mdinfo                                                                
+[?2004hroot@359b42c9c43e:/task/test# grep "Density" npt_test.out
+[?2004l                                                    Density    =         0.7587
+                                                    Density    =         0.7608
+                                                    Density    =         0.7588
+                                                    Density    =         0.0002
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > npt_test_ber.in
+[?2004l[?2004h> Equilibration NPT
+[?2004l[?2004h>  &cntrl
+[?2004l[?2004h>   imin=0, irest=1, ntx=5,
+[?2004l[?2004h>   nstlim=500, dt=0.002,
+[?2004l[?2004h>   ntc=2, ntf=2,
+[?2004l[?2004h>   cut=8.5, ntb=2, ntp=1,
+[?2004l[?2004h>   barostat=1, taup=1.0,
+[?2004l[?2004h>   ntt=3, gamma_ln=2.0,
+[?2004l[?2004h>   temp0=300.0, pres0=1.01325,
+[?2004l[?2004h>   ntpr=100, ntwx=0, ntwr=500,
+[?2004l[?2004h>   ioutfm=1,
+[?2004l[?2004h>  /
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# sander -O -i npt_test_ber.in -o npt_test_ber.out -p solv_ions.prmtop -c nvt.rst7 -r npt_test_ber.rst7
+[?2004l[?2004hroot@359b42c9c43e:/task/test# grep "Density" npt_test_ber.out
+[?2004l                                                    Density    =         0.7649
+                                                    Density    =         0.7691
+                                                    Density    =         0.7731
+                                                    Density    =         0.7768
+                                                    Density    =         0.7825
+                                                    Density    =         0.7709
+                                                    Density    =         0.0062
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u, time
+[?2004l[?2004h> prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+[?2004l[?2004h> inpcrd = app.AmberInpcrdFile("solv_ions.inpcrd")
+[?2004l[?2004h> system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+[?2004l[?2004h> system.addForce(mm.MonteCarloBarostat(1.01325*u.bar, 300*u.kelvin, 25))
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+[?2004l[?2004h> platform = mm.Platform.getPlatformByName("CPU")
+[?2004l[?2004h> sim = app.Simulation(prmtop.topology, system, integrator, platform)
+[?2004l[?2004h> sim.context.setPositions(inpcrd.positions)
+[?2004l[?2004h> if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> sim.minimizeEnergy(maxIterations=200)
+[?2004l[?2004h> t1 = time.time()
+[?2004l[?2004h> print(f"Minimization took {t1-t0:.2f} s")
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300*u.kelvin)
+[?2004l[?2004h> sim.step(500)
+[?2004l[?2004h> t2 = time.time()
+[?2004l[?2004h> print(f"500 steps (1 ps) took {t2-t1:.2f} s")
+[?2004l[?2004h> '
+[?2004lMinimization took 17.45 s
+500 steps (1 ps) took 12.80 s
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > npt_run.in
+[?2004l[?2004h> Equilibration NPT
+[?2004l[?2004h>  &cntrl
+[?2004l[?2004h>   imin=0, irest=1, ntx=5,
+[?2004l[?2004h>   nstlim=2500, dt=0.002,
+[?2004l[?2004h>   ntc=2, ntf=2,
+[?2004l[?2004h>   cut=8.5, ntb=2, ntp=1,
+[?2004l[?2004h>   barostat=1, taup=1.0,
+[?2004l[?2004h>   ntt=3, gamma_ln=2.0,
+[?2004l[?2004h>   temp0=300.0, pres0=1.01325,
+[?2004l[?2004h>   ntpr=250, ntwx=0, ntwr=2500,
+[?2004l[?2004h>   ioutfm=1,
+[?2004l[?2004h>  /
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# time sander -O -i npt_run.in -o npt_run.out -p solv_ions.prmtop -c nvt.rst7 -r npt_run.rst7
+[?2004l
+real	3m16.102s
+user	2m30.700s
+sys	0m1.968s
+[?2004hroot@359b42c9c43e:/task/test# grep "Density" npt_run.out
+[?2004l                                                    Density    =         0.7712
+                                                    Density    =         0.7825
+                                                    Density    =         0.7956
+                                                    Density    =         0.8082
+                                                    Density    =         0.8186
+                                                    Density    =         0.8307
+                                                    Density    =         0.8431
+                                                    Density    =         0.8523
+                                                    Density    =         0.8616
+                                                    Density    =         0.8718
+                                                    Density    =         0.8181
+                                                    Density    =         0.0331
+[?2004hroot@359b42c9c43e:/task/test# tail -n 20 npt_run.out
+[?2004l| Final Performance Info:
+| -----------------------------------------------------
+| Average timings for all steps:
+|     Elapsed(s) =     195.88 Per Step(ms) =      78.35
+|         ns/day =       2.21   seconds/ns =   39175.48
+| -----------------------------------------------------
+
+|           Job began  at 19:16:29.594  on 11/12/2026
+|           Setup done at 19:16:29.793  on 11/12/2026
+|           Run   done at 19:19:45.670  on 11/12/2026
+|     wallclock() was called  115533 times
+
+|3D-RISM memory allocation summary
+|Type          Maximum        Current   
+|Integer       0.00000 GB     0.00000 GB
+|Real          0.00000 GB     0.00000 GB
+|Logical       0.00000 GB     0.00000 GB
+|Character     0.00000 GB     0.00000 GB
+|---------------------------------------
+|Total         0.00000 GB     0.00000 GB
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import openmm as mm, openmm.app as app, openmm.unit as u
+[?2004l[?2004h> prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+[?2004l[?2004h> inpcrd = app.AmberInpcrdFile("min.rst7")
+[?2004l[?2004h> system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+[?2004l[?2004h> system.addForce(mm.MonteCarloBarostat(1.01325*u.bar, 300*u.kelvin, 10))
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+[?2004l[?2004h> sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+[?2004l[?2004h> sim.context.setPositions(inpcrd.positions)
+[?2004l[?2004h> if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300*u.kelvin)
+[?2004l[?2004h> # NVT for 0.5 ps (250 steps)
+[?2004l[?2004h> sim.step(250)
+[?2004l[?2004h> print("NVT complete")
+[?2004l[?2004h> # NPT: report density every 500 steps for 3000 steps
+[?2004l[?2004h> for i in range(6):
+[?2004l[?2004h>     sim.step(500)
+[?2004l[?2004h>     state = sim.context.getState(getPositions=True, enforcePeriodicBox=True)
+[?2004l[?2004h>     box = state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h>     vol = box[0][0] * box[1][1] * box[2][2]
+[?2004l[?2004h>     # total mass in g
+[?2004l[?2004h>     mass = sum(a.element.mass.value_in_unit(u.dalton) for a in prmtop.topology.atoms()) * 1.66054e-24
+[?2004l[?2004h>     density = mass / (vol * 1e-24)
+[?2004l[?2004h>     print(f"Step {(i+1)*500}: box = [{box[0][0]:.2f}, {box[1][1]:.2f}, {box[2][2]:.2f}], density = {density:.4f} g/cc")
+[?2004l[?2004h> '
+[?2004lNVT complete
+Step 500: box = [52.90, 47.60, 52.89], density = 0.8700 g/cc
+Step 1000: box = [51.91, 46.71, 51.90], density = 0.9205 g/cc
+Step 1500: box = [51.25, 46.12, 51.24], density = 0.9569 g/cc
+Step 2000: box = [50.79, 45.71, 50.78], density = 0.9827 g/cc
+Step 2500: box = [50.67, 45.60, 50.66], density = 0.9898 g/cc
+Step 3000: box = [50.44, 45.39, 50.43], density = 1.0036 g/cc
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/test/test_save_rst7.py
+[?2004l[?2004h> import parmed as pmd
+[?2004l[?2004h> import openmm as mm, openmm.app as app, openmm.unit as u
+[?2004l[?2004h> 
+[?2004l[?2004h> # Test saving state from sim
+[?2004l[?2004h> prmtop = app.AmberPrmtopFile("solv_ions.prmtop")
+[?2004l[?2004h> inpcrd = app.AmberInpcrdFile("min.rst7")
+[?2004l[?2004h> system = prmtop.createSystem(nonbondedMethod=app.PME, nonbondedCutoff=8.5*u.angstroms, constraints=app.HBonds)
+[?2004l[?2004h> system.addForce(mm.MonteCarloBarostat(1.01325*u.bar, 300*u.kelvin, 10))
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300*u.kelvin, 1.0/u.picosecond, 2.0*u.femtoseconds)
+[?2004l[?2004h> sim = app.Simulation(prmtop.topology, system, integrator, mm.Platform.getPlatformByName("CPU"))
+[?2004l[?2004h> sim.context.setPositions(inpcrd.positions)
+[?2004l[?2004h> if inpcrd.boxVectors is not None: sim.context.setPeriodicBoxVectors(*inpcrd.boxVectors)
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300*u.kelvin)
+[?2004l[?2004h> sim.step(50)
+[?2004l[?2004h> 
+[?2004l[?2004h> state = sim.context.getState(getPositions=True, getVelocities=True, enforcePeriodicBox=True)
+[?2004l[?2004h> parm = pmd.load_file("solv_ions.prmtop", "solv_ions.inpcrd")
+[?2004l[?2004h> parm.positions = state.getPositions(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> parm.velocities = state.getVelocities(asNumpy=True).value_in_unit(u.angstroms / u.picosecond)
+[?2004l[?2004h> box = state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> parm.box = [box[0][0], box[1][1], box[2][2], 90.0, 90.0, 90.0]
+[?2004l[?2004h> parm.save("test_out.rst7", overwrite=True)
+[?2004l[?2004h> print("Saved test_out.rst7")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/test/test_save_rst7.py
+[?2004lSaved test_out.rst7
+[?2004hroot@359b42c9c43e:/task/test# cpptraj -p solv_ions.prmtop -y test_out.rst7 -x test_check.pdb
+[?2004l
+CPPTRAJ: Trajectory Analysis. V6.29.13 (AmberTools)
+    ___  ___  ___  ___
+     | \/ | \/ | \/ | 
+    _|_/\_|_/\_|_/\_|_
+
+| Date/time: 11/12/26 19:22:38
+| Available memory: 8.080 GB
+
+	Reading 'solv_ions.prmtop' as Amber Topology
+	Radius Set: modified Bondi radii (mbondi)
+	Reading 'test_out.rst7' as Amber Restart
+	Writing 'test_check.pdb' as PDB
+---------- RUN BEGIN -------------------------------------------------
+
+PARAMETER FILES (1 total):
+ 0: solv_ions.prmtop, 11350 atoms, 3582 res, box: Orthorhombic, 3527 mol, 3503 solvent
+
+INPUT TRAJECTORIES (1 total):
+ 0: 'test_out.rst7' is an AMBER restart file with velocity info, Parm solv_ions.prmtop (Orthorhombic box) (reading 1 of 1)
+  Coordinate processing will occur on 1 frames.
+
+OUTPUT TRAJECTORIES (1 total):
+  'test_check.pdb' (1 frames) is a PDB file
+
+BEGIN TRAJECTORY PROCESSING:
+Warning: No PDB space group specified.
+.....................................................
+ACTIVE OUTPUT TRAJECTORIES (1):
+  test_check.pdb (coordinates, velocities, time, box)
+----- test_out.rst7 (1-1, 1) -----
+100% Complete.
+
+Read 1 frames and processed 1 frames.
+TIME: Avg. throughput= 25.2048 frames / second.
+
+ACTION OUTPUT:
+TIME: Analyses took 0.0000 seconds.
+
+RUN TIMING:
+TIME:		Init               : 0.0000 s (  0.06%)
+TIME:		Trajectory Process : 0.0397 s ( 99.75%)
+TIME:		Action Post        : 0.0000 s (  0.00%)
+TIME:		Analysis           : 0.0000 s (  0.00%)
+TIME:		Data File Write    : 0.0000 s (  0.03%)
+TIME:		Other              : 0.0001 s (  0.00%)
+TIME:	Run Total 0.0398 s
+---------- RUN END ---------------------------------------------------
+TIME: Total execution time: 0.0820 seconds.
+--------------------------------------------------------------------------------
+To cite CPPTRAJ use:
+Daniel R. Roe and Thomas E. Cheatham, III, "PTRAJ and CPPTRAJ: Software for
+  Processing and Analysis of Molecular Dynamics Trajectory Data". J. Chem.
+  Theory Comput., 2013, 9 (7), pp 3084-3095.
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd, inspect
+[?2004l[?2004h> print(inspect.getsource(pmd.amber.AmberAsciiRestart._write_velocities))
+[?2004l[?2004h> '
+[?2004lTraceback (most recent call last):
+  File "<string>", line 2, in <module>
+AttributeError: type object 'AmberAsciiRestart' has no attribute '_write_velocities'
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd, inspect
+[?2004l[?2004h> print(inspect.getsource(pmd.amber.AmberAsciiRestart.write))
+[?2004l[?2004h> '
+[?2004lTraceback (most recent call last):
+  File "<string>", line 2, in <module>
+AttributeError: type object 'AmberAsciiRestart' has no attribute 'write'
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd
+[?2004l[?2004h> print([m for m in dir(pmd.amber.AmberAsciiRestart) if not m.startswith("__")])
+[?2004l[?2004h> '
+[?2004l['CRDS_PER_LINE', 'DEFAULT_TITLE', '_parse', 'box', 'cell_angles', 'cell_lengths', 'close', 'coordinates', 'id_format', 'parse', 'positions', 'velocities']
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd, inspect
+[?2004l[?2004h> print(inspect.getsource(pmd.Structure.save))
+[?2004l[?2004h> '
+[?2004l    def save(self, fname, format=None, overwrite=False, **kwargs):
+        """
+        Saves the current Structure in the requested file format. Supported
+        formats can be specified explicitly or determined by file-name
+        extension. The following formats are supported, with the recognized
+        suffix and ``format`` keyword shown in parentheses:
+
+            - PDB (.pdb, pdb)
+            - PDBx/mmCIF (.cif, cif)
+            - PQR (.pqr, pqr)
+            - Amber topology file (.prmtop/.parm7, amber)
+            - CHARMM PSF file (.psf, psf)
+            - CHARMM coordinate file (.crd, charmmcrd)
+            - Gromacs topology file (.top, gromacs)
+            - Gromacs GRO file (.gro, gro)
+            - DLPOLY topology file (.field, field)
+            - DLPOLY coordinate file (.config, config)
+            - Mol2 file (.mol2, mol2)
+            - Mol3 file (.mol3, mol3)
+            - Amber ASCII restart (.rst7/.inpcrd/.restrt, rst7)
+            - Amber NetCDF restart (.ncrst, ncrst)
+
+        Parameters
+        ----------
+        fname : str or file-like object
+            Name of the file or file-like object to save. If ``format`` is
+            ``None`` (see below), the file type will be determined based on
+            the filename extension. If ``fname`` is file-like object,  ``format``
+            must be  provided. If the type cannot be determined, a ValueError is raised.
+        format : str, optional
+            The case-insensitive keyword specifying what type of file ``fname``
+            should be saved as. If ``None`` (default), the file type will be
+            determined from filename extension of ``fname``
+        overwrite : bool, optional
+            If True, allow the target file to be overwritten. Otherwise, an
+            IOError is raised if the file exists. Default is False
+        kwargs : keyword-arguments
+            Remaining arguments are passed on to the file writing routines that
+            are called by this function
+
+        Raises
+        ------
+        ValueError if either filename extension or ``format`` are not recognized
+        TypeError if the structure cannot be converted to the desired format for
+        whatever reason
+        IOError if the file cannot be written either because it exists and
+        ``overwrite`` is ``False``, the filesystem is read-only, or write
+        permissions are not granted for the user
+        """
+        from . import amber, charmm, formats, gromacs, dlpoly
+        extmap = {
+            '.pdb': 'PDB',
+            '.pqr': 'PQR',
+            '.cif': 'CIF',
+            '.pdbx': 'CIF',
+            '.parm7': 'AMBER',
+            '.prmtop': 'AMBER',
+            '.psf': 'PSF',
+            '.top': 'GROMACS',
+            '.gro': 'GRO',
+            '.field': 'FIELD',
+            '.config': 'CONFIG',
+            '.mol2': 'MOL2',
+            '.mol3': 'MOL3',
+            '.crd': 'CHARMMCRD',
+            '.rst7': 'RST7',
+            '.inpcrd': 'RST7',
+            '.restrt': 'RST7',
+            '.ncrst': 'NCRST',
+        }
+        # Basically everybody uses atom type names instead of type indexes. So
+        # convert to atom type names and switch back if need be
+        if not hasattr(fname, 'write'):
+            if os.path.exists(fname) and not overwrite:
+                raise IOError('%s exists; not overwriting' % fname)
+        else:
+            if format is None:
+                raise RuntimeError(
+                    'Must provide supported format if using file-like object')
+        all_ints = True
+        for atom in self.atoms:
+            if (isinstance(atom.type, int) and atom.atom_type is not UnassignedAtomType):
+                atom.type = str(atom.atom_type)
+            else:
+                all_ints = False
+        try:
+            if format is not None:
+                format = format.upper()
+            else:
+                base, ext = os.path.splitext(fname)
+                if ext in ('.bz2', '.gz'):
+                    ext = os.path.splitext(base)[1]
+                try:
+                    format = extmap[ext]
+                except KeyError:
+                    raise ValueError(
+                        'Could not determine file type of %s' % fname)
+            # Dispatch
+            if format == 'PDB':
+                self.write_pdb(fname, **kwargs)
+            elif format == 'CIF':
+                self.write_cif(fname, **kwargs)
+            elif format == 'PQR':
+                formats.PQRFile.write(self, fname, **kwargs)
+            elif format == 'PSF':
+                s = charmm.CharmmPsfFile.from_structure(self)
+                s.write_psf(fname, **kwargs)
+            elif format == 'GRO':
+                gromacs.GromacsGroFile.write(self, fname, **kwargs)
+            elif format == 'CONFIG':
+                dlpoly.DlpolyConfigFile.write(self, fname, **kwargs)
+            elif format == 'MOL2':
+                formats.Mol2File.write(self, fname, **kwargs)
+            elif format == 'MOL3':
+                formats.Mol2File.write(self, fname, mol3=True, **kwargs)
+            elif format == 'GROMACS':
+                s = gromacs.GromacsTopologyFile.from_structure(self)
+                s.write(fname, **kwargs)
+            elif format == 'FIELD':
+                s = dlpoly.DlpolyFieldFile.from_structure(self)
+                s.write(fname, **kwargs)
+            elif format == 'CHARMMCRD':
+                charmm.CharmmCrdFile.write(self, fname, **kwargs)
+            elif format == 'AMBER':
+                if (self.trigonal_angles or self.out_of_plane_bends or self.torsion_torsions or
+                        self.pi_torsions or self.stretch_bends or self.chiral_frames or
+                        self.multipole_frames):
+                    s = amber.AmoebaParm.from_structure(self)
+                    s.write_parm(fname, **kwargs)
+                elif self.urey_bradleys or self.impropers:
+                    s = amber.ChamberParm.from_structure(self)
+                    s.write_parm(fname, **kwargs)
+                else:
+                    try:
+                        s = amber.AmberParm.from_structure(self)
+                    except TypeError as e:
+                        if 'Cannot translate exceptions' in str(e):
+                            s = amber.ChamberParm.from_structure(self)
+                        else:
+                            raise  # pragma: no cover
+                    s.write_parm(fname, **kwargs)
+            elif format in ('RST7', 'NCRST'):
+                rst7 = amber.Rst7(natom=len(self.atoms), **kwargs)
+                rst7.coordinates = self.coordinates
+                rst7.vels = self.velocities
+                rst7.box = self.box
+                rst7.write(fname, netcdf=(format == 'NCRST'))
+            else:
+                raise ValueError('No file type matching %s' % format)
+        finally:
+            if all_ints:
+                for atom in self.atoms:
+                    atom.type = int(atom.atom_type)
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd, inspect
+[?2004l[?2004h> print(inspect.getsource(pmd.amber.Rst7))
+[?2004l[?2004h> '
+[?2004lclass Rst7(object):
+    """
+    Amber input coordinate (or restart coordinate) file. Front-end for the
+    readers and writers, supports both NetCDF and ASCII restarts.
+
+    Parameters
+    ----------
+    filename : str, optional
+        If a filename is provided, this file is parsed and the Rst7 data
+        populated from that file. The format (ASCII or NetCDF) is autodetected
+    natom : int, optional
+        If no filename is provided, this value is required. If a filename is
+        provided, this value is ignored (and instead set to the value of natom
+        from the coordinate file). This is the number of atoms for which we have
+        coordinates. If not provided for a new file, it *must* be set later.
+    title : str, optional
+        For a file that is to be written, this is the title that will be given
+        to that file. Default is an empty string
+    time : float, optional
+        The time to write to the restart file. This is cosmetic. Default is 0
+    """
+
+    def __init__(self, filename=None, natom=None, title='', time=0.0):
+        """
+        Optionally takes a filename to read. This is deprecated, though, as the
+        alternative constructor "open" should be used instead
+        """
+        self.coordinates = []
+        self.vels = None
+        self._box = None
+        self.natom = natom
+        self.title = title
+        self.time = 0
+        if filename is not None:
+            self.filename = filename
+            self._read(filename)
+
+    @property
+    def box(self):
+        return self._box
+    @box.setter
+    def box(self, value):
+        if value is None:
+            self._box = None
+        else:
+            self._box = np.array(value).reshape((-1, 6))[0]
+
+    @classmethod
+    def open(cls, filename):
+        """ Constructor that opens and parses an input coordinate file
+
+        Parameters
+        ----------
+        filename : str
+            Name of the file to parse
+        """
+        inst = cls()
+        inst.filename = filename
+        inst._read(filename)
+        return inst
+
+    def _read(self, filename):
+        """
+        Open and parse an input coordinate file in either ASCII or NetCDF format
+        """
+        try:
+            f = AmberAsciiRestart(filename, 'r')
+            self.natom = f.natom
+        except ValueError:
+            # Maybe it's a NetCDF file?
+            try:
+                f = NetCDFRestart.open_old(filename)
+                self.natom = f.atom
+            except (TypeError, RuntimeError):
+                raise AmberError('Could not parse restart file %s' % filename)
+
+        self.coordinates = f.coordinates
+        if f.hasvels:
+            self.vels = f.velocities
+        if f.hasbox:
+            self.box = f.box
+        self.title = f.title
+        self.time = f.time
+
+    @classmethod
+    def copy_from(cls, thing):
+        """
+        Copies the coordinates, velocities, and box information from another
+        instance
+        """
+        inst = cls()
+        inst.natom = thing.natom
+        inst.title = thing.title
+        inst.coordinates = thing.coordinates[:]
+        if hasattr(thing, 'vels'): inst.vels = _copy.deepcopy(thing.vels)
+        if hasattr(thing, 'box'): inst.box = _copy.deepcopy(thing.box)
+        inst.time = thing.time
+
+        return inst
+
+    def __copy__(self):
+        """ Copy constructor """
+        return type(self).copy_from(self)
+
+    def write(self, fname, netcdf=False):
+        """ Writes the coordinates and/or velocities to a restart file """
+        if netcdf:
+            if self.natom is None:
+                raise RuntimeError('Number of atoms must be set for NetCDF '
+                                   'Restart files before write time')
+            f = NetCDFRestart.open_new(fname, self.natom, self.box is not None,
+                                       self.vels is not None, self.title)
+        else:
+            f = AmberAsciiRestart(fname, 'w', natom=self.natom,
+                                  title=self.title)
+
+        f.time = self.time
+        # Now write the coordinates
+        f.coordinates = self.coordinates
+        if self.vels is not None:
+            f.velocities = self.vels
+        if self.box is not None:
+            f.box = self.box
+        f.close()
+
+    @property
+    def positions(self):
+        """ Atomic coordinates with units """
+        coordinates = self.coordinates.reshape(self.natom, 3)
+        return [Vec3(*x) for x in coordinates] * u.angstroms
+
+    @property
+    def velocities(self):
+        """ Atomic velocities in units of angstroms/picoseconds """
+        return np.asarray(self.vels).reshape(self.natom, 3)
+
+    @property
+    def box_vectors(self):
+        """ Unit cell vectors with units """
+        if self.box is None: return None
+        return box_lengths_and_angles_to_vectors(*self.box)
+
+    @property
+    def hasbox(self):
+        """ Whether or not this Rst7 has unit cell information """
+        return self.box is not None
+
+    @property
+    def hasvels(self):
+        """ Whether or not this Rst7 has velocities """
+        return self.vels is not None
+
+[?2004hroot@359b42c9c43e:/task/test# python3 -c 'import parmed as pmd, inspect
+[?2004l[?2004h> print(inspect.getsource(pmd.amber.AmberAsciiRestart.velocities.fset))
+[?2004l[?2004h> '
+[?2004l    @velocities.setter
+    def velocities(self, stuff):
+        if self._status == 'old':
+            raise RuntimeError('Cannot set velocities on an old restart')
+        stuff = np.asarray(stuff).ravel()
+        if not self._coords_written:
+            raise RuntimeError('Coordinates must be set before velocities')
+        if self._cell_lengths_written or self._cell_angles_written:
+            raise RuntimeError('Velocities must be written before the box info')
+        if self._vels_written:
+            raise RuntimeError('Can only write velocities once')
+        if len(stuff) != 3 * self.natom:
+            raise ValueError(f'Got {len(stuff)} velocities for {self.natom} atoms.')
+        self._velocities = stuff.reshape((-1, self.natom, 3))
+        fmt = '%12.7f%12.7f%12.7f'
+        numwrit = 0
+        for i in range(self.natom):
+            i3 = i * 3
+            self._file.write(fmt % tuple(stuff[i3+i]*ONEVELSCALE for i in range(3)))
+            numwrit += 1
+            if numwrit % 2 == 0:
+                self._file.write('\n')
+        if self.natom % 2 == 1:
+            self._file.write('\n')
+        self._vels_written = self.hasvels = True
+
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' > /task/run_sop.py
+[?2004l'36' and a['aname'] == 'CA'][0]
+c36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'C'][0]
+o36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'O'][0]
+
+dir_n = norm(norm(c36 - ca36) + norm(c36 - o36))
+nme_n = c36 + dir_n * 1.335
+nme_c = place_atom(ca36, c36, nme_n, 1.45, 121.9, 180.0)
+
+nme_atoms = [
+    {'aname': 'N', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_n},
+    {'aname': 'C', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_c}
+]
+
+n41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'N'][0]
+ca41 = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'CA'][0]
+c41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'C'][0]
+
+ace_c   = place_atom(c41, ca41, n41, 1.335, 121.9, 180.0)
+ace_ch3 = place_atom(ca41, n41, ace_c, 1.50, 116.6, 180.0)
+ace_o   = place_atom(ca41, n41, ace_c, 1.23, 122.9, 0.0)
+
+ace_atoms = [
+    {'aname': 'CH3', 'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_ch3},
+    {'aname': 'C',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_c},
+    {'aname': 'O',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_o}
+]
+
+clean_pdb_path = '/task/output/prepared_protein.pdb'
+atom_idx = 1
+with open(clean_pdb_path, 'w') as out:
+    for a in seg1:
+        c = a['coord']
+        out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+        atom_idx += 1
+    for a in nme_atoms:
+        c = a['coord']
+        out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+        atom_idx += 1
+    out.write('TER\n')
+    for a in ace_atoms:
+        c = a['coord']
+        out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1[?2004h> import os, json, subprocess
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import parmed as pmd
+[?2004l[?2004h> import openmm as mm
+[?2004l[?2004h> import openmm.app as app
+[?2004l[?2004h> import openmm.unit as u
+[?2004l[?2004h> 
+[?2004l[?2004h> OUTPUT_DIR = '/task/output'
+[?2004l[?2004h> os.makedirs(OUTPUT_DIR, exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(v):
+[?2004l[?2004h>     return v / np.linalg.norm(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> def place_atom(p1, p2, p3, length, angle_deg, dihedral_deg):
+[?2004l[?2004h>     v21 = norm(p1 - p2)
+[?2004l[?2004h>     v23 = norm(p3 - p2)
+[?2004l[?2004h>     n = norm(np.cross(v21, v23))
+[?2004l[?2004h>     u = norm(np.cross(n, v23))
+[?2004l[?2004h>     theta = np.radians(angle_deg)
+[?2004l[?2004h>     phi = np.radians(dihedral_deg)
+[?2004l[?2004h>     d = length * (-np.cos(theta) * v23 + np.sin(theta) * (np.cos(phi) * u + np.sin(phi) * n))
+[?2004l[?2004h>     return p3 + d
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/input/structure.pdb') as f:
+[?2004l[?2004h>     lines = f.readlines()
+[?2004l[?2004h> 
+[?2004l[?2004h> filtered_atoms = []
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith(('ATOM', 'HETATM')):
+[?2004l[?2004h>         rname = l[17:20].strip()
+[?2004l[?2004h>         chain = l[21]
+[?2004l[?2004h>         rnum = l[22:26].strip()
+[?2004l[?2004h>         icode = l[26].strip()
+[?2004l[?2004h>         alt = l[16]
+[?2004l[?2004h>         aname = l[12:16].strip()
+[?2004l[?2004h>         if rname in ['GOL', 'SO4', 'EDO', 'CL', 'NA', 'HOH']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         full_res = rnum + icode
+[?2004l[?2004h>         if full_res == '32' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '34' and alt not in [' ', 'B']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res == '43' and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         elif full_res not in ['32', '34', '43'] and alt not in [' ', 'A']:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if rname == 'MSE':
+[?2004l[?2004h>             rname = 'MET'
+[?2004l[?2004h>             if aname == 'SE':
+[?2004l[?2004h>                 aname = 'SD'
+[?2004l[?2004h>         if rname == 'CYS' and full_res in ['22', '31', '47', '55', '67A', '70']:
+[?2004l[?2004h>             rname = 'CYX'
+[?2004l[?2004h>         x = float(l[30:38])
+[?2004l[?2004h>         y = float(l[38:46])
+[?2004l[?2004h>         z = float(l[46:54])
+[?2004l[?2004h>         filtered_atoms.append({
+[?2004l[?2004h>             'aname': aname, 'rname': rname, 'chain': chain,
+[?2004l[?2004h>             'rnum': rnum, 'icode': icode, 'coord': np.array([x, y, z])
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> seg1 = [a for a in filtered_atoms if int(a['rnum']) <= 36]
+[?2004l[?2004h> seg2 = [a for a in filtered_atoms if int(a['rnum']) >= 41]
+[?2004l[?2004h> 
+[?2004l[?2004h> ca36 = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> c36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'C'][0]
+[?2004l[?2004h> o36  = [a['coord'] for a in seg1 if a['rnum'] == '36' and a['aname'] == 'O'][0]
+[?2004l[?2004h> 
+[?2004l[?2004h> dir_n = norm(norm(c36 - ca36) + norm(c36 - o36))
+[?2004l[?2004h> nme_n = c36 + dir_n * 1.335
+[?2004l[?2004h> nme_c = place_atom(ca36, c36, nme_n, 1.45, 121.9, 180.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> nme_atoms = [
+[?2004l[?2004h>     {'aname': 'N', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_n},
+[?2004l[?2004h>     {'aname': 'C', 'rname': 'NME', 'chain': 'P', 'rnum': '37', 'icode': '', 'coord': nme_c}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> n41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'N'][0]
+[?2004l[?2004h> ca41 = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'CA'][0]
+[?2004l[?2004h> c41  = [a['coord'] for a in seg2 if a['rnum'] == '41' and a['aname'] == 'C'][0]
+[?2004l00           {a['aname'][0]}\n")
+        atom_idx += 1
+    for a in seg2:
+        c = a['coord']
+        out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+        atom_idx += 1
+    out.write('TER\nEND\n')
+print('Prepared protein PDB written.')
+EOF
+python3 /task/run_sop.py
+[?2004h> 
+[?2004l[?2004h> ace_c   = place_atom(c41, ca41, n41, 1.335, 121.9, 180.0)
+[?2004l[?2004h> ace_ch3 = place_atom(ca41, n41, ace_c, 1.50, 116.6, 180.0)
+[?2004l[?2004h> ace_o   = place_atom(ca41, n41, ace_c, 1.23, 122.9, 0.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> ace_atoms = [
+[?2004l[?2004h>     {'aname': 'CH3', 'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_ch3},
+[?2004l[?2004h>     {'aname': 'C',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_c},
+[?2004l[?2004h>     {'aname': 'O',   'rname': 'ACE', 'chain': 'P', 'rnum': '40', 'icode': '', 'coord': ace_o}
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> clean_pdb_path = '/task/output/prepared_protein.pdb'
+[?2004l[?2004h> atom_idx = 1
+[?2004l[?2004h> with open(clean_pdb_path, 'w') as out:
+[?2004l[?2004h>     for a in seg1:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in nme_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write('TER\n')
+[?2004l[?2004h>     for a in ace_atoms:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     for a in seg2:
+[?2004l[?2004h>         c = a['coord']
+[?2004l[?2004h>         out.write(f"ATOM  {atom_idx:5d}  {a['aname']:<4s}{a['rname']:3s} {a['chain']}{a['rnum']:>4s}{a['icode']:1s}   {c[0]:8.3f}{c[1]:8.3f}{c[2]:8.3f}  1.00  0.00           {a['aname'][0]}\n")
+[?2004l[?2004h>         atom_idx += 1
+[?2004l[?2004h>     out.write('TER\nEND\n')
+[?2004l[?2004h> print('Prepared protein PDB written.')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/run_sop.py
+[?2004lPrepared protein PDB written.
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' >> /task/run_sop.py
+[?2004l[?2004h> 
+[?2004l[?2004h> leap_solv_script = '''source leaprc.protein.ff14SB
+[?2004l[?2004h> source leaprc.water.tip3p
+[?2004l[?2004h> mol = loadpdb /task/output/prepared_protein.pdb
+[?2004l[?2004h> bond mol.22.SG mol.70.SG
+[?2004l[?2004h> bond mol.31.SG mol.53.SG
+[?2004l[?2004h> bond mol.45.SG mol.66.SG
+[?2004l[?2004h> solvatebox mol TIP3PBOX 8.0
+[?2004l[?2004h> saveamberparm mol /task/output/temp_solv.prmtop /task/output/temp_solv.inpcrd
+[?2004l[?2004h> quit
+[?2004l[?2004h> '''
+[?2004l[?2004h> with open('/task/output/solv_init.leap', 'w') as f:
+[?2004l[?2004h>     f.write(leap_solv_script)
+[?2004l[?2004h> 
+[?2004l[?2004h> res = subprocess.run(['tleap', '-f', '/task/output/solv_init.leap'], capture_output=True, text=True)
+[?2004l[?2004h> prm_temp = pmd.load_file('/task/output/temp_solv.prmtop')
+[?2004l[?2004h> n_water_initial = sum(1 for r in prm_temp.residues if r.name == 'WAT')
+[?2004l[?2004h> print(f'Initial water molecules: {n_water_initial}')
+[?2004l[?2004h> 
+[?2004l[?2004h> n_pairs = round(0.15 * (n_water_initial - 5) / (55.5 + 2 * 0.15))
+[?2004l[?2004h> n_water_final = n_water_initial - 5 - 2 * n_pairs
+[?2004l[?2004h> print(f'Calculated NaCl pairs: {n_pairs}, Final waters: {n_water_final}')
+[?2004l[?2004h> 
+[?2004l[?2004h> leap_final_script = f'''source leaprc.protein.ff14SB
+[?2004l[?2004h> source leaprc.water.tip3p
+[?2004l[?2004h> mol = loadpdb /task/output/prepared_protein.pdb
+[?2004l[?2004h> bond mol.22.SG mol.70.SG
+[?2004l[?2004h> bond mol.31.SG mol.53.SG
+[?2004l[?2004h> bond mol.45.SG mol.66.SG
+[?2004l[?2004h> solvatebox mol TIP3PBOX 8.0
+[?2004l[?2004h> addionsrand mol Cl- 0
+[?2004l[?2004h> addionsrand mol Na+ {n_pairs} Cl- {n_pairs}
+[?2004l[?2004h> saveamberparm mol /task/output/system.prmtop /task/output/system.inpcrd
+[?2004l[?2004h> quit
+[?2004l[?2004h> '''
+[?2004l[?2004h> with open('/task/output/build_system.leap', 'w') as f:
+[?2004l[?2004h>     f.write(leap_final_script)
+[?2004l[?2004h> 
+[?2004l[?2004h> res = subprocess.run(['tleap', '-f', '/task/output/build_system.leap'], capture_output=True, text=True)
+[?2004l[?2004h> if res.returncode != 0:
+[?2004l[?2004h>     print('tleap failed:', res.stderr)
+[?2004l[?2004h>     exit(1)
+[?2004l[?2004h> 
+[?2004l[?2004h> prm = pmd.load_file('/task/output/system.prmtop', '/task/output/system.inpcrd')
+[?2004l[?2004h> n_na = sum(1 for r in prm.residues if r.name in ['Na+', 'NA'])
+[?2004l[?2004h> n_cl = sum(1 for r in prm.residues if r.name in ['Cl-', 'CL'])
+[?2004l[?2004h> n_wat = sum(1 for r in prm.residues if r.name in ['WAT', 'HOH'])
+[?2004l[?2004h> solute_charge = sum(atom.charge for atom in prm.atoms if atom.residue.name not in ['WAT', 'HOH', 'Na+', 'NA', 'Cl-', 'CL'])
+[?2004l[?2004h> protein_net_charge = int(round(solute_charge))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Built system: Na+: {n_na}, Cl-: {n_cl}, WAT: {n_wat}, Solute charge: {protein_net_charge}')
+[?2004l[?2004h> print(f'Initial box: {prm.box}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/run_sop.py
+[?2004lPrepared protein PDB written.
+Initial water molecules: 3527
+Calculated NaCl pairs: 9, Final waters: 3504
+Built system: Na+: 9, Cl-: 14, WAT: 3504, Solute charge: 5
+Initial box: [55.366399 49.823973 55.356936 90.       90.       90.      ]
+[?2004hroot@359b42c9c43e:/task/test# cat << 'EOF' >> /task/run_sop.py
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Starting equilibration...')
+[?2004l[?2004h> prmtop_mm = app.AmberPrmtopFile('/task/output/system.prmtop')
+[?2004l[?2004h> inpcrd_mm = app.AmberInpcrdFile('/task/output/system.inpcrd')
+[?2004l[?2004h> 
+[?2004l[?2004h> system_mm = prmtop_mm.createSystem(
+[?2004l[?2004h>     nonbondedMethod=app.PME,
+[?2004l[?2004h>     nonbondedCutoff=8.5 * u.angstroms,
+[?2004l[?2004h>     constraints=app.HBonds
+[?2004l[?2004h> )
+[?2004l[?2004h> 
+[?2004l[?2004h> integrator = mm.LangevinMiddleIntegrator(300 * u.kelvin, 1.0 / u.picosecond, 2.0 * u.femtoseconds)
+[?2004l[?2004h> platform = mm.Platform.getPlatformByName('CPU')
+[?2004l[?2004h> sim = app.Simulation(prmtop_mm.topology, system_mm, integrator, platform)
+[?2004l[?2004h> sim.context.setPositions(inpcrd_mm.positions)
+[?2004l[?2004h> if inpcrd_mm.boxVectors is not None:
+[?2004l[?2004h>     sim.context.setPeriodicBoxVectors(*inpcrd_mm.boxVectors)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('3.1 Minimising...')
+[?2004l[?2004h> sim.minimizeEnergy(maxIterations=400)
+[?2004l[?2004h> print('Minimisation complete.')
+[?2004l[?2004h> 
+[?2004l[?2004h> print('3.2 Thermalising at NVT (300 K, 1.0 ps)...')
+[?2004l[?2004h> sim.context.setVelocitiesToTemperature(300 * u.kelvin)
+[?2004l[?2004h> sim.step(500)
+[?2004l[?2004h> print('Thermalisation complete.')
+[?2004l[?2004h> 
+[?2004l[?2004h> print('3.3 Running NPT equilibration (300 K, 1 bar)...')
+[?2004l[?2004h> barostat = mm.MonteCarloBarostat(1.01325 * u.bar, 300 * u.kelvin, 10)
+[?2004l[?2004h> system_mm.addForce(barostat)
+[?2004l[?2004h> state_nvt = sim.context.getState(getPositions=True, getVelocities=True, getPeriodicBoxVectors=True)
+[?2004l[?2004h> integrator_npt = mm.LangevinMiddleIntegrator(300 * u.kelvin, 1.0 / u.picosecond, 2.0 * u.femtoseconds)
+[?2004l[?2004h> sim_npt = app.Simulation(prmtop_mm.topology, system_mm, integrator_npt, platform)
+[?2004l[?2004h> sim_npt.context.setPositions(state_nvt.getPositions())
+[?2004l[?2004h> sim_npt.context.setVelocities(state_nvt.getVelocities())
+[?2004l[?2004h> sim_npt.context.setPeriodicBoxVectors(*state_nvt.getPeriodicBoxVectors())
+[?2004l[?2004h> 
+[?2004l[?2004h> total_mass_daltons = sum(a.element.mass.value_in_unit(u.dalton) for a in prmtop_mm.topology.atoms())
+[?2004l[?2004h> mass_grams = total_mass_daltons * 1.660539e-24
+[?2004l[?2004h> 
+[?2004l[?2004h> densities = []
+[?2004l[?2004h> for block in range(8):
+[?2004l[?2004h>     sim_npt.step(500)
+[?2004l[?2004h>     st = sim_npt.context.getState(getPositions=True, getPeriodicBoxVectors=True)
+[?2004l[?2004h>     box = st.getPeriodicBoxVectors(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h>     vol_a3 = box[0][0] * box[1][1] * box[2][2]
+[?2004l[?2004h>     d = mass_grams / (vol_a3 * 1e-24)
+[?2004l[?2004h>     densities.append(d)
+[?2004l[?2004h>     print(f'Block {block+1} ({(block+1)*1.0:.1f} ps NPT): box = [{box[0][0]:.3f}, {box[1][1]:.3f}, {box[2][2]:.3f}], density = {d:.4f} g/cc')
+[?2004l[?2004h> 
+[?2004l[?2004h> final_state = sim_npt.context.getState(getPositions=True, getVelocities=True, enforcePeriodicBox=True)
+[?2004l[?2004h> final_box_vec = final_state.getPeriodicBoxVectors(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> final_box = [final_box_vec[0][0], final_box_vec[1][1], final_box_vec[2][2], 90.0, 90.0, 90.0]
+[?2004l[?2004h> 
+[?2004l[?2004h> parm_out = pmd.load_file('/task/output/system.prmtop', '/task/output/system.inpcrd')
+[?2004l[?2004h> parm_out.positions = final_state.getPositions(asNumpy=True).value_in_unit(u.angstroms)
+[?2004l[?2004h> parm_out.velocities = final_state.getVelocities(asNumpy=True).value_in_unit(u.angstroms / u.picosecond)
+[?2004l[?2004h> parm_out.box = final_box
+[?2004l[?2004h> parm_out.save('/task/output/equilibrated.rst7', overwrite=True)
+[?2004l[?2004h> print('Saved /task/output/equilibrated.rst7')
+[?2004l[?2004h> 
+[?2004l[?2004h> report = {
+[?2004l[?2004h>     'disulfides': [
+[?2004l[?2004h>         ['22', '70'],
+[?2004l[?2004h>         ['31', '55'],
+[?2004l[?2004h>         ['47', '67A']
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'protein_net_charge': int(protein_net_charge),
+[?2004l[?2004h>     'n_na': int(n_na),
+[?2004l[?2004h>     'n_cl': int(n_cl),
+[?2004l[?2004h>     'n_water': int(n_wat),
+[?2004l[?2004h>     'box_angstrom': [
+[?2004l[?2004h>         round(float(final_box_vec[0][0]), 4),
+[?2004l[?2004h>         round(float(final_box_vec[1][1]), 4),
+[?2004l[?2004h>         round(float(final_box_vec[2][2]), 4)
+[?2004l[?2004h>     ]
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/output/report.json', 'w') as f:
+[?2004l[?2004h>     json.dump(report, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Report written:')
+[?2004l[?2004h> print(json.dumps(report, indent=2))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/run_sop.py
+[?2004lPrepared protein PDB written.
+Initial water molecules: 3527
+Calculated NaCl pairs: 9, Final waters: 3504
+Built system: Na+: 9, Cl-: 14, WAT: 3504, Solute charge: 5
+Initial box: [55.366399 49.823973 55.356936 90.       90.       90.      ]
+Starting equilibration...
+3.1 Minimising...
+Minimisation complete.
+3.2 Thermalising at NVT (300 K, 1.0 ps)...
+Thermalisation complete.
+3.3 Running NPT equilibration (300 K, 1 bar)...
+Traceback (most recent call last):
+  File "/task/run_sop.py", line 195, in <module>
+    state_nvt = sim.context.getState(getPositions=True, getVelocities=True, getPeriodicBoxVectors=True)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Context.getState() got an unexpected keyword argument 'getPeriodicBoxVectors'
+[?2004hroot@359b42c9c43e:/task/test# sed -i 's/getPeriodicBoxVectors=True/enforcePeriodicBox=True/g' /task/run_sop.py
+[?2004l[?2004hroot@359b42c9c43e:/task/test# python3 /task/run_sop.py
+[?2004lPrepared protein PDB written.
+Initial water molecules: 3527
+Calculated NaCl pairs: 9, Final waters: 3504
+Built system: Na+: 9, Cl-: 14, WAT: 3504, Solute charge: 5
+Initial box: [55.366399 49.823973 55.356936 90.       90.       90.      ]
+Starting equilibration...
+3.1 Minimising...
+Minimisation complete.
+3.2 Thermalising at NVT (300 K, 1.0 ps)...
+Thermalisation complete.
+3.3 Running NPT equilibration (300 K, 1 bar)...
+Block 1 (1.0 ps NPT): box = [54.023, 48.615, 54.014], density = 0.8169 g/cc
+Block 2 (2.0 ps NPT): box = [52.836, 47.547, 52.827], density = 0.8732 g/cc
+Block 3 (3.0 ps NPT): box = [52.118, 46.901, 52.109], density = 0.9098 g/cc
+Block 4 (4.0 ps NPT): box = [51.497, 46.342, 51.488], density = 0.9431 g/cc
+Block 5 (5.0 ps NPT): box = [51.172, 46.050, 51.164], density = 0.9612 g/cc
+Block 6 (6.0 ps NPT): box = [50.762, 45.680, 50.753], density = 0.9847 g/cc
+Block 7 (7.0 ps NPT): box = [50.543, 45.483, 50.534], density = 0.9976 g/cc
+Block 8 (8.0 ps NPT): box = [50.505, 45.450, 50.497], density = 0.9998 g/cc
+Saved /task/output/equilibrated.rst7
+Report written:
+{
+  "disulfides": [
+    [
+      "22",
+      "70"
+    ],
+    [
+      "31",
+      "55"
+    ],
+    [
+      "47",
+      "67A"
+    ]
+  ],
+  "protein_net_charge": 5,
+  "n_na": 9,
+  "n_cl": 14,
+  "n_water": 3504,
+  "box_angstrom": [
+    50.5055,
+    45.4497,
+    50.4969
+  ]
+}
+[?2004hroot@359b42c9c43e:/task/test# ls -la /task/output
+[?2004ltotal 5716
+drwxr-xr-x 1 root root    4096 Nov 12 19:30 .
+drwxr-xr-x 1 root root    4096 Nov 12 19:26 ..
+-rw-rw-rw- 1 root root     333 Nov 12 19:26 build_system.leap
+-rw-rw-rw- 1 root root  828865 Nov 12 19:30 equilibrated.rst7
+-rw-rw-rw- 1 root root   31612 Nov 12 19:26 prepared_protein.pdb
+-rw-rw-rw- 1 root root     269 Nov 12 19:30 report.json
+-rw-rw-rw- 1 root root     289 Nov 12 19:26 solv_init.leap
+-rw-rw-rw- 1 root root  414478 Nov 12 19:26 system.inpcrd
+-rw-rw-rw- 1 root root 2059285 Nov 12 19:26 system.prmtop
+-rw-rw-rw- 1 root root  416157 Nov 12 19:26 temp_solv.inpcrd
+-rw-rw-rw- 1 root root 2065494 Nov 12 19:26 temp_solv.prmtop
+[?2004hroot@359b42c9c43e:/task/test# cat /task/output/report.json
+[?2004l{
+  "disulfides": [
+    [
+      "22",
+      "70"
+    ],
+    [
+      "31",
+      "55"
+    ],
+    [
+      "47",
+      "67A"
+    ]
+  ],
+  "protein_net_charge": 5,
+  "n_na": 9,
+  "n_cl": 14,
+  "n_water": 3504,
+  "box_angstrom": [
+    50.5055,
+    45.4497,
+    50.4969
+  ]
+}[?2004hroot@359b42c9c43e:/task/test# rm -f /task/output/build_system.leap /task/output/solv_init.leap /task/output/prepared_protein.pdb /task/output/temp_solv.* 
+[?2004l[?2004hroot@359b42c9c43e:/task/test# ls -la /task/output
+[?2004ltotal 3248
+drwxr-xr-x 1 root root    4096 Nov 12 19:30 .
+drwxr-xr-x 1 root root    4096 Nov 12 19:26 ..
+-rw-rw-rw- 1 root root  828865 Nov 12 19:30 equilibrated.rst7
+-rw-rw-rw- 1 root root     269 Nov 12 19:30 report.json
+-rw-rw-rw- 1 root root  414478 Nov 12 19:26 system.inpcrd
+-rw-rw-rw- 1 root root 2059285 Nov 12 19:26 system.prmtop
+[?2004hroot@359b42c9c43e:/task/test# python3 -c '
+[?2004l[?2004h> import json, parmed as pmd
+[?2004l[?2004h> 
+[?2004l[?2004h> # 1. Topology & Inpcrd
+[?2004l[?2004h> prm = pmd.load_file("/task/output/system.prmtop", "/task/output/system.inpcrd")
+[?2004l[?2004h> print(f"Total atoms in system.prmtop: {len(prm.atoms)}")
+[?2004l[?2004h> print(f"Total residues: {len(prm.residues)}")
+[?2004l[?2004h> print(f"system.inpcrd box: {prm.box}")
+[?2004l[?2004h> assert prm.box is not None, "system.inpcrd must contain periodic box!"
+[?2004l[?2004h> 
+[?2004l[?2004h> # 2. Equilibrated restart
+[?2004l[?2004h> rst = pmd.load_file("/task/output/system.prmtop", "/task/output/equilibrated.rst7")
+[?2004l[?2004h> print(f"Total atoms in equilibrated.rst7: {len(rst.atoms)}")
+[?2004l[?2004h> assert len(rst.atoms) == len(prm.atoms), "Atom counts must match!"
+[?2004l[?2004h> print(f"equilibrated.rst7 box: {rst.box}")
+[?2004l[?2004h> assert rst.box is not None, "equilibrated.rst7 must contain periodic box!"
+[?2004l[?2004h> assert rst.velocities is not None, "equilibrated.rst7 must contain velocities!"
+[?2004l[?2004h> print(f"Velocities present: shape = {rst.velocities.shape}")
+[?2004l[?2004h> 
+[?2004l[?2004h> # 3. Report
+[?2004l[?2004h> with open("/task/output/report.json") as f:
+[?2004l[?2004h>     rep = json.load(f)
+[?2004l[?2004h> print("report.json:", json.dumps(rep, indent=2))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check keys
+[?2004l[?2004h> required_keys = {"disulfides", "protein_net_charge", "n_na", "n_cl", "n_water", "box_angstrom"}
+[?2004l[?2004h> assert set(rep.keys()) == required_keys, f"Keys mismatch: {set(rep.keys())} vs {required_keys}"
+[?2004l[?2004h> 
+[?2004l[?2004h> assert isinstance(rep["disulfides"], list)
+[?2004l[?2004h> assert len(rep["disulfides"]) == 3
+[?2004l[?2004h> assert isinstance(rep["protein_net_charge"], int)
+[?2004l[?2004h> assert rep["protein_net_charge"] == 5
+[?2004l[?2004h> assert isinstance(rep["n_na"], int) and rep["n_na"] == 9
+[?2004l[?2004h> assert isinstance(rep["n_cl"], int) and rep["n_cl"] == 14
+[?2004l[?2004h> assert isinstance(rep["n_water"], int) and rep["n_water"] == 3504
+[?2004l[?2004h> assert len(rep["box_angstrom"]) == 3
+[?2004l[?2004h> for i in range(3):
+[?2004l[?2004h>     assert abs(rep["box_angstrom"][i] - rst.box[i]) < 1e-3, f"Box mismatch at {i}: {rep['box_angstrom'][i]} vs {rst.box[i]}"
+[?2004l[?2004h> 
+[?2004l[?2004h> print("ALL CHECKS PASSED SUCCESSFULLY!")
+[?2004l[?2004h> '
+[?2004lTotal atoms in system.prmtop: 11353
+Total residues: 3583
+system.inpcrd box: [55.366399 49.823973 55.356936 90.       90.       90.      ]
+Total atoms in equilibrated.rst7: 11353
+equilibrated.rst7 box: [50.5054877 45.4496608 50.4968555 90.        90.        90.       ]
+Velocities present: shape = (11353, 3)
+report.json: {
+  "disulfides": [
+    [
+      "22",
+      "70"
+    ],
+    [
+      "31",
+      "55"
+    ],
+    [
+      "47",
+      "67A"
+    ]
+  ],
+  "protein_net_charge": 5,
+  "n_na": 9,
+  "n_cl": 14,
+  "n_water": 3504,
+  "box_angstrom": [
+    50.5055,
+    45.4497,
+    50.4969
+  ]
+}
+ALL CHECKS PASSED SUCCESSFULLY!
+[?2004hroot@359b42c9c43e:/task/test# 
+[?2004l[?2004hroot@359b42c9c43e:/task/test# cd /task && rm -rf /task/test /task/run_sop.py
+[?2004l[?2004hroot@359b42c9c43e:/task# ls -la /task /task/output
+[?2004l/task:
+total 24
+drwxr-xr-x 1 root root 4096 Nov 12 19:30 .
+drwxr-xr-x 1 root root 4096 Nov 12 19:05 ..
+dr-xr-xr-x 1 root root 4096 Nov 11 20:06 input
+drwxr-xr-x 1 root root 4096 Nov 12 19:30 output
+drwxr-xr-x 1 root root 4096 Nov 11 20:06 software
+
+/task/output:
+total 3248
+drwxr-xr-x 1 root root    4096 Nov 12 19:30 .
+drwxr-xr-x 1 root root    4096 Nov 12 19:30 ..
+-rw-rw-rw- 1 root root  828865 Nov 12 19:30 equilibrated.rst7
+-rw-rw-rw- 1 root root     269 Nov 12 19:30 report.json
+-rw-rw-rw- 1 root root  414478 Nov 12 19:26 system.inpcrd
+-rw-rw-rw- 1 root root 2059285 Nov 12 19:26 system.prmtop
+[?2004hroot@359b42c9c43e:/task# 

@@ -1,0 +1,1592 @@
+[?2004hroot@b54e64a175e0:/task# ls -la /task /task/input /task/output
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 12 20:04 .
+drwxr-xr-x 1 root root 4096 Nov 12 20:18 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 18:23 input
+drwxr-xr-x 2 root root 4096 Nov 12 02:25 output
+drwxr-xr-x 4 root root 4096 Nov 12 18:23 software
+
+/task/input:
+total 28
+dr-xr-xr-x 1 root root 4096 Nov 12 18:23 .
+drwxr-xr-x 1 root root 4096 Nov 12 20:04 ..
+-r--r--r-- 1 root root 2088 Nov 12 18:23 candidates.bed
+-r--r--r-- 1 root root 2505 Nov 12 18:23 candidates.vcf
+dr-xr-xr-x 1 root root 4096 Nov 12 18:23 cram
+dr-xr-xr-x 1 root root 4096 Nov 12 18:23 reference
+-r--r--r-- 1 root root 3620 Nov 12 18:23 review_sop.md
+
+/task/output:
+total 8
+drwxr-xr-x 2 root root 4096 Nov 12 02:25 .
+drwxr-xr-x 1 root root 4096 Nov 12 20:04 ..
+[?2004hroot@b54e64a175e0:/task# cat /task/software/igv/README.md
+[?2004l# IGV 2.19.8 on the review workstation
+
+## Desktop application
+`/task/software/open_igv.sh` starts IGV on display `:99` (1280x800) with the reference, both CRAM
+files and the candidate track (log: `/tmp/igv.log`) and returns once these are loaded, usually
+after 10-40 seconds (IGV opens its window and its batch port a few seconds earlier, while it is
+still loading). On its first start the script writes the workstation defaults to
+`~/igv/prefs.properties` (offline start-up, read down-sampling switched off) and sets IGV's Java
+heap in `~/.igv/java_arguments` (2 GB).
+
+## Batch port
+While the application is running it listens on `127.0.0.1:60151`. Send one command per line (plain
+text, newline-terminated); IGV answers every command with one line (`OK`, or an error text) once
+the command has finished. The commands are those of IGV batch scripts, among them:
+
+    echo                               answers "echo"
+    new                                unload all tracks
+    genome <id|path>                   load a reference genome
+    load <path>[,<path>...]            load data files
+    goto <locus>                       e.g. goto chr1:1000-1200
+    snapshotDirectory <dir>            directory for images
+    snapshot [<file>]                  save the IGV view as an image (.png or .svg, by extension)
+    saveSession <file.xml>             save the session
+    maxPanelHeight <pixels>            maximum height of a track panel in an image
+    collapse | expand | squish         display mode of the tracks
+    viewaspairs                        draw alignments as pairs
+    sort <option> [<locus>]            sort alignments, e.g. base, strand, quality, insertSize
+    group <option> [<position>]        group alignments, e.g. strand, base, readGroup
+    colorBy <option>                   colour alignments, e.g. READ_STRAND, FIRST_OF_PAIR_STRAND,
+                                       INSERT_SIZE, UNEXPECTED_PAIR, NONE
+    preference <key> <value>           set an IGV preference (keys as in prefs.properties)
+    setSleepInterval <milliseconds>    pause between commands
+    exit                               quit IGV
+
+## igvtools
+`igvtools <command> ...` runs IGV's command-line utilities (Java heap 1 GB).
+
+    igvtools count [options] <input> <output> <genome>
+        coverage of an alignment file. <output>: a .wig file (text), a .tdf file, or both separated
+        by a comma. <genome>: a FASTA file, a .chrom.sizes file or a genome id. Options:
+          -w, --windowSize <n>       window size in bp (default 25)
+          -z, --maxZoom <n>          zoom levels precomputed for .tdf output (default 7)
+          -e, --extFactor <n>        extend reads by n bp
+          --strands read|first       count the two strands separately (strand of the read / of the
+                                     first read of the pair)
+          --bases                    count A, C, G, T, N, deletions and insertions separately
+          --query <chr:start-end>    restrict to a region (indexed input)
+          --minMapQuality <q>        skip alignments below this mapping quality (default 0)
+          --includeDuplicates        include alignments flagged as duplicates
+    igvtools index <file>            index a feature file
+    igvtools toTDF [options] <input> <output.tdf> <genome>
+    igvtools version
+    (`igvtools sort` is not available for alignment files on this workstation.)
+[?2004hroot@b54e64a175e0:/task# cat /task/input/review_sop.md
+[?2004l# Somatic variant review SOP (laboratory document R-07, revision 4)
+
+Review each candidate in the tumour and in the matched normal. The reviewer records one call per
+candidate: `somatic`, or `fail` with exactly one failure tag.
+
+## What counts as evidence
+- Evidence is counted in sequenced molecules (read pairs). Reads marked as duplicates add no
+  evidence and no depth. Secondary and supplementary alignments are ignored.
+- Depth at a candidate = molecules whose read covers the candidate position.
+- A molecule supports a single-nucleotide candidate if its read shows the alternate base at that
+  position, whatever the base quality or mapping quality (those are judged by the tags below).
+- For insertions and deletions, judge what the read sequence shows, not where the aligner drew the
+  gap: a read supports the candidate if it carries a gap that produces the same sequence as the
+  candidate allele.
+- "Supporting reads" are the reads of the supporting molecules that cover the candidate.
+
+## Failure tags, in order of precedence (record the first that applies)
+1. `GERMLINE` - the alternate allele is seen in the normal in at least 2 molecules and at least 5%
+   of the normal depth.
+2. `LOW_SUPPORT` - fewer than 4 supporting molecules in the tumour.
+3. `LOW_BASE_QUALITY` - at least three quarters of the supporting molecules show the alternate
+   base with base quality below 20.
+4. `LOW_MAPPING_QUALITY` - at least three quarters of the supporting molecules have mapping
+   quality below 20.
+5. `MULTI_MISMATCH` - the supporting reads carry, on average, four or more further mismatches to
+   the reference within the same read (aligned bases, not counting the candidate itself).
+6. `STRAND_BIAS` - at least 90% of the supporting reads are on one strand although reads on both
+   strands cover the position.
+7. `READ_END` - at least three quarters of the supporting reads show the alternate base within 5
+   bases of either end of the read.
+8. `DISCORDANT_PAIRS` - at least three quarters of the supporting molecules are read pairs with an
+   insert size (absolute template length) above 1,000 bp. (The library was prepared with fragments
+   of 200-500 bp.)
+9. `MNV_PARTNER` - concerns two single-nucleotide candidates at directly adjacent positions to
+   neither of which a tag above applies. If they are carried by the same molecules (at least 90% of
+   the molecules that support either candidate support both), they are one multi-nucleotide
+   variant: it is reported on the left-hand candidate, which stays `somatic`, and the right-hand
+   candidate is recorded as `fail` with this tag. Adjacent candidates carried by different
+   molecules are separate variants and are both kept.
+
+A candidate to which no tag applies is called `somatic` (tag `PASS`).
+
+## Documentation of the review
+The review is documented from IGV; both items below must be written by IGV itself.
+- Session (`review_session.xml`): saved from IGV with the reference `/task/input/reference/ref.fa`,
+  both alignment files and the candidate track loaded, the alignments of both alignment tracks
+  coloured by read strand, and the view on the first candidate of the list (the displayed range
+  contains its position and is at most 200 bp wide).
+- Images (`snapshots/<variant_id>.png`): for every candidate one PNG image saved from IGV with the
+  view on that candidate (displayed range containing the candidate, at most 200 bp wide) and the
+  alignments visible. Each candidate has its own image, at least 800 pixels wide and 300 pixels
+  high; an image that shows no data, or the same image filed for two candidates, does not count.
+[?2004hroot@b54e64a175e0:/task# head -n 30 /task/input/candidates.vcf
+[?2004l##fileformat=VCFv4.2
+##contig=<ID=chr22_roi,length=60000>
+##source=candidate_caller_v3
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr22_roi	2434	cand_001	T	C	.	.	.
+chr22_roi	3357	cand_002	AT	A	.	.	.
+chr22_roi	3873	cand_003	A	C	.	.	.
+chr22_roi	4864	cand_004	C	G	.	.	.
+chr22_roi	5387	cand_005	T	G	.	.	.
+chr22_roi	6149	cand_006	A	C	.	.	.
+chr22_roi	7309	cand_007	AGGC	A	.	.	.
+chr22_roi	8267	cand_008	C	G	.	.	.
+chr22_roi	9169	cand_009	T	C	.	.	.
+chr22_roi	9775	cand_010	G	C	.	.	.
+chr22_roi	10354	cand_011	GA	G	.	.	.
+chr22_roi	11367	cand_012	T	C	.	.	.
+chr22_roi	11920	cand_013	C	G	.	.	.
+chr22_roi	12638	cand_014	G	A	.	.	.
+chr22_roi	13514	cand_015	TA	T	.	.	.
+chr22_roi	14552	cand_016	C	A	.	.	.
+chr22_roi	14553	cand_017	A	C	.	.	.
+chr22_roi	17481	cand_018	C	G	.	.	.
+chr22_roi	18306	cand_019	G	C	.	.	.
+chr22_roi	19235	cand_020	A	C	.	.	.
+chr22_roi	20103	cand_021	G	A	.	.	.
+chr22_roi	20999	cand_022	A	T	.	.	.
+chr22_roi	22250	cand_023	G	T	.	.	.
+chr22_roi	22942	cand_024	C	T	.	.	.
+chr22_roi	23832	cand_025	C	T	.	.	.
+chr22_roi	24796	cand_026	G	T	.	.	.
+[?2004hroot@b54e64a175e0:/task# cat /task/software/open_igv.sh
+[?2004l#!/bin/bash
+# Start IGV on the virtual display with the reference, both CRAM files and the candidate track.
+export DISPLAY="${DISPLAY:-:99}"
+bash /task/software/desktop/start_desktop.sh
+if pgrep -f 'org.broad.igv.ui.Main' >/dev/null 2>&1; then
+  echo "IGV is already running (log: /tmp/igv.log); batch port 60151"
+  exit 0
+fi
+mkdir -p "$HOME/igv" "$HOME/.igv"
+if [ ! -s "$HOME/igv/prefs.properties" ]; then
+  printf 'PROVISIONING_URL_DEFAULT=/task/software/igv/oauth_offline.json\nIGV.genome.sequence.dir=/task/software/igv/genomes.tsv\nCHECK_VERSION=false\nSAM.DOWNSAMPLE_READS=false\n' > "$HOME/igv/prefs.properties"
+fi
+[ -s "$HOME/.igv/java_arguments" ] || echo "-Xmx2g" > "$HOME/.igv/java_arguments"
+nohup igv -g /task/input/reference/ref.fa /task/input/cram/tumor.cram,/task/input/cram/normal.cram,/task/input/candidates.bed "$@" > /tmp/igv.log 2>&1 &
+# IGV opens its window and its batch port before the reference and the tracks are loaded: wait for them.
+for _ in $(seq 1 480); do
+  grep -q 'Loading resource: .*candidates.bed' /tmp/igv.log 2>/dev/null && break
+  sleep 0.5
+done
+sleep 3
+if grep -q 'Loading resource: .*candidates.bed' /tmp/igv.log 2>/dev/null; then
+  echo "IGV is running with the tracks loaded (log: /tmp/igv.log); batch port 60151"
+else
+  echo "IGV has not finished starting after 4 minutes, see /tmp/igv.log" >&2
+  exit 1
+fi
+[?2004hroot@b54e64a175e0:/task# find /task/software /usr -name "*.jar" 2>/dev/null
+[?2004l[?2004hroot@b54e64a175e0:/task# which igv igvtools; cat $(which igv); wc -l /task/input/candidates.vcf
+[?2004l/opt/tools/bin/igv
+/usr/local/bin/igvtools
+#!/bin/sh
+
+#This script is intended for launch on *nix machines
+
+#-Xmx8g indicates 8 gb of memory.
+#To adjust this (or other Java options), edit the "$HOME/.igv/java_arguments" 
+#file.  For more info, see the README at 
+#https://raw.githubusercontent.com/igvteam/igv/master/scripts/readme.txt 
+#Add the flag -Ddevelopment = true to use features still in development
+#Add the flag -Dsun.java2d.uiScale=2 for HiDPI displays
+prefix=`dirname $(readlink -f $0 || echo $0)`
+
+# Check whether or not to use the bundled JDK
+if [ -d "${prefix}/jdk-21" ]; then
+    echo echo "Using bundled JDK."
+    JAVA_HOME="${prefix}/jdk-21"
+    PATH=$JAVA_HOME/bin:$PATH
+else
+    echo "Using system JDK. IGV requires Java 21."
+fi
+
+# Report on Java version
+java -version
+
+# Check if there is a user-specified Java arguments file
+if [ -e "$HOME/.igv/java_arguments" ]; then
+    java --module-path="/opt/tools/lib/igv" -Xmx8g \
+        @"/opt/tools/lib/igv/igv.args" \
+        -Dsamjdk.snappy.disable=true \
+        -Dapple.laf.useScreenMenuBar=true \
+        -Djava.net.preferIPv4Stack=true \
+        -Djava.net.useSystemProxies=true \
+        @"$HOME/.igv/java_arguments" \
+        --module=org.igv/org.broad.igv.ui.Main "$@"
+else
+    java --module-path="/opt/tools/lib/igv" -Xmx8g \
+        @"/opt/tools/lib/igv/igv.args" \
+        -Dsamjdk.snappy.disable=true \
+        -Dapple.laf.useScreenMenuBar=true \
+        -Djava.net.preferIPv4Stack=true \
+        -Djava.net.useSystemProxies=true \
+        --module=org.igv/org.broad.igv.ui.Main "$@"
+fi72 /task/input/candidates.vcf
+[?2004hroot@b54e64a175e0:/task# ls -la /opt
+[?2004ltotal 16
+drwxr-xr-x 1 root root 4096 Nov 12 02:13 .
+drwxr-xr-x 1 root root 4096 Nov 12 20:18 ..
+drwxr-xr-x 3 root root 4096 Nov 12 02:12 mamba
+drwxr-xr-x 1 root root 4096 Nov 12 02:13 tools
+[?2004hroot@b54e64a175e0:/task# ls -la /opt/tools/lib/igv; cat /usr/local/bin/igvtools
+[?2004ltotal 33124
+drwxr-xr-x 3 root root    4096 Nov 12 02:14 .
+drwxr-xr-x 1 root root    4096 Nov 12 02:13 ..
+-rw-rw-r-- 1 root root    7776 Jun 25 21:24 AbsoluteLayout-RELEASE110-module.jar
+-rw-rw-r-- 1 root root   13759 Jun 25 21:24 annotations-2.30.17.jar
+-rw-rw-r-- 1 root root   76109 Jun 25 21:24 apache-client-2.30.17.jar
+-rw-rw-r-- 1 root root   15823 Jun 25 21:24 arns-2.30.17.jar
+-rw-rw-r-- 1 root root  121836 Jun 25 21:24 asm-7.3.1.jar
+-rw-rw-r-- 1 root root   33446 Jun 25 21:24 asm-analysis-7.3.1.jar
+-rw-rw-r-- 1 root root   71548 Jun 25 21:24 asm-commons-7.3.1.jar
+-rw-rw-r-- 1 root root   52826 Jun 25 21:24 asm-tree-7.3.1.jar
+-rw-r--r-- 1 root root   84322 Nov 12 02:13 asm-util-7.3.1.jar
+-rw-rw-r-- 1 root root  234858 Jun 25 21:24 auth-2.30.17.jar
+-rw-rw-r-- 1 root root  180770 Jun 25 21:24 aws-core-2.30.17.jar
+-rw-rw-r-- 1 root root  141743 Jun 25 21:24 aws-json-protocol-2.30.17.jar
+-rw-rw-r-- 1 root root   69395 Jun 25 21:24 aws-query-protocol-2.30.17.jar
+-rw-rw-r-- 1 root root  102275 Jun 25 21:24 aws-xml-protocol-2.30.17.jar
+-rw-r--r-- 1 root root  424371 Nov 12 02:13 batik-awt-util-1.17-module.jar
+-rw-rw-r-- 1 root root  113103 Jun 25 21:24 batik-codec-1.17-module.jar
+-rw-rw-r-- 1 root root    8475 Jun 25 21:24 batik-constants-1.17-module.jar
+-rw-rw-r-- 1 root root  185909 Jun 25 21:24 batik-dom-1.17-module.jar
+-rw-rw-r-- 1 root root   10376 Jun 25 21:24 batik-ext-1.17-module.jar
+-rw-rw-r-- 1 root root   11511 Jun 25 21:24 batik-i18n-1.17-module.jar
+-rw-rw-r-- 1 root root    6698 Jun 25 21:24 batik-shared-resources-1.17-module.jar
+-rw-r--r-- 1 root root  227364 Nov 12 02:13 batik-svggen-1.17-module.jar
+-rw-r--r-- 1 root root  129150 Nov 12 02:13 batik-transcoder-1.17-module.jar
+-rw-r--r-- 1 root root  127181 Nov 12 02:13 batik-util-1.17-module.jar
+-rw-rw-r-- 1 root root   33958 Jun 25 21:24 batik-xml-1.17-module.jar
+-rw-rw-r-- 1 root root   69775 Jun 25 21:24 checksums-2.30.17.jar
+-rw-rw-r-- 1 root root    8046 Jun 25 21:24 checksums-spi-2.30.17.jar
+-rw-rw-r-- 1 root root  797672 Jun 25 21:24 cognitoidentity-2.30.17.jar
+-rw-r--r-- 1 root root  368494 Nov 12 02:13 commons-codec-1.17.1.jar
+-rw-r--r-- 1 root root 1083862 Nov 12 02:13 commons-compress-1.26.0.jar
+-rw-rw-r-- 1 root root  501218 Jun 25 21:24 commons-io-2.15.1.jar
+-rw-r--r-- 1 root root  265137 Nov 12 02:13 commons-jexl-2.1.1-module.jar
+-rw-rw-r-- 1 root root  657952 Jun 25 21:24 commons-lang3-3.14.0.jar
+-rw-rw-r-- 1 root root   70816 Jun 25 21:24 commons-logging-1.3.0.jar
+-rw-r--r-- 1 root root 2192570 Nov 12 02:13 commons-math3-3.6.1-module.jar
+-rw-rw-r-- 1 root root   17776 Jun 25 21:24 crt-core-2.30.17.jar
+-rw-rw-r-- 1 root root   13171 Jun 25 21:24 endpoints-spi-2.30.17.jar
+-rw-rw-r-- 1 root root   30193 Jun 25 21:24 eventstream-1.0.1.jar
+drwxr-xr-x 2 root root   12288 Nov 12 02:13 genomes
+-rw-rw-r-- 1 root root  258075 Jun 25 21:24 gson-2.8.9.jar
+-rw-rw-r-- 1 root root 3043932 Jun 25 21:24 guava-32.1.3-jre.jar
+-rw-r--r-- 1 root root 2055661 Nov 12 02:13 htsjdk-4.3.0-module.jar
+-rw-rw-r-- 1 root root   17476 Jun 25 21:24 http-auth-2.30.17.jar
+-rw-rw-r-- 1 root root  158991 Jun 25 21:24 http-auth-aws-2.30.17.jar
+-rw-rw-r-- 1 root root    8707 Jun 25 21:24 http-auth-aws-eventstream-2.30.17.jar
+-rw-rw-r-- 1 root root   45763 Jun 25 21:24 http-auth-spi-2.30.17.jar
+-rw-rw-r-- 1 root root   88590 Jun 25 21:24 http-client-spi-2.30.17.jar
+-rw-rw-r-- 1 root root  780321 Jun 25 21:24 httpclient-4.5.13.jar
+-rw-rw-r-- 1 root root  327891 Jun 25 21:24 httpcore-4.4.16.jar
+-rw-rw-r-- 1 root root   30965 Jun 25 21:24 identity-spi-2.30.17.jar
+-rw-rw-r-- 1 root root     671 Jun 25 21:24 igv.args
+-rw-r--r-- 1 root root 3720738 Nov 12 02:13 igv.jar
+-rw-r--r-- 1 root root 2126883 Nov 12 02:13 jide-oss-3.7.12-module.jar
+-rw-rw-r-- 1 root root   74702 Jun 25 21:24 json-20231013.jar
+-rw-rw-r-- 1 root root   33223 Jun 25 21:24 json-utils-2.30.17.jar
+-rw-rw-r-- 1 root root   27264 Jun 25 21:24 metrics-spi-2.30.17.jar
+-rw-rw-r-- 1 root root  339045 Jun 25 21:24 netty-buffer-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  355199 Jun 25 21:24 netty-codec-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  674362 Jun 25 21:24 netty-codec-http-4.1.118.Final.jar
+-rw-r--r-- 1 root root  710057 Nov 12 02:13 netty-common-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  580162 Jun 25 21:24 netty-handler-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  292640 Jun 25 21:24 netty-nio-client-2.30.17.jar
+-rw-rw-r-- 1 root root   37842 Jun 25 21:24 netty-resolver-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  521428 Jun 25 21:24 netty-transport-4.1.118.Final.jar
+-rw-rw-r-- 1 root root  147621 Jun 25 21:24 netty-transport-classes-epoll-4.1.118.Final.jar
+-rw-rw-r-- 1 root root   44157 Jun 25 21:24 netty-transport-native-unix-common-4.1.118.Final.jar
+-rw-r--r-- 1 root root   73050 Nov 12 02:13 ngs-java-2.9.0-module.jar
+-rw-rw-r-- 1 root root   49919 Jun 25 21:24 profiles-2.30.17.jar
+-rw-rw-r-- 1 root root   44336 Jun 25 21:24 protocol-core-2.30.17.jar
+-rw-rw-r-- 1 root root   11640 Jun 25 21:24 reactive-streams-1.0.4.jar
+-rw-rw-r-- 1 root root  912337 Jun 25 21:24 regions-2.30.17.jar
+-rw-rw-r-- 1 root root   66311 Jun 25 21:24 retries-2.30.17.jar
+-rw-rw-r-- 1 root root   31489 Jun 25 21:24 retries-spi-2.30.17.jar
+-rw-rw-r-- 1 root root 3840307 Jun 25 21:24 s3-2.30.17.jar
+-rw-rw-r-- 1 root root  983404 Jun 25 21:24 sdk-core-2.30.17.jar
+-rw-rw-r-- 1 root root   41125 Jun 25 21:24 slf4j-api-1.7.36.jar
+-rw-rw-r-- 1 root root  392421 Jun 25 21:24 sso-2.30.17.jar
+-rw-rw-r-- 1 root root  536491 Jun 25 21:24 sts-2.30.17.jar
+-rw-r--r-- 1 root root  118023 Nov 12 02:14 swing-layout-1.0.3-module.jar
+-rw-rw-r-- 1 root root  535001 Jun 25 21:24 third-party-jackson-core-2.30.17.jar
+-rw-rw-r-- 1 root root  227568 Jun 25 21:24 utils-2.30.17.jar
+-rw-rw-r-- 1 root root  684341 Jun 25 21:24 xmlgraphics-commons-2.9-module.jar
+-rw-rw-r-- 1 root root  116013 Jun 25 21:24 xz-1.9.jar
+#!/bin/sh
+# igvtools of the IGV 2.19.8 installation (the IGV package of this workstation has no launcher for it).
+exec java --module-path=/opt/tools/lib/igv -Xmx1g -Djava.awt.headless=true \
+    --module=org.igv/org.broad.igv.tools.IgvTools "$@"
+[?2004hroot@b54e64a175e0:/task# which javac; java --version
+[?2004lopenjdk 21.0.10-internal 2026-01-20
+OpenJDK Runtime Environment (build 21.0.10-internal-adhoc.rattler.src)
+OpenJDK 64-Bit Server VM (build 21.0.10-internal-adhoc.rattler.src, mixed mode)
+[?2004hroot@b54e64a175e0:/task# find / -name javac 2>/dev/null; find / -name jshell 2>/dev/null
+[?2004l[?2004hroot@b54e64a175e0:/task# java --list-modules | grep -E 'compiler|htsjdk'
+[?2004l[?2004hroot@b54e64a175e0:/task# echo 'public class Hello { public static void main(String[] args) { System.out.println("hello"); } }' > /tmp/Hello.java && java /tmp/Hello.java
+[?2004lError: A JNI error has occurred, please check your installation and try again
+Exception in thread "main" java.lang.InternalError: Module jdk.compiler not in boot Layer
+	at java.base/sun.launcher.LauncherHelper.loadModuleMainClass(LauncherHelper.java:759)
+	at java.base/sun.launcher.LauncherHelper.checkAndLoadMain(LauncherHelper.java:710)
+[?2004hroot@b54e64a175e0:/task# which python3; python3 -m pip list 2>/dev/null; /opt/mamba/bin/conda list 2>/dev/null
+[?2004l/opt/tools/bin/python3
+Package                   Version
+------------------------- ----------
+annotated-types           0.8.0
+anyio                     4.16.0
+attrs                     26.1.0
+certifi                   2026.10.23
+cffi                      2.1.1
+click                     8.5.1
+cryptography              50.0.2
+h11                       0.16.0
+httpcore                  1.0.9
+httpx                     0.28.1
+httpx-sse                 0.4.3
+idna                      3.20
+jsonschema                4.26.0
+jsonschema-specifications 2025.9.1
+mcp                       1.30.0
+numpy                     2.5.4
+packaging                 26.3
+pip                       26.2.2
+pycparser                 3.12
+pydantic                  2.14.3
+pydantic_core             2.50.4
+pydantic-settings         2.16.2
+PyJWT                     2.15.1
+python-dotenv             1.2.4
+python-multipart          0.0.33
+referencing               0.37.0
+rpds-py                   2026.9.1
+setuptools                84.2.1
+sse-starlette             3.7.0
+starlette                 1.10.0
+typing_extensions         4.16.0
+typing-inspection         0.4.5
+uvicorn                   0.54.0
+wheel                     0.48.0
+[?2004hroot@b54e64a175e0:/task# find /opt/mamba -name "*samtools*" -o -name "*pysam*" 2>/dev/null
+[?2004l[?2004hroot@b54e64a175e0:/task# igvtools count --help
+[?2004lUnknown option '--help'
+Enter igvtools help count for help on this command
+Done
+[?2004hroot@b54e64a175e0:/task# igvtools
+[?2004l
+Program: igvtools. IGV Version user not_set
+
+Usage: igvtools [command] [options] [input file/dir] [other arguments]
+
+Command: version print the version number
+	 sort    sort an alignment file by start position. 
+	 index   index an alignment file
+	 toTDF    convert an input file (cn, gct, wig) to tiled data format (tdf)
+	 count   compute coverage density for an alignment file
+	 formatexp  center, scale, and log2 normalize an expression file
+	 gui      Start the gui
+	 help <command>     display this help message, or help on a specific command
+	 See http://www.broadinstitute.org/software/igv/igvtools_commandline for more detailed help
+	
+Error: No arguments provided
+Done
+[?2004hroot@b54e64a175e0:/task# igvtools help count
+[?2004lCould not find readme file /docs/igvtools_readme.txt
+See http://www.broadinstitute.org/software/igv/igvtools_commandline, or igvtools_readme.txt, for more help
+
+Done
+[?2004hroot@b54e64a175e0:/task# 
+[?2004l[?2004hroot@b54e64a175e0:/task# which jar
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; [print(f, len(zipfile.ZipFile('/opt/tools/lib/igv/'+f).namelist())) for f in ['igv.jar', 'htsjdk-4.3.0-module.jar']]"
+[?2004ligv.jar 2009
+htsjdk-4.3.0-module.jar 1279
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar'); print([n for n in z.namelist() if 'main' in n.lower()])"
+[?2004l['htsjdk/samtools/cram/encoding/core/GammaIntegerEncoding.class', 'htsjdk/samtools/cram/encoding/core/GammaIntegerCodec.class']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, glob; [print(j, [n for n in zipfile.ZipFile(j).namelist() if n.endswith('.class') and 'main' in n.lower()]) for j in glob.glob('/opt/tools/lib/igv/*.jar')]"
+[?2004l/opt/tools/lib/igv/netty-transport-classes-epoll-4.1.118.Final.jar ['io/netty/channel/epoll/EpollDomainSocketChannel.class', 'io/netty/channel/epoll/EpollDomainSocketChannel$EpollDomainUnsafe.class', 'io/netty/channel/epoll/EpollDomainDatagramChannel.class', 'io/netty/channel/epoll/EpollDomainSocketChannel$1.class', 'io/netty/channel/epoll/EpollDomainSocketChannelConfig.class', 'io/netty/channel/epoll/EpollServerDomainSocketChannel.class', 'io/netty/channel/epoll/EpollDomainDatagramChannelConfig.class', 'io/netty/channel/epoll/EpollDomainDatagramChannel$EpollDomainDatagramChannelUnsafe.class']
+/opt/tools/lib/igv/json-20231013.jar []
+/opt/tools/lib/igv/xmlgraphics-commons-2.9-module.jar []
+/opt/tools/lib/igv/asm-util-7.3.1.jar []
+/opt/tools/lib/igv/commons-codec-1.17.1.jar []
+/opt/tools/lib/igv/asm-commons-7.3.1.jar []
+/opt/tools/lib/igv/sdk-core-2.30.17.jar []
+/opt/tools/lib/igv/guava-32.1.3-jre.jar ['com/google/common/collect/DiscreteDomain$1.class', 'com/google/common/collect/DiscreteDomain$BigIntegerDomain.class', 'com/google/common/collect/DiscreteDomain$IntegerDomain.class', 'com/google/common/collect/DiscreteDomain$LongDomain.class', 'com/google/common/collect/DiscreteDomain.class', 'com/google/common/net/InternetDomainName.class']
+/opt/tools/lib/igv/http-auth-aws-2.30.17.jar []
+/opt/tools/lib/igv/jide-oss-3.7.12-module.jar ['com/jidesoft/utils/JideFocusTracker$MainContainerListener.class', 'com/jidesoft/utils/JideFocusTracker$MainFocusListener.class']
+/opt/tools/lib/igv/commons-math3-3.6.1-module.jar ['org/apache/commons/math3/ode/MainStateJacobianProvider.class', 'org/apache/commons/math3/ode/JacobianMatrices$MainStateJacobianWrapper.class']
+/opt/tools/lib/igv/httpclient-4.5.13.jar ['org/apache/http/impl/cookie/NetscapeDomainHandler.class', 'org/apache/http/impl/cookie/RFC2109DomainHandler.class', 'org/apache/http/impl/cookie/PublicSuffixDomainFilter.class', 'org/apache/http/impl/cookie/RFC2965DomainAttributeHandler.class', 'org/apache/http/impl/cookie/BasicDomainHandler.class', 'org/apache/http/impl/execchain/MainClientExec.class', 'org/apache/http/conn/util/DomainType.class']
+/opt/tools/lib/igv/AbsoluteLayout-RELEASE110-module.jar []
+/opt/tools/lib/igv/batik-svggen-1.17-module.jar []
+/opt/tools/lib/igv/retries-spi-2.30.17.jar []
+/opt/tools/lib/igv/commons-io-2.15.1.jar ['org/apache/commons/io/input/MessageDigestCalculatingInputStream$MessageDigestMaintainingObserver.class', 'org/apache/commons/io/input/MessageDigestInputStream$MessageDigestMaintainingObserver.class']
+/opt/tools/lib/igv/commons-logging-1.3.0.jar []
+/opt/tools/lib/igv/batik-constants-1.17-module.jar []
+/opt/tools/lib/igv/s3-2.30.17.jar []
+/opt/tools/lib/igv/asm-tree-7.3.1.jar []
+/opt/tools/lib/igv/eventstream-1.0.1.jar []
+/opt/tools/lib/igv/netty-resolver-4.1.118.Final.jar []
+/opt/tools/lib/igv/endpoints-spi-2.30.17.jar []
+/opt/tools/lib/igv/http-auth-aws-eventstream-2.30.17.jar []
+/opt/tools/lib/igv/netty-transport-native-unix-common-4.1.118.Final.jar ['io/netty/channel/unix/DomainDatagramChannelConfig.class', 'io/netty/channel/unix/DomainDatagramChannel.class', 'io/netty/channel/unix/DomainDatagramSocketAddress.class', 'io/netty/channel/unix/DomainSocketChannel.class', 'io/netty/channel/unix/DomainSocketChannelConfig.class', 'io/netty/channel/unix/DomainDatagramPacket.class', 'io/netty/channel/unix/DomainSocketAddress.class', 'io/netty/channel/unix/DomainSocketReadMode.class', 'io/netty/channel/unix/ServerDomainSocketChannel.class']
+/opt/tools/lib/igv/sso-2.30.17.jar []
+/opt/tools/lib/igv/netty-codec-http-4.1.118.Final.jar []
+/opt/tools/lib/igv/apache-client-2.30.17.jar []
+/opt/tools/lib/igv/http-auth-spi-2.30.17.jar []
+/opt/tools/lib/igv/netty-handler-4.1.118.Final.jar []
+/opt/tools/lib/igv/sts-2.30.17.jar []
+/opt/tools/lib/igv/crt-core-2.30.17.jar []
+/opt/tools/lib/igv/json-utils-2.30.17.jar []
+/opt/tools/lib/igv/arns-2.30.17.jar []
+/opt/tools/lib/igv/commons-jexl-2.1.1-module.jar []
+/opt/tools/lib/igv/reactive-streams-1.0.4.jar []
+/opt/tools/lib/igv/batik-ext-1.17-module.jar []
+/opt/tools/lib/igv/netty-codec-4.1.118.Final.jar []
+/opt/tools/lib/igv/commons-lang3-3.14.0.jar []
+/opt/tools/lib/igv/asm-7.3.1.jar []
+/opt/tools/lib/igv/annotations-2.30.17.jar []
+/opt/tools/lib/igv/checksums-spi-2.30.17.jar []
+/opt/tools/lib/igv/gson-2.8.9.jar []
+/opt/tools/lib/igv/batik-xml-1.17-module.jar []
+/opt/tools/lib/igv/profiles-2.30.17.jar []
+/opt/tools/lib/igv/batik-transcoder-1.17-module.jar []
+/opt/tools/lib/igv/netty-common-4.1.118.Final.jar ['io/netty/util/DomainMappingBuilder.class', 'io/netty/util/DomainNameMappingBuilder$1.class', 'io/netty/util/DomainWildcardMappingBuilder.class', 'io/netty/util/DomainNameMapping.class', 'io/netty/util/DomainNameMappingBuilder.class', 'io/netty/util/DomainWildcardMappingBuilder$ImmutableDomainWildcardMapping.class', 'io/netty/util/DomainNameMappingBuilder$ImmutableDomainNameMapping.class']
+/opt/tools/lib/igv/aws-query-protocol-2.30.17.jar []
+/opt/tools/lib/igv/netty-transport-4.1.118.Final.jar ['io/netty/channel/socket/nio/NioServerDomainSocketChannel$1.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$1.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$3.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$4.class', 'io/netty/channel/socket/nio/NioDomainSocketUtil.class', 'io/netty/channel/socket/nio/NioServerDomainSocketChannel$NioDomainServerSocketChannelConfig.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$2.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$NioDomainSocketChannelConfig.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel.class', 'io/netty/channel/socket/nio/NioServerDomainSocketChannel.class', 'io/netty/channel/socket/nio/NioDomainSocketChannel$NioSocketChannelUnsafe.class']
+/opt/tools/lib/igv/third-party-jackson-core-2.30.17.jar []
+/opt/tools/lib/igv/slf4j-api-1.7.36.jar []
+/opt/tools/lib/igv/ngs-java-2.9.0-module.jar []
+/opt/tools/lib/igv/identity-spi-2.30.17.jar []
+/opt/tools/lib/igv/batik-util-1.17-module.jar []
+/opt/tools/lib/igv/retries-2.30.17.jar []
+/opt/tools/lib/igv/http-auth-2.30.17.jar []
+/opt/tools/lib/igv/batik-i18n-1.17-module.jar []
+/opt/tools/lib/igv/commons-compress-1.26.0.jar ['org/apache/commons/compress/archivers/arj/MainHeader$Flags.class', 'org/apache/commons/compress/archivers/arj/MainHeader$HostOS.class', 'org/apache/commons/compress/archivers/arj/MainHeader.class']
+/opt/tools/lib/igv/aws-xml-protocol-2.30.17.jar []
+/opt/tools/lib/igv/metrics-spi-2.30.17.jar []
+/opt/tools/lib/igv/utils-2.30.17.jar []
+/opt/tools/lib/igv/batik-awt-util-1.17-module.jar []
+/opt/tools/lib/igv/cognitoidentity-2.30.17.jar []
+/opt/tools/lib/igv/asm-analysis-7.3.1.jar []
+/opt/tools/lib/igv/netty-nio-client-2.30.17.jar []
+/opt/tools/lib/igv/netty-buffer-4.1.118.Final.jar []
+/opt/tools/lib/igv/xz-1.9.jar ['org/tukaani/xz/LZMAInputStream.class']
+/opt/tools/lib/igv/auth-2.30.17.jar []
+/opt/tools/lib/igv/http-client-spi-2.30.17.jar []
+/opt/tools/lib/igv/checksums-2.30.17.jar []
+/opt/tools/lib/igv/batik-shared-resources-1.17-module.jar []
+/opt/tools/lib/igv/batik-dom-1.17-module.jar []
+/opt/tools/lib/igv/htsjdk-4.3.0-module.jar ['htsjdk/samtools/cram/encoding/core/GammaIntegerEncoding.class', 'htsjdk/samtools/cram/encoding/core/GammaIntegerCodec.class']
+/opt/tools/lib/igv/aws-json-protocol-2.30.17.jar []
+/opt/tools/lib/igv/igv.jar ['org/broad/igv/ui/Main$Version.class', 'org/broad/igv/ui/IGVMainFrame.class', 'org/broad/igv/ui/Main$2.class', 'org/broad/igv/ui/Main$IGVArgs.class', 'org/broad/igv/ui/Main$1.class', 'org/broad/igv/ui/panel/MainPanel.class', 'org/broad/igv/ui/panel/MainPanel$3.class', 'org/broad/igv/ui/panel/MainPanel$SplitPane.class', 'org/broad/igv/ui/panel/MainPanel$1.class', 'org/broad/igv/ui/panel/MainPanel$2.class', 'org/broad/igv/ui/Main.class']
+/opt/tools/lib/igv/regions-2.30.17.jar ['software/amazon/awssdk/regions/servicemetadata/Route53domainsServiceMetadata.class']
+/opt/tools/lib/igv/protocol-core-2.30.17.jar []
+/opt/tools/lib/igv/batik-codec-1.17-module.jar []
+/opt/tools/lib/igv/httpcore-4.4.16.jar []
+/opt/tools/lib/igv/swing-layout-1.0.3-module.jar []
+/opt/tools/lib/igv/aws-core-2.30.17.jar []
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, glob; [print(j, n) for j in glob.glob('/opt/tools/lib/igv/*.jar') for n in zipfile.ZipFile(j).namelist() if n.endswith('.class') and b'([Ljava/lang/String;)V' in zipfile.ZipFile(j).read(n) and b'main' in zipfile.ZipFile(j).read(n)]"
+[?2004l/opt/tools/lib/igv/asm-util-7.3.1.jar org/objectweb/asm/util/ASMifier.class
+/opt/tools/lib/igv/asm-util-7.3.1.jar org/objectweb/asm/util/CheckClassAdapter.class
+/opt/tools/lib/igv/asm-util-7.3.1.jar org/objectweb/asm/util/Textifier.class
+/opt/tools/lib/igv/commons-codec-1.17.1.jar org/apache/commons/codec/cli/Digest.class
+python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if 'command' in n.lower() or 'batch' in n.lower()])"
+
+^CTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/opt/tools/lib/python3.12/zipfile/__init__.py", line 1396, in __init__
+    self._RealGetContents()
+  File "/opt/tools/lib/python3.12/zipfile/__init__.py", line 1503, in _RealGetContents
+    x = ZipInfo(filename)
+        ^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if 'batch' in n.lower() or 'command' in n.lower()])"
+[?2004l['org/broad/igv/batch/', 'org/broad/igv/batch/CommandListener.class', 'org/broad/igv/batch/CommandExecutor.class', 'org/broad/igv/batch/TestClient.class', 'org/broad/igv/batch/Exec.class', 'org/broad/igv/batch/BatchRunner.class', 'org/broad/igv/tools/CommandLineStatusMonitor.class', 'org/broad/igv/ui/commandbar/', 'org/broad/igv/ui/commandbar/RemoveGenomesDialog.class', 'org/broad/igv/ui/commandbar/SearchTextField$SearchHints.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$2.class', 'org/broad/igv/ui/commandbar/RemoveGenomesDialog$1.class', 'org/broad/igv/ui/commandbar/GenomeListManager$GenomeListSorter.class', 'org/broad/igv/ui/commandbar/HostedGenomeSelectionDialog$1.class', 'org/broad/igv/ui/commandbar/HostedGenomeSelectionDialog.class', 'org/broad/igv/ui/commandbar/GenomeComboBox.class', 'org/broad/igv/ui/commandbar/RemoveGenomesDialog$GenomeCellRenderer.class', 'org/broad/igv/ui/commandbar/ChromosomeComboBox.class', 'org/broad/igv/ui/commandbar/GenomeListManager.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$5.class', 'org/broad/igv/ui/commandbar/GenomeComboBox$GenomeBoxActionListener.class', 'org/broad/igv/ui/commandbar/GenomeComboBox$ComboBoxRenderer.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$1.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$4.class', 'org/broad/igv/ui/commandbar/IGVCommandBar.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$3.class', 'org/broad/igv/ui/commandbar/IGVCommandBar$6.class', 'org/broad/igv/ui/commandbar/SearchTextField.class', 'org/broad/igv/ui/action/SearchCommand$ResultType.class', 'org/broad/igv/ui/action/SearchCommand$SearchResult.class', 'org/broad/igv/ui/action/SearchCommand.class', 'org/broad/igv/peaks/PeakCommandBar.jfd']
+[?2004hroot@b54e64a175e0:/task# which javap
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, re; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/batch/CommandExecutor.class'); print(set(re.findall(rb'[a-zA-Z]{3,20}', data)))"
+[?2004l{b'org', b'sortTag', b'InnerClasses', b'setShowTranslation', b'getAbsolutePath', b'loadTracks', b'HashSet', b'location', b'zoomout', b'RegionScoreType', b'replace', b'tagArg', b'debug', b'showDataRange', b'insertion', b'COMMAND', b'vAPString', b'colorBy', b'currentBatchSetting', b'logging', b'Stream', b'NUCLEOTIDE', b'scrollToTop', b'nio', b'ColorOption', b'parent', b'affectedTracks', b'group', b'setPath', b'printStackTrace', b'contains', b'stringToColorNoDefau', b'MAX', b'sesssion', b'mode', b'Math', b'next', b'getPath', b'ors', b'URLUtils', b'position', b'URLDecoder', b'home', b'read', b'nts', b'tracks', b'number', b'fileString', b'parse', b'decodeURL', b'stripQuotes', b'setLogScale', b'put', b'expand', b'toLowerCase', b'SessionReader', b'BASE', b'Predicate', b'SAMPLING', b'GROUP', b'Strand', b'getDataResourceLocat', b'isDataURL', b'StackMapTable', b'setTrackLine', b'Ljava', b'intValue', b'Error', b'START', b'override', b'bringToFront', b'als', b'Locus', b'Finished', b'SCRIPT', b'Lorg', b'breakFileString', b'split', b'MainPanel', b'attributeName', b'logScale', b'Collection', b'loadFiles', b'Class', b'CallSite', b'Arrays', b'squish', b'sleep', b'decodeFileString', b'command', b'createTrackLine', b'IILjava', b'setOverride', b'getRegionSortOption', b'YERROR', b'MethodHandle', b'overlay', b'hgt', b'vAP', b'ion', b'SortOption', b'LENGTH', b'directory', b'LineNumberTable', b'setSequenceTrackStra', b'does', b'needsDecode', b'exists', b'getLogger', b'collection', b'collect', b'colorArg', b'coverageString', b'isBatch', b'msg', b'defaultCharset', b'string', b'LambdaMetafactory', b'test', b'getResourceLocator', b'sortAllTracksByAttri', b'addframes', b'files', b'loadfile', b'tag', b'SequenceTrack', b'parseTrackName', b'fitTracks', b'setAutoScale', b'setStrand', b'Component', b'loadedFiles', b'exist', b'toArray', b'maybeFile', b'gotoimmediate', b'showAttributes', b'set', b'SourceFile', b'LogManager', b'missing', b'HashMap', b'gototrack', b'SIZE', b'NUMBER', b'setDefaultPassword', b'IGVPreferences', b'attributeMap', b'Lookup', b'asList', b'setSamplingWindowSiz', b'ignore', b'stream', b'genomeIDorPath', b'NOT', b'dataURLs', b'UIUtilities', b'trackName', b'allAttributes', b'booleanValue', b'ZLjava', b'Double', b'TRACK', b'Unknown', b'setCoverage', b'alignedReadLength', b'getDataRange', b'prefs', b'regionSortOption', b'height', b'value', b'matching', b'trim', b'Color', b'must', b'for', b'Charset', b'isRemote', b'defineRegion', b'getName', b'windowSize', b'readGroup', b'customText', b'awt', b'loadGenomeById', b'Running', b'mateChr', b'getCurrentGenome', b'setSleepInterval', b'InterruptedException', b'readOrder', b'attributes', b'UNKOWN', b'setTrackHeight', b'item', b'getInstance', b'INSERT', b'setColor', b'isSessionFile', b'genome', b'show', b'insertSize', b'formatString', b'substring', b'revalidateTrackPanel', b'ResourceLocator', b'setSnapshotDirectory', b'indexString', b'unmerge', b'ERROR', b'Integer', b'butes', b'remove', b'logScaleString', b'preference', b'merge', b'DataRange', b'Genome', b'snapshotDirectory', b'ORDER', b'goto', b'Range', b'sleepInterval', b'clearAccessTokens', b'NULL', b'FFF', b'OverlayTracksMenuAct', b'warn', b'INSERTION', b'breakQuotedString', b'JideSplitPane', b'Session', b'getAlignmentTracks', b'setaccesstoken', b'end', b'usage', b'BootstrapMethods', b'dataRangeString', b'new', b'Logger', b'StringConcatFactory', b'unrecognized', b'sample', b'sortByRegionScore', b'NumberFormatExceptio', b'IllegalArgumentExcep', b'sortByAttribute', b'FrameManager', b'insert', b'getContentPane', b'Future', b'library', b'setIndexPath', b'region', b'least', b'altName', b'setAltColor', b'fError', b'formats', b'batch', b'ReferenceFrame', b'getPreferences', b'params', b'incrementZoom', b'scrolltotrack', b'sleeping', b'snapshotdirectory', b'session', b'format', b'java', b'names', b'setSequenceShowTrans', b'CharSequence', b'index', b'setFormat', b'DataTrack', b'showTranslation', b'FileUtils', b'auto', b'newSession', b'colorString', b'requires', b'groupAlignmentTracks', b'data', b'indexFiles', b'createParents', b'getAttributeNames', b'Set', b'sortAlignmentTracks', b'GenomeManager', b'SAM', b'repaint', b'decodeSafe', b'makeConcatWithConsta', b'prefVal', b'snapshotDir', b'broad', b'setting', b'dup', b'getAllTracks', b'targetFile', b'getCurrentLocusStrin', b'getId', b'get', b'EXPANDED', b'lation', b'isLocal', b'invoke', b'StringUtils', b'renderer', b'scrollToTrack', b'showMessage', b'coverageFiles', b'setBatch', b'LocalVariableTypeTab', b'tion', b'attributeIndex', b'user', b'init', b'Constants', b'setDisplayMode', b'getFirstFrame', b'Exceptions', b'interval', b'PAIR', b'Executing', b'startsWith', b'log', b'getAlignmentSortOpti', b'groupOption', b'track', b'max', b'ArrayList', b'getStart', b'coverage', b'reverse', b'size', b'invalid', b'reverseString', b'getArgs', b'fitTracksToPanel', b'png', b'locus', b'GenomeListItem', b'tweakdivider', b'File', b'CommandListener', b'getParentFile', b'target', b'arguments', b'fromString', b'jidesoft', b'POS', b'swing', b'Track', b'System', b'setViewAsPairs', b'SnapshotUtilities', b'WINDOW', b'isURL', b'Type', b'atrack', b'readname', b'subList', b'samplingwindowsize', b'parsing', b'maxdepth', b'separated', b'param', b'setSequenceStrand', b'getProperty', b'MATE', b'CommandExecutor', b'samplingreadcount', b'setCredentials', b'eractive', b'filename', b'Boolean', b'LINEAR', b'not', b'COUNT', b'util', b'baseline', b'setDataRange', b'setAccessToken', b'isQuoted', b'groupArg', b'getMainPanel', b'true', b'hiddenAttributes', b'quality', b'tweakPanelDivider', b'form', b'autoscale', b'addAll', b'HttpUtils', b'READ', b'echo', b'DIR', b'scriptDir', b'PreferencesManager', b'setType', b'hasNext', b'specified', b'getHiddenAttributes', b'setSamplingReadCount', b'Globals', b'writingin', b'garbage', b'Iterator', b'shouldShowTranslatio', b'Could', b'execute', b'the', b'maxpanelheight', b'Object', b'lambda', b'GroupOption', b'endsWith', b'invertSort', b'SessionWriter', b'range', b'CHR', b'LocalVariableTable', b'nameString', b'found', b'trackLine', b'COLLAPSED', b'getSession', b'metafactory', b'setHiddenAttributes', b'STRAND', b'parseInt', b'DisplayMode', b'createSnapshot', b'createSnapshotNonInt', b'formatOrExt', b'order', b'cmd', b'Thread', b'gotoImmediate', b'version', b'Lcom', b'colorAlignmentTracks', b'attributeArg', b'setHeight', b'MethodType', b'SAMPLE', b'sort', b'decodedString', b'LIBRARY', b'asc', b'clearDefaultCredenti', b'removeTrack', b'iterator', b'samplingReadCount', b'tmp', b'resolveFileReference', b'str', b'IGV', b'false', b'toUpperCase', b'trackpanels', b'getFile', b'xml', b'isLog', b'GenomeListManager', b'ParsingUtils', b'doubleValue', b'input', b'Throwable', b'igv', b'net', b'sortOption', b'clear', b'IOException', b'Data', b'Koverlay', b'Map', b'setDefaultUserName', b'FIRST', b'length', b'tofront', b'locusString', b'comma', b'LEVELS', b'load', b'MessageUtils', b'tokens', b'colorOption', b'savesession', b'clearaccesstokens', b'scaleType', b'currentSession', b'base', b'outputFile', b'Collector', b'parameter', b'panel', b'ascending', b'VERSION', b'clinit', b'zoomin', b'Exception', b'roi', b'fileLocators', b'action', b'SQUISHED', b'deleteTracks', b'setMaxPanelHeight', b'overridePreference', b'equalsIgnoreCase', b'addRegionOfInterest', b'integer', b'String', b'ALIGNED', b'mergeString', b'prefKey', b'trackStrand', b'option', b'feature', b'setShowDataRange', b'required', b'setDataURL', b'setName', b'sam', b'min', b'AlignmentTrack', b'DError', b'logscale', b'firstOfPairStrand', b'separate', b'currentGenomePath', b'getGenomeListItem', b'QUALITY', b'scrolltotop', b'Float', b'MethodHandles', b'RuntimeUtils', b'AttributeManager', b'NAME', b'Code', b'getChr', b'collapse', b'add', b'path', b'strand', b'execution', b'concurrent', b'lang', b'tracksMatchingName', b'valueOf', b'mkdirs', b'Attribute', b'reset', b'file', b'att', b'setTrackDisplayMode', b'desc', b'also', b'same', b'getMessage', b'getEnd', b'commandLine', b'parseFloat', b'loadSession', b'replaceAll', b'exit', b'charset', b'this', b'Signature', b'goToLocus', b'color', b'Collectors', b'NONE', b'snapshot', b'clearCredentials', b'ColorUtilities', b'decode', b'result', b'commandbar', b'sortArg', b'create', b'LOG', b'toList', b'alt', b'RegionOfInterest', b'saveSession', b'res', b'getAvailableMemoryFr', b'equals', b'filter', b'function', b'getAlignmentGroupOpt', b'nattributes', b'addFrames', b'error', b'IGVContentPane', b'args', b'mkdir', b'name', b'List', b'ILjava', b'viewaspairs', b'list', b'oauth', b'getCenterSplitPane', b'getAbsoluteFile', b'start'}
+[?2004hroot@b54e64a175e0:/task# igvtools count --bases /task/input/cram/tumor.cram /tmp/test_tumor.wig /task/input/reference/ref.fa
+[?2004lNov 12, 2026 8:21:07 PM java.util.prefs.FileSystemPreferences$1 run
+INFO: Created user preferences directory.
+INFO [Nov 12,2026 20:21] [GenomeManager] Loading genome: /task/input/reference/ref.fa
+head -n 30 /tmp/test_tumor.wig
+Done
+[?2004hroot@b54e64a175e0:/task# head -n 30 /tmp/test_tumor.wig
+[?2004ltrack type=wiggle_0
+#Columns: Pos, Combined Strands A, Combined Strands C, Combined Strands G, Combined Strands T, Combined Strands N, Combined Strands DEL, Combined Strands INS
+variableStep chrom=chr22_roi span=25
+1	1.24	0.72	3.44	1.0	0.0	0.0	0.0
+26	6.96	7.04	5.08	3.56	0.0	0.0	0.0
+51	7.92	13.88	13.0	4.44	0.0	0.0	0.0
+76	6.04	9.68	18.16	16.28	0.0	0.0	0.0
+101	12.24	10.28	14.24	14.04	0.0	0.0	0.0
+126	11.48	11.36	10.96	13.04	0.0	0.0	0.0
+151	7.16	15.0	10.96	12.96	0.0	0.0	0.0
+176	11.2	11.56	7.64	16.88	0.0	0.0	0.0
+201	16.64	9.28	18.2	13.56	0.0	0.0	0.0
+226	18.4	23.28	8.12	15.72	0.0	0.0	0.0
+251	14.04	29.56	14.4	14.36	0.0	0.0	0.0
+276	12.56	18.64	9.32	37.32	0.0	0.0	0.0
+301	26.2	13.04	32.48	9.96	0.0	0.0	0.0
+326	34.32	10.52	37.52	3.4	0.0	0.0	0.0
+351	27.76	10.6	49.12	0.0	0.0	0.0	0.0
+376	33.52	7.64	52.64	0.0	0.0	0.0	0.0
+401	16.28	32.52	36.28	16.28	0.0	0.0	0.0
+426	20.32	28.36	36.0	16.12	0.0	0.0	0.0
+451	4.0	27.48	7.72	57.72	0.0	0.0	0.0
+476	24.68	20.4	32.36	24.04	0.0	0.0	0.0
+501	16.36	24.4	39.32	19.92	0.0	0.0	0.0
+526	0.0	23.36	54.44	19.6	0.0	0.0	0.0
+551	22.8	11.48	45.32	15.16	0.0	0.0	0.0
+576	14.4	38.56	25.04	10.2	0.0	0.0	0.0
+601	9.88	35.24	22.48	12.68	0.0	0.0	0.0
+626	16.08	41.48	9.4	12.2	0.0	0.0	0.0
+651	15.16	24.84	18.76	19.08	0.0	0.0	0.0
+[?2004hroot@b54e64a175e0:/task# find / -name "*ecj*" -o -name "*compiler*" 2>/dev/null | grep -v "/proc" | grep -v "/sys"
+[?2004l/usr/lib/python3.13/re/__pycache__/_compiler.cpython-313.pyc
+/usr/lib/python3.13/re/_compiler.py
+/usr/local/lib/python3.12/re/__pycache__/_compiler.cpython-312.pyc
+/usr/local/lib/python3.12/re/_compiler.py
+/opt/tools/compiler_compat
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/ccompiler.py
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/cygwinccompiler.py
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/_msvccompiler.py
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/compilers
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/unixccompiler.py
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/__pycache__/zosccompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/__pycache__/_msvccompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/__pycache__/cygwinccompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/__pycache__/ccompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/__pycache__/unixccompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/site-packages/setuptools/_distutils/zosccompiler.py
+/opt/tools/lib/python3.12/site-packages/cffi/recompiler.py
+/opt/tools/lib/python3.12/site-packages/cffi/__pycache__/recompiler.cpython-312.pyc
+/opt/tools/lib/python3.12/re/__pycache__/_compiler.cpython-312.pyc
+/opt/tools/lib/python3.12/re/_compiler.py
+[?2004hroot@b54e64a175e0:/task# ls -la /task/software/desktop
+[?2004ltotal 24
+drwxr-xr-x 2 root root 4096 Nov 12 18:23 .
+drwxr-xr-x 4 root root 4096 Nov 12 18:23 ..
+-rwxr-xr-x 1 root root 5655 Nov 12 18:23 desktop
+-rwxr-xr-x 1 root root 3306 Nov 12 18:23 server.py
+-rwxr-xr-x 1 root root  431 Nov 12 18:23 start_desktop.sh
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if 'alignment' in n.lower() and ('menu' in n.lower() or 'export' in n.lower() or 'popup' in n.lower())])"
+[?2004l['org/broad/igv/sam/AlignmentTrackMenu$Deselector.class', 'org/broad/igv/sam/AlignmentTrack$InsertionMenu.class', 'org/broad/igv/sam/AlignmentTrackMenu.class']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if n.startswith('org/broad/igv/sam/') and not '$' in n])"
+[?2004l['org/broad/igv/sam/', 'org/broad/igv/sam/ReadMate.class', 'org/broad/igv/sam/AlignmentDataManager.class', 'org/broad/igv/sam/DownsampledInterval.class', 'org/broad/igv/sam/SpliceJunctionTrack.class', 'org/broad/igv/sam/SpliceGap.class', 'org/broad/igv/sam/PackedAlignments.class', 'org/broad/igv/sam/AlignmentTileLoader.class', 'org/broad/igv/sam/mods/', 'org/broad/igv/sam/mods/BaseModificationCoverageRenderer.class', 'org/broad/igv/sam/mods/BaseModificationUtils.class', 'org/broad/igv/sam/mods/BaseModificationSet.class', 'org/broad/igv/sam/mods/BaseModificationRenderer.class', 'org/broad/igv/sam/mods/BaseModificationKey.class', 'org/broad/igv/sam/mods/BaseModificationColors.class', 'org/broad/igv/sam/mods/BaseModificationCounts.class', 'org/broad/igv/sam/mods/BaseModficationFilter.class', 'org/broad/igv/sam/PairedAlignment.class', 'org/broad/igv/sam/SparseAlignmentCounts.class', 'org/broad/igv/sam/ReadStats.class', 'org/broad/igv/sam/AlignmentTrack.class', 'org/broad/igv/sam/AlignmentUtils.class', 'org/broad/igv/sam/FeatureWrappedAlignment.class', 'org/broad/igv/sam/PositionCache.class', 'org/broad/igv/sam/BisulfiteBaseInfo.class', 'org/broad/igv/sam/DenseAlignmentCounts.class', 'org/broad/igv/sam/InsertionSelectionEvent.class', 'org/broad/igv/sam/AlignmentBlock.class', 'org/broad/igv/sam/BaseAlignmentCounts.class', 'org/broad/igv/sam/BisulfiteBaseInfoNOMeseq.class', 'org/broad/igv/sam/reader/', 'org/broad/igv/sam/reader/AlignmentParser.class', 'org/broad/igv/sam/reader/SAMReader.class', 'org/broad/igv/sam/reader/PSLAlignmentParser.class', 'org/broad/igv/sam/reader/DotAlignedIndexer.class', 'org/broad/igv/sam/reader/AlignmentReaderFactory.class', 'org/broad/igv/sam/reader/DotAlignedCodec.class', 'org/broad/igv/sam/reader/GeraldReader.class', 'org/broad/igv/sam/reader/AlignmentIndexer.class', 'org/broad/igv/sam/reader/ReadGroupFilter.class', 'org/broad/igv/sam/reader/SAMQueryIterator.class', 'org/broad/igv/sam/reader/SamUtils.class', 'org/broad/igv/sam/reader/DotAlignedParser.class', 'org/broad/igv/sam/reader/BAMReader.class', 'org/broad/igv/sam/reader/FeatureIndex.class', 'org/broad/igv/sam/reader/IndexNotFoundException.class', 'org/broad/igv/sam/reader/WrappedIterator.class', 'org/broad/igv/sam/reader/IndexLoadException.class', 'org/broad/igv/sam/reader/CGIAlignmentReader.class', 'org/broad/igv/sam/reader/SamReaderPool.class', 'org/broad/igv/sam/reader/MergedAlignmentReader.class', 'org/broad/igv/sam/reader/AlignmentReader.class', 'org/broad/igv/sam/reader/UnsortedFileException.class', 'org/broad/igv/sam/reader/SamIndexer.class', 'org/broad/igv/sam/reader/SolexaQualityConverter.class', 'org/broad/igv/sam/SpliceJunctionHelper.class', 'org/broad/igv/sam/LinkedAlignment.class', 'org/broad/igv/sam/Row.class', 'org/broad/igv/sam/SAMAlignment.class', 'org/broad/igv/sam/DotAlignedAlignment.class', 'org/broad/igv/sam/Alignment.class', 'org/broad/igv/sam/EmptyAlignmentIterator.class', 'org/broad/igv/sam/InsertionManager.class', 'org/broad/igv/sam/EmptyAlignmentCounts.class', 'org/broad/igv/sam/BaseRenderer.class', 'org/broad/igv/sam/SupplementaryGroup.class', 'org/broad/igv/sam/AlignmentRenderer.class', 'org/broad/igv/sam/ByteSubarray.class', 'org/broad/igv/sam/smrt/', 'org/broad/igv/sam/smrt/SMRTKineticsRenderer.class', 'org/broad/igv/sam/smrt/SMRTKinetics.class', 'org/broad/igv/sam/smrt/SMRTKineticsDecoder.class', 'org/broad/igv/sam/SbxUtils.class', 'org/broad/igv/sam/AlignmentCounts.class', 'org/broad/igv/sam/ClusterUtils.class', 'org/broad/igv/sam/EWigTrack.class', 'org/broad/igv/sam/cram/', 'org/broad/igv/sam/cram/IGVReferenceSource.class', 'org/broad/igv/sam/cram/ReferenceDiskCache.class', 'org/broad/igv/sam/Gap.class', 'org/broad/igv/sam/SortOption.class', 'org/broad/igv/sam/ReducedMemoryAlignment.class', 'org/broad/igv/sam/CoverageTrack.class', 'org/broad/igv/sam/ClippingCounts.class', 'org/broad/igv/sam/SAMWriter.class', 'org/broad/igv/sam/BisulfiteCounts.class', 'org/broad/igv/sam/AlignmentTrackMenu.class', 'org/broad/igv/sam/AlignmentInterval.class', 'org/broad/igv/sam/SupplementaryAlignment.class', 'org/broad/igv/sam/SMRTKineticsDecoder.class', 'org/broad/igv/sam/AlignmentPacker.class', 'org/broad/igv/sam/AlignmentBlockImpl.class', 'org/broad/igv/sam/InsertionMarker.class', 'org/broad/igv/sam/PEStats.class']
+[?2004hroot@b54e64a175e0:/task# ls -lh /task/input/cram /task/input/reference
+[?2004l/task/input/cram:
+total 324K
+-r--r--r-- 1 root root  98K Nov 12 18:23 normal.cram
+-r--r--r-- 1 root root   80 Nov 12 18:23 normal.cram.crai
+-r--r--r-- 1 root root 213K Nov 12 18:23 tumor.cram
+-r--r--r-- 1 root root  117 Nov 12 18:23 tumor.cram.crai
+
+/task/input/reference:
+total 64K
+-r--r--r-- 1 root root 60K Nov 12 18:23 ref.fa
+-r--r--r-- 1 root root  25 Nov 12 18:23 ref.fa.fai
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if b'SAMWriter' in z.read(n)])"
+[?2004l['org/broad/igv/track/TrackMenuUtils.class', 'org/broad/igv/sam/SAMWriter$SamAlignmentIterable.class', 'org/broad/igv/sam/SAMWriter.class']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, re; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/track/TrackMenuUtils.class'); print([s.decode('latin1') for s in set(re.findall(rb'[a-zA-Z]{4,30}', data)) if any(w in s.lower() for w in [b'align', b'export', b'sam', b'write'])])"
+[?2004l['PrintWriter', 'writeAlignmentFilePicard', 'exportVisibleFeatures', 'isAlignment', 'Export', 'exportVisibleAlignments', 'getExportTrackLine', 'setAlignmentX', 'AlignmentTrack', 'SAMWriter', 'exportData', 'alignmentTrack', 'Alignments', 'AlignmentDataManager', 'writer', 'getExportFeatures']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, re; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/sam/SAMWriter.class'); print([s.decode('latin1') for s in set(re.findall(rb'[a-zA-Z]{4,30}', data))])"
+[?2004l['asList', 'alignment', 'SAMFileWriter', 'iter', 'SAMWriter', 'isDuplicate', 'IOException', 'AlignmentTileLoader', 'Alignment', 'fileHeader', 'getLocator', 'iterator', 'StringUtils', 'compare', 'writeToStream', 'close', 'ResourceLocator', 'OutputStream', 'writeAlignmentFilePicard', 'inlocator', 'addAlignment', 'alignments', 'SourceFile', 'makeConcatWithConstants', 'getLoadedInterval', 'LocalVariableTypeTable', 'isPaired', 'StackMapTable', 'join', 'writeAlignments', 'getAlignments', 'valid', 'getCigarString', 'format', 'header', 'metafactory', 'SamAlignmentIterable', 'LambdaMetafactory', 'hasNext', 'MethodHandle', 'count', 'AlignmentInterval', 'SAMFileWriterFactory', 'AlignmentDataManager', 'getFileHeader', 'interval', 'SortOrder', 'writeToFile', 'Collection', 'Comparator', 'ReadMate', 'result', 'NestMembers', 'samIter', 'Iterator', 'IllegalArgumentException', 'mateStart', 'JLhtsjdk', 'tokens', 'invoke', 'lambda', 'BootstrapMethods', 'list', 'start', 'getAlignmentStart', 'SAMFileWriterImpl', 'File', 'ConstantValue', 'range', 'samtools', 'FIELD', 'List', 'isSecondOfPair', 'ZLjava', 'Lorg', 'ReferenceFrame', 'outPath', 'getFormat', 'coordinate', 'sort', 'lang', 'setSortOrder', 'Code', 'java', 'AlignmentReaderFactory', 'SAMFileHeader', 'createIndex', 'makeSAMOrBAMWriter', 'htsjdk', 'panel', 'this', 'MethodType', 'SAMRecord', 'isFirstOfPair', 'getInferredInsertSize', 'Range', 'SAMAlignment', 'toString', 'broad', 'getRecord', 'getReadName', 'getFlags', 'isProperPair', 'query', 'stream', 'Ljava', 'Object', 'getSAMString', 'mate', 'isNegativeStrand', 'Integer', 'getMate', 'setHeader', 'InnerClasses', 'outFile', 'refName', 'Input', 'feature', 'Lhtsjdk', 'SEPARATOR', 'util', 'Exceptions', 'factory', 'String', 'sequence', 'AlignmentReader', 'CloseableIterator', 'Signature', 'ArrayList', 'equals', 'cram', 'getReadSequence', 'checkExportableAlignmentFile', 'CallSite', 'init', 'SAMTextWriter', 'getLoader', 'reader', 'dataManager', 'StringConcatFactory', 'next', 'getMappingQuality', 'HashSet', 'frame', 'validExts', 'writer', 'getReader', 'export', 'mateRefName', 'LocalVariableTable', 'getChr', 'isVendorFailedRead', 'MethodHandles', 'getStart', 'isMapped', 'Lookup', 'Arrays', 'setCreateIndex', 'LineNumberTable', 'contains']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/commons-jexl-2.1.1-module.jar'); print([n for n in z.namelist() if 'main' in n.lower() or 'cli' in n.lower() or 'shell' in n.lower()])"
+[?2004l[]
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, glob; mains = [(j.split('/')[-1], n) for j in glob.glob('/opt/tools/lib/igv/*.jar') for n in zipfile.ZipFile(j).namelist() if n.endswith('.class') and b'main' in zipfile.ZipFile(j).read(n) and b'([Ljava/lang/String;)V' in zipfile.ZipFile(j).read(n)]; print(mains)"
+[?2004l
+^CTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/opt/tools/lib/python3.12/zipfile/__init__.py", line 1396, in __init__
+    self._RealGetContents()
+  File "/opt/tools/lib/python3.12/zipfile/__init__.py", line 1494, in _RealGetContents
+    orig_filename_crc = crc32(filename)
+                        ^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/find_mains.py
+[?2004l[?2004h> import zipfile, glob
+[?2004l[?2004h> for j in glob.glob('/opt/tools/lib/igv/*.jar'):
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         z = zipfile.ZipFile(j)
+[?2004l[?2004h>         for n in z.namelist():
+[?2004l[?2004h>             if n.endswith('.class'):
+[?2004l[?2004h>                 data = z.read(n)
+[?2004l[?2004h>                 if b'main' in data and b'([Ljava/lang/String;)V' in data:
+[?2004l[?2004h>                     print(f"{j.split('/')[-1]}: {n}")
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         pass
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/find_mains.py
+[?2004lasm-util-7.3.1.jar: org/objectweb/asm/util/ASMifier.class
+asm-util-7.3.1.jar: org/objectweb/asm/util/CheckClassAdapter.class
+asm-util-7.3.1.jar: org/objectweb/asm/util/Textifier.class
+commons-codec-1.17.1.jar: org/apache/commons/codec/cli/Digest.class
+jide-oss-3.7.12-module.jar: com/jidesoft/icons/JideIconsFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/dialog/TreeIconsFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/converter/DefaultArrayConverter.class
+jide-oss-3.7.12-module.jar: com/jidesoft/converter/MonthNameConverter.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/vsnet/VsnetMetalProgressBarUI.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/vsnet/VsnetWindowsProgressBarUI.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/LookAndFeelFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/basic/BasicFolderChooserIconsFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/XPUtils.class
+jide-oss-3.7.12-module.jar: com/jidesoft/plaf/aqua/BinaryPListParser.class
+jide-oss-3.7.12-module.jar: com/jidesoft/utils/BigDecimalMathUtils.class
+jide-oss-3.7.12-module.jar: com/jidesoft/utils/SortedList.class
+jide-oss-3.7.12-module.jar: com/jidesoft/utils/SortedList$1.class
+jide-oss-3.7.12-module.jar: com/jidesoft/swing/OverlayableIconsFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/swing/SearchableBarIconsFactory.class
+jide-oss-3.7.12-module.jar: com/jidesoft/swing/MultilineToggleButton.class
+jide-oss-3.7.12-module.jar: com/jidesoft/swing/Calculator.class
+jide-oss-3.7.12-module.jar: com/jidesoft/spinner/PointFormatter.class
+commons-math3-3.6.1-module.jar: org/apache/commons/math3/util/FastMath.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/BrowserCompatSpec.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/RFC6265CookieSpecProvider.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/RFC2109Spec.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/NetscapeDraftSpec.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/RFC2965Spec.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/RFC6265StrictSpec.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/DefaultCookieSpecProvider.class
+httpclient-4.5.13.jar: org/apache/http/impl/cookie/DefaultCookieSpec.class
+batik-svggen-1.17-module.jar: org/apache/batik/svggen/font/SVGFont.class
+netty-handler-4.1.118.Final.jar: io/netty/handler/ssl/ReferenceCountedOpenSslEngine.class
+commons-lang3-3.14.0.jar: org/apache/commons/lang3/CharSet.class
+batik-transcoder-1.17-module.jar: org/apache/batik/transcoder/wmf/tosvg/WMFTranscoder.class
+batik-transcoder-1.17-module.jar: org/apache/batik/transcoder/print/PrintTranscoder.class
+netty-common-4.1.118.Final.jar: io/netty/util/Version.class
+ngs-java-2.9.0-module.jar: gov/nih/nlm/ncbi/ngs/LibVersionChecker.class
+ngs-java-2.9.0-module.jar: gov/nih/nlm/ncbi/ngs/Version.class
+ngs-java-2.9.0-module.jar: gov/nih/nlm/ncbi/ngs/NGS.class
+batik-util-1.17-module.jar: org/apache/batik/util/ClassFileUtilities.class
+commons-compress-1.26.0.jar: org/apache/commons/compress/archivers/Lister.class
+commons-compress-1.26.0.jar: org/apache/commons/compress/archivers/sevenz/CLI.class
+batik-awt-util-1.17-module.jar: org/apache/batik/ext/swing/JAffineTransformChooser.class
+htsjdk-4.3.0-module.jar: htsjdk/tribble/readers/PositionalBufferedStream.class
+htsjdk-4.3.0-module.jar: htsjdk/samtools/util/HttpUtils.class
+htsjdk-4.3.0-module.jar: htsjdk/samtools/seekablestream/SeekableFTPStream.class
+igv.jar: org/broad/igv/tdf/TDFUtils.class
+igv.jar: org/broad/igv/repeats/RepeatMaskSplitter.class
+igv.jar: org/broad/igv/maf/MAFUtils.class
+igv.jar: org/broad/igv/maf/MAFtoSAM.class
+igv.jar: org/broad/igv/batch/TestClient.class
+igv.jar: org/broad/igv/batch/Exec.class
+igv.jar: org/broad/igv/track/TestUtils.class
+igv.jar: org/broad/igv/encode/EncodeTrackChooser.class
+igv.jar: org/broad/igv/encode/UCSCEncodeUtils.class
+igv.jar: org/broad/igv/feature/FeatureFileUtils.class
+igv.jar: org/broad/igv/feature/EmblFeatureTableParser.class
+igv.jar: org/broad/igv/feature/genome/ChromSizesUtils.class
+igv.jar: org/broad/igv/feature/GFFParser.class
+igv.jar: org/broad/igv/gwas/EqtlPreprocessor.class
+igv.jar: org/broad/igv/bedpe/BedPEUtils.class
+igv.jar: org/broad/igv/ultima/render/ColorMap.class
+igv.jar: org/broad/igv/ucsc/HubTrackSelectionDialog.class
+igv.jar: org/broad/igv/tools/converters/IlluminaToCN.class
+igv.jar: org/broad/igv/tools/converters/CLWtoSAM.class
+igv.jar: org/broad/igv/tools/converters/MFastaToSAM.class
+igv.jar: org/broad/igv/tools/converters/ExpressionFormatter.class
+igv.jar: org/broad/igv/tools/converters/WigToBed.class
+igv.jar: org/broad/igv/tools/converters/GFFtoBed.class
+igv.jar: org/broad/igv/tools/PairedEndStats.class
+igv.jar: org/broad/igv/tools/RepeatMaskSplitter.class
+igv.jar: org/broad/igv/tools/TestFileGenerator.class
+igv.jar: org/broad/igv/tools/IgvTools.class
+igv.jar: org/broad/igv/tools/experimental/ExtractPairs.class
+igv.jar: org/broad/igv/tools/PairedUtils.class
+igv.jar: org/broad/igv/tools/IgvToolsGui.class
+igv.jar: org/broad/igv/tools/UCSCUtils.class
+igv.jar: org/broad/igv/renderer/TestGraphicUtils$1.class
+igv.jar: org/broad/igv/renderer/TestGraphicUtils.class
+igv.jar: org/broad/igv/charts/ScatterPlotDemo.class
+igv.jar: org/broad/igv/sam/reader/CGIAlignmentReader.class
+igv.jar: org/broad/igv/prefs/PreferencesEditor.class
+igv.jar: org/broad/igv/ui/AboutDialog$2.class
+igv.jar: org/broad/igv/ui/TrackConfigurationDialog$4.class
+igv.jar: org/broad/igv/ui/ResourceFileBuilderDialog.class
+igv.jar: org/broad/igv/ui/svg/SVGTest.class
+igv.jar: org/broad/igv/ui/AWTFrameTest.class
+igv.jar: org/broad/igv/ui/IGVMainFrame.class
+igv.jar: org/broad/igv/ui/IGVMenuBar.class
+igv.jar: org/broad/igv/ui/HeatmapScaleDialog.class
+igv.jar: org/broad/igv/ui/HeatmapScaleDialog$10.class
+igv.jar: org/broad/igv/ui/Main$IGVArgs.class
+igv.jar: org/broad/igv/ui/supdiagram/SupplementaryAlignmentDiagramDialog.class
+igv.jar: org/broad/igv/ui/DataRangeDialog$3.class
+igv.jar: org/broad/igv/ui/AboutDialog.class
+igv.jar: org/broad/igv/ui/HeatmapDialog.class
+igv.jar: org/broad/igv/ui/color/ColorSwatch.class
+igv.jar: org/broad/igv/ui/color/PaletteToolFrame.class
+igv.jar: org/broad/igv/ui/DataRangeDialog.class
+igv.jar: org/broad/igv/ui/legend/LegendDialog$8.class
+igv.jar: org/broad/igv/ui/legend/LegendDialog.class
+igv.jar: org/broad/igv/ui/TrackConfigurationDialog.class
+igv.jar: org/broad/igv/ui/CompletableFutureExample.class
+igv.jar: org/broad/igv/ui/TooltipTextFrame.class
+igv.jar: org/broad/igv/ui/util/SortDialog.class
+igv.jar: org/broad/igv/ui/util/SortDialog$3.class
+igv.jar: org/broad/igv/ui/util/MessageUtils$3.class
+igv.jar: org/broad/igv/ui/util/download/Downloader.class
+igv.jar: org/broad/igv/ui/util/SimpleFormDialog.class
+igv.jar: org/broad/igv/ui/util/FontChooser2.class
+igv.jar: org/broad/igv/ui/util/ReorderableJList.class
+igv.jar: org/broad/igv/ui/util/MessageUtils.class
+igv.jar: org/broad/igv/ui/util/FontChooser2$4.class
+igv.jar: org/broad/igv/ui/Main.class
+igv.jar: org/broad/igv/variant/util/VCFtoBed.class
+igv.jar: org/broad/igv/variant/util/AutismUtils.class
+igv.jar: org/broad/igv/util/converters/TarjeiToBedgraph.class
+igv.jar: org/broad/igv/util/converters/DensitiesToBedGraph.class
+igv.jar: org/broad/igv/util/DumpHttpHeaders.class
+igv.jar: org/broad/igv/util/stream/IGVSeekableHTTPStream.class
+igv.jar: org/broad/igv/util/TutorialUtils.class
+igv.jar: org/broad/igv/util/SequenceGC.class
+igv.jar: org/broad/igv/util/FormatUtils.class
+igv.jar: org/broad/igv/util/AsciiEcho.class
+igv.jar: org/broad/igv/util/stats/KaplanMeierEstimator.class
+igv.jar: org/broad/igv/util/collections/LRUCache.class
+igv.jar: org/broad/igv/util/UnzipGenomes.class
+igv.jar: org/broad/igv/util/IlluminaUtils.class
+igv.jar: com/sanityinc/jargs/CmdLineParser.class
+igv.jar: slider/RangeSliderDemo$2.class
+igv.jar: slider/RangeSliderDemo.class
+swing-layout-1.0.3-module.jar: org/jdesktop/layout/AquaLayoutStyle.class
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, re; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/batch/Exec.class'); print([s.decode('latin1') for s in set(re.findall(rb'[a-zA-Z]{4,30}', data))])"
+[?2004l['Lorg', 'Code', 'broad', 'Exceptions', 'args', 'read', 'println', 'this', 'exec', 'lang', 'batch', 'Runtime', 'System', 'Writer', 'OutputStream', 'abcd', 'Process', 'print', 'Ljava', 'getRuntime', 'PrintStream', 'PrintWriter', 'String', 'InputStream', 'main', 'java', 'LocalVariableTable', 'flush', 'SourceFile', 'getInputStream', 'StackMapTable', 'OutputStreamWriter', 'close', 'Object', 'IOException', 'init', 'Exec', 'getOutputStream', 'LineNumberTable']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile, re; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/tools/experimental/ExtractPairs.class'); print([s.decode('latin1') for s in set(re.findall(rb'[a-zA-Z]{4,30}', data))])"
+[?2004l['extract', 'PAIRED', 'UNMAPPED', 'openConnectionStream', 'isLocal', 'init', 'String', 'cram', 'Volumes', 'CHECK', 'this', 'FAILS', 'close', 'BufferedWriter', 'drives', 'FileWriter', 'getEnd', 'posString', 'alignment', 'PAIR', 'STRAND', 'getSamReader', 'factory', 'Exceptions', 'open', 'Throwable', 'Exception', 'java', 'iter', 'MethodHandles', 'SAMRecordIterator', 'MethodType', 'tools', 'QUALITY', 'SUPPLEMENTARY', 'startsWith', 'HttpUtils', 'second', 'CRAMReferenceSource', 'SourceFile', 'Object', 'lastAlignment', 'first', 'FLAG', 'SECOND', 'DUPLICATE', 'alignmentFile', 'equals', 'Lhtsjdk', 'getContig', 'getReadName', 'makeDefault', 'Ljava', 'http', 'ConstantValue', 'CallSite', 'flush', 'referenceSource', 'Lorg', 'SamReaderFactory', 'getStart', 'experimental', 'args', 'Shared', 'reader', 'inputFile', 'next', 'outputFile', 'SamReader', 'printStackTrace', 'InputStream', 'SILENT', 'InnerClasses', 'BootstrapMethods', 'makeConcatWithConstants', 'getMappingQuality', 'READ', 'invoke', 'StringConcatFactory', 'validationStringency', 'getFlags', 'FIRST', 'lang', 'IOException', 'LineNumberTable', 'StackMapTable', 'pairs', 'Math', 'resource', 'File', 'MATE', 'main', 'ValidationStringency', 'hasNext', 'ExtractPairs', 'filter', 'PRIMARY', 'println', 'broad', 'compareTo', 'discordant', 'GoogleDrive', 'IGVReferenceSource', 'PROPER', 'getInstance', 'htsjdk', 'ALIGNMENT', 'path', 'VENDOR', 'PrintWriter', 'SAMRecord', 'BufferedInputStream', 'Code', 'iterator', 'samtools', 'util', 'Lookup', 'Writer', 'LocalVariableTable', 'SamInputResource', 'namesorted']
+[?2004hroot@b54e64a175e0:/task# java --module-path=/opt/tools/lib/igv --module=org.igv/org.broad.igv.tools.experimental.ExtractPairs 2>&1
+[?2004lError: Main method not found in class org.broad.igv.tools.experimental.ExtractPairs, please define the main method as:
+   public static void main(String[] args)
+or a JavaFX application class must extend javafx.application.Application
+[?2004hroot@b54e64a175e0:/task# 
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/tools/experimental/ExtractPairs.class'); print([s for s in data.split(b'\x00') if b'main' in s])"
+[?2004l[b'\x04main\x01']
+[?2004hroot@b54e64a175e0:/task# java -cp "/opt/tools/lib/igv/*" org.objectweb.asm.util.Textifier org.broad.igv.tools.experimental.ExtractPairs 2>&1 | head -n 40
+[?2004lError: Main method not found in class org.objectweb.asm.util.Textifier, please define the main method as:
+   public static void main(String[] args)
+or a JavaFX application class must extend javafx.application.Application
+[?2004hroot@b54e64a175e0:/task# /task/software/open_igv.sh
+[?2004lIGV is running with the tracks loaded (log: /tmp/igv.log); batch port 60151
+[?2004hroot@b54e64a175e0:/task# python3 -c "import socket; s = socket.create_connection(('127.0.0.1', 60151)); s.sendall(b'echo\n'); print(s.recv(1024))"
+[?2004lb'echo\n'
+[?2004hroot@b54e64a175e0:/task# desktop windows; desktop screenshot /tmp/desktop.png; ls -lh /tmp/desktop.png
+[?2004l0x00400018  0 2    40   1148 775  b54e64a175e0 IGV
+/tmp/desktop.png
+-rw-rw-rw- 1 root root 22K Nov 12 20:24 /tmp/desktop.png
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar').read('org/broad/igv/track/TrackMenuUtils.class'); print([s for s in data.split(b'\x00') if b'export' in s.lower()])"
+[?2004l[b'\x12Export Features...\x07\x021\x01', b'\x14Export Alignments...\x07\x02:\x01', b'\x12getExportTrackLine\n\x02d\x02m\x0c\x02n', b'\x11getExportFeatures\x01', b'\nexportData\x01', b'\x17exportVisibleAlignments\x01', b'\x15exportVisibleFeatures\x01']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar'); print([n for n in z.namelist() if b'Export Alignments' in z.read(n)])"
+[?2004l['org/broad/igv/track/TrackMenuUtils.class']
+[?2004hroot@b54e64a175e0:/task# which gcc g++ make clang rustc perl php ruby tclsh node 2>&1
+[?2004l/usr/bin/perl
+/opt/tools/bin/tclsh
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_menu.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/track/TrackMenuUtils.class')
+[?2004l[?2004h> print([s for s in data.split(b'\x00') if any(w in s for w in [b'Export', b'export', b'sam', b'bam', b'Alignment', b'FileChooser', b'Dialog'])][:20])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_menu.py
+[?2004l[b'\x1forg/broad/igv/sam/CoverageTrack\x07', b'\rsetAlignmentX\x01', b'\x12Export Features...\x07\x021\x01', b' org/broad/igv/sam/AlignmentTrack\x08\x028\x01', b'\x14Export Alignments...\x07\x02:\x01', b'*()Lorg/broad/igv/sam/AlignmentDataManager;\n\x02D\x02E\x07\x02F\x0c\x02G\x02H\x01', b'&org/broad/igv/sam/AlignmentDataManager\x01', b'\x1borg/broad/igv/sam/SAMWriter\x01', b'\x18writeAlignmentFilePicard\x01', b't(Lorg/broad/igv/sam/AlignmentDataManager;Ljava/io/File;Lorg/broad/igv/ui/panel/ReferenceFrame;Ljava/lang/String;II)I\x07\x02W\x01', b'\x12getExportTrackLine\n\x02d\x02m\x0c\x02n', b'\x0fshowInputDialog\x01', b'\x11showMessageDialog\x01', b'\x16showColorChooserDialog\x01', b'\x0bisAlignment\n', b' org/broad/igv/ui/DataRangeDialog\n\x04{\x04~\x0c', b'\x0egetAlphaDialog\x01', b'\x17()Ljavax/swing/JDialog;\n\x04\xbe\x04\x81\x07\x04\xbf\x01', b'\x13javax/swing/JDialog\n\x04\xc1\x04\xc2\x07\x04\xc3\x0c\x04\xc4\x02\xa7\x01', b'\x11getExportFeatures\x01']
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_exec.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/batch/Exec.class')
+[?2004l[?2004h> print([s for s in data.split(b'\x00') if len(s) > 2][:30])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_exec.py
+[?2004l[b'\xca\xfe\xba\xbe', b'\x10java/lang/Object\x01', b'\x06<init>\x01', b'\x03()V\n', b'\x11java/lang/Runtime\x01', b'\ngetRuntime\x01', b'\x15()Ljava/lang/Runtime;\x08', b'\x03cat\n', b'\x04exec\x01', b"'(Ljava/lang/String;)Ljava/lang/Process;\n", b'\x11java/lang/Process\x01', b'\x0fgetOutputStream\x01', b'\x18()Ljava/io/OutputStream;\x07', b'\x13java/io/PrintWriter\x07', b'\x1ajava/io/OutputStreamWriter\n', b'\x19(Ljava/io/OutputStream;)V\n', b'\x13(Ljava/io/Writer;)V\x08', b'\x04abcd\n', b'\x07println\x01', b'\x15(Ljava/lang/String;)V\n', b'\x05flush\n', b'\x14java/io/OutputStream\x01', b'\x05close\n', b'\x0egetInputStream\x01', b'\x17()Ljava/io/InputStream;\n', b'\x13java/io/InputStream\x01', b'\x04read\x01', b'\x03()I\t', b'\x10java/lang/System\x01', b'\x03out\x01']
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_export.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/track/TrackMenuUtils.class')
+[?2004l[?2004h> for match in [b'exportVisibleAlignments', b'writeAlignmentFilePicard']:
+[?2004l[?2004h>     pos = 0
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         pos = data.find(match, pos)
+[?2004l[?2004h>         if pos == -1: break
+[?2004l[?2004h>         print(match, pos)
+[?2004l[?2004h>         pos += len(match)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_export.py
+[?2004lb'exportVisibleAlignments' 20445
+b'writeAlignmentFilePicard' 8260
+[?2004hroot@b54e64a175e0:/task# ls -la /usr/lib/jvm 2>/dev/null; find / -name "*openjdk*" 2>/dev/null
+[?2004l/opt/tools/etc/conda/deactivate.d/openjdk_deactivate.sh
+/opt/tools/etc/conda/test-files/openjdk
+/opt/tools/etc/conda/activate.d/openjdk_activate.sh
+/opt/tools/conda-meta/openjdk-21.0.10-h1602c4f_22.json
+[?2004hroot@b54e64a175e0:/task# cat /opt/tools/conda-meta/openjdk-21.0.10-h1602c4f_22.json | grep -o '"bin/[^"]*"' | head -n 30
+[?2004l"bin/jar"
+"bin/jarsigner"
+"bin/java"
+"bin/javac"
+"bin/javadoc"
+"bin/javap"
+"bin/jcmd"
+"bin/jconsole"
+"bin/jdb"
+"bin/jdeprscan"
+"bin/jdeps"
+"bin/jfr"
+"bin/jhsdb"
+"bin/jimage"
+"bin/jinfo"
+"bin/jlink"
+"bin/jmap"
+"bin/jmod"
+"bin/jpackage"
+"bin/jps"
+"bin/jrunscript"
+"bin/jshell"
+"bin/jstack"
+"bin/jstat"
+"bin/jstatd"
+"bin/jwebserver"
+"bin/keytool"
+"bin/rmiregistry"
+"bin/serialver"
+"bin/jar"
+[?2004hroot@b54e64a175e0:/task# ls -l /opt/tools/bin/j* /opt/tools/bin/java* 2>/dev/null
+[?2004llrwxrwxrwx 1 root root    19 Nov 12 02:13 /opt/tools/bin/java -> ../lib/jvm/bin/java
+lrwxrwxrwx 1 root root    19 Nov 12 02:13 /opt/tools/bin/java -> ../lib/jvm/bin/java
+-rwxrwxr-x 1 root root 64376 Oct 28 03:10 /opt/tools/bin/jpegtran
+-rwxrwxr-x 1 root root 42568 Nov  2 01:59 /opt/tools/bin/jpgicc
+-rwxr-xr-x 1 root root   170 Nov 12 02:14 /opt/tools/bin/jsonschema
+[?2004hroot@b54e64a175e0:/task# ls -la /opt/tools/lib/jvm; ls -la /opt/tools/lib/jvm/bin
+[?2004ltotal 28
+drwxr-xr-x  6 root root 4096 Nov 12 02:13 .
+drwxr-xr-x  1 root root 4096 Nov 12 02:13 ..
+drwxr-xr-x  2 root root 4096 Nov 12 02:13 bin
+drwxr-xr-x  4 root root 4096 Nov 12 02:13 conf
+drwxr-xr-x 29 root root 4096 Nov 12 02:13 legal
+drwxr-xr-x  4 root root 4096 Nov 12 02:13 lib
+-rw-r--r--  1 root root  428 Nov 12 02:13 release
+total 40
+drwxr-xr-x 2 root root  4096 Nov 12 02:13 .
+drwxr-xr-x 6 root root  4096 Nov 12 02:13 ..
+-rwxr-xr-x 1 root root 16144 Nov 12 02:13 java
+-rwxr-xr-x 1 root root 16216 Nov 12 02:13 keytool
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_export.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/track/TrackMenuUtils.class')
+[?2004l[?2004h> print('exportVisibleAlignments is at index', data.find(b'exportVisibleAlignments'))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_export.py
+[?2004lexportVisibleAlignments is at index 20445
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/inspect_method.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/track/TrackMenuUtils.class')
+[?2004l[?2004h> start = max(0, 20445 - 200)
+[?2004l[?2004h> end = min(len(data), 20445 + 500)
+[?2004l[?2004h> print(data[start:end])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/inspect_method.py
+[?2004lb'rg/broad/igv/ui/panel/ReferenceFrame;)Ljavax/swing/JMenuItem;\x01\x00\x02ft\x01\x00\nexportData\x01\x00s(Ljava/util/Collection<Lorg/broad/igv/track/Track;>;Lorg/broad/igv/ui/panel/ReferenceFrame;)Ljavax/swing/JMenuItem;\x01\x00\x17exportVisibleAlignments\x01\x00R(Ljava/lang/String;Ljava/util/Collection;Lorg/broad/igv/ui/panel/ReferenceFrame;)I\x01\x00\x0bdataManager\x01\x00(Lorg/broad/igv/sam/AlignmentDataManager;\x01\x00\tinlocator\x01\x00$Lorg/broad/igv/util/ResourceLocator;\x01\x00\x05range\x01\x00\x01e\x01\x00\x15Ljava/io/IOException;\x01\x00\x07outPath\x01\x00\x0ealignmentTrack\x01\x00"Lorg/broad/igv/sam/AlignmentTrack;\x01\x00\x07outFile\x01\x00\x0eLjava/io/File;\x01\x00o(Ljava/lang/String;Ljava/util/Collection<Lorg/broad/igv/track/Track;>;Lorg/broad/igv/ui/panel/ReferenceFrame;)I\x01\x00\x15exportVisibleFeatures\x01\x00R(Ljava/lang/Stri'
+[?2004hroot@b54e64a175e0:/task# python3 -c "import socket; s = socket.create_connection(('127.0.0.1', 60151)); s.sendall(b'goto chr22_roi:2400-2470\n'); print(s.recv(1024))"
+[?2004lb'OK\n'
+[?2004hroot@b54e64a175e0:/task# desktop screenshot /tmp/desktop.png; ls -lh /tmp/desktop.png
+[?2004l/tmp/desktop.png
+-rw-rw-rw- 1 root root 24K Nov 12 20:27 /tmp/desktop.png
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/read_png.py
+[?2004l[?2004h> import zlib, struct
+[?2004l[?2004h> with open('/tmp/desktop.png', 'rb') as f:
+[?2004l[?2004h>     f.read(8)
+[?2004l[?2004h>     _, _ = struct.unpack('>I4s', f.read(8))
+[?2004l[?2004h>     w, h, depth, colortype = struct.unpack('>IIBB', f.read(10))
+[?2004l[?2004h>     print('Desktop dimensions:', w, h)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/read_png.py
+[?2004lDesktop dimensions: 1280 800
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_sigs.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> def check_class(cname):
+[?2004l[?2004h>     data = z.read(cname)
+[?2004l[?2004h>     print(cname)
+[?2004l[?2004h>     strings = [s for s in data.split(b'\x00') if len(s) > 2]
+[?2004l[?2004h>     for s in strings:
+[?2004l[?2004h>         if any(w in s for w in [b'makeDefault', b'referenceSequence', b'referenceSourcePath', b'open', b'iterator', b'hasNext', b'getSAMString']):
+[?2004l[?2004h>             print('  ', s)
+[?2004l[?2004h> check_class('htsjdk/samtools/SamReaderFactory.class')
+[?2004l[?2004h> check_class('htsjdk/samtools/SamReader.class')
+[?2004l[?2004h> check_class('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_sigs.py
+[?2004lhtsjdk/samtools/SamReaderFactory.class
+   b'\x04open\x01'
+   b'\x11referenceSequence\x01'
+   b'\x0bmakeDefault\x01'
+htsjdk/samtools/SamReader.class
+   b'\x08iterator\x01'
+htsjdk/samtools/SAMRecord.class
+   b'\x08iterator\x01'
+   b'\x07hasNext\x0b\x01\x06\x01\x0b\x0c\x01\x0c\x01\r\x01'
+   b'\x0cgetSAMString\x01'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_factory.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SamReaderFactory.class')
+[?2004l[?2004h> for term in [b'makeDefault', b'referenceSequence', b'open']:
+[?2004l[?2004h>     idx = 0
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         idx = data.find(term, idx)
+[?2004l[?2004h>         if idx == -1: break
+[?2004l[?2004h>         print(term, data[idx:idx+len(term)+60])
+[?2004l[?2004h>         idx += len(term)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_factory.py
+[?2004lb'makeDefault' b'makeDefault\x01\x00$()Lhtsjdk/samtools/SamReaderFactory;\x01\x00\x04make\x01\x00\x08<clinit>\x01\x00\n'
+b'referenceSequence' b'referenceSequence\x01\x002(Ljava/io/File;)Lhtsjdk/samtools/SamReaderFactory;\x01\x008(Lja'
+b'open' b'open\x01\x00k(Ljava/nio/file/Path;Ljava/util/function/Function;Ljava/u'
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SamReaderFactory.class'); print([s for s in data.split(b'\x00') if b'open' in s or (b'(Ljava/io/File;)' in s and b'SamReader' in s)])"
+[?2004l[b'\x04open\x01', b'+(Ljava/io/File;)Lhtsjdk/samtools/SamReader;\x01', b'2(Ljava/io/File;)Lhtsjdk/samtools/SamReaderFactory;\x01']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMRecordIterator.class'); print([s for s in data.split(b'\x00') if any(w in s for w in [b'next', b'hasNext'])])"
+[?2004l[]
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMRecordIterator.class'); print([s for s in data.split(b'\x00') if b'Iterator' in s])"
+[?2004l[b'!htsjdk/samtools/SAMRecordIterator\x07', b'&htsjdk/samtools/util/CloseableIterator\x01', b'N(Lhtsjdk/samtools/SAMFileHeader$SortOrder;)Lhtsjdk/samtools/SAMRecordIterator;\x01', b'WLjava/lang/Object;Lhtsjdk/samtools/util/CloseableIterator<Lhtsjdk/samtools/SAMRecord;>;\x01', b'\x16SAMRecordIterator.java\x01']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMRecord.class'); idx = data.find(b'getSAMString'); print(data[idx:idx+40])"
+[?2004lb'getSAMString\x01\x00/(Lhtsjdk/samtools/SAMReco'
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMRecord.class'); print([s for s in data.split(b'\x00') if b'getSAMString' in s or (b'()' in s and b'String' in s and b'SAM' in s)])"
+[?2004l[b'\x0cgetSAMString\x01']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMFileWriterFactory.class'); print([s for s in data.split(b'\x00') if b'make' in s or b'Writer' in s][:20])"
+[?2004l[b'$htsjdk/samtools/SAMFileWriterFactory\x01', b'"htsjdk/samtools/AsyncSAMFileWriter\t', b'\x1aSAMFileWriterFactory(null)\n', b')(Lhtsjdk/samtools/SAMFileWriterFactory;)V\x08', b'\rmakeBAMWriter\x01', b'P(Lhtsjdk/samtools/SAMFileHeader;ZLjava/io/File;I)Lhtsjdk/samtools/SAMFileWriter;\n', b'V(Lhtsjdk/samtools/SAMFileHeader;ZLjava/nio/file/Path;I)Lhtsjdk/samtools/SAMFileWriter;\n', b'\x17makeConcatWithConstants\x01', b'\x1dhtsjdk/samtools/BAMFileWriter\n', b'\x13initializeBAMWriter\x01', b'C(Lhtsjdk/samtools/BAMFileWriter;Lhtsjdk/samtools/SAMFileHeader;ZZ)V\n', b'#(Lhtsjdk/samtools/SAMFileWriter;I)V\x07', b'\rmakeSAMWriter\x01', b'U(Lhtsjdk/samtools/SAMFileHeader;ZLjava/nio/file/Path;)Lhtsjdk/samtools/SAMFileWriter;\t', b'\x1dhtsjdk/samtools/SAMTextWriter\n', b'\ninitWriter\x01', b'd(Lhtsjdk/samtools/SAMFileHeader;ZLhtsjdk/samtools/SAMFileWriterImpl;)Lhtsjdk/samtools/SAMFileWriter;\n', b'!htsjdk/samtools/SAMFileWriterImpl\n\x01\x05', b'\x12makeSAMOrBAMWriter\x0b', b'\nmakeWriter\x01']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMFileWriterFactory.class'); idx = data.find(b'makeSAMOrBAMWriter'); print(data[idx:idx+90])"
+[?2004lb'makeSAMOrBAMWriter\x0b\x00\x87\x01\x0e\x0c\x01\x0f\x00{\x01\x00\x0bgetFileName\x0b\x00\x87\x00\xb6\t\x01\x12\x01\x13\x07\x01\x14\x0c\x01\x15\x01\x16\x01\x00\x1ehtsjdk/samtools/SamReader$T'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_samwriter.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/igv.jar')
+[?2004l[?2004h> data = z.read('org/broad/igv/sam/SAMWriter.class')
+[?2004l[?2004h> print([s for s in data.split(b'\x00') if b'(' in s and b')' in s][:30])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_samwriter.py
+[?2004l[b'\x03()V\t', b')(Z)Lhtsjdk/samtools/SAMFileWriterFactory;\n', b'O(Lhtsjdk/samtools/SAMFileHeader;ZLjava/io/File;)Lhtsjdk/samtools/SAMFileWriter;\n', b'6(Lhtsjdk/samtools/SAMFileWriter;Ljava/util/Iterator;)I\x07', b'\x19(Ljava/io/OutputStream;)V\n', b'"(Lhtsjdk/samtools/SAMFileHeader;)V\x0b', b'\x03()Z\x0b', b'\x14()Ljava/lang/Object;\x07', b'\x1d()Lhtsjdk/samtools/SAMRecord;\x0b', b'\x1e(Lhtsjdk/samtools/SAMRecord;)V\x0b', b'\x1e()Lorg/broad/igv/sam/ReadMate;\n', b'\x14()Ljava/lang/String;\x07', b'\x04(I)V\x0b', b'\x15(Ljava/lang/Object;)Z\n', b' (Lorg/broad/igv/sam/Alignment;)I\n', b'\x15(I)Ljava/lang/String;\x0b', b'\x03()I\x0b', b'6(Ljava/util/List;Ljava/lang/String;)Ljava/lang/String;\x12', b'&(Ljava/lang/String;)Ljava/lang/String;\n', b'&()Lorg/broad/igv/util/ResourceLocator;\n', b'\x15(Ljava/lang/String;)V\n', b')()Lorg/broad/igv/sam/AlignmentTileLoader;\n', b'!()Lhtsjdk/samtools/SAMFileHeader;\t', b',(Lhtsjdk/samtools/SAMFileHeader$SortOrder;)V\x07', b'\x17(Ljava/lang/String;II)V\n', b'N(Lorg/broad/igv/ui/panel/ReferenceFrame;)Lorg/broad/igv/sam/AlignmentInterval;\n', b'\x12()Ljava/util/List;\n', b'\x19(Ljava/util/Collection;)V\x12', b'\x18()Ljava/util/Comparator;\x0b', b'\x19(Ljava/util/Comparator;)V\x07']
+[?2004hroot@b54e64a175e0:/task# python3 -c "import zipfile; data = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar').read('htsjdk/samtools/SAMFileHeader.class'); print([s for s in data.split(b'\x00') if b'getText' in s or b'getHeader' in s][:10])"
+[?2004l[b'\rgetTextHeader\x01']
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/gen_hello.py
+[?2004l[?2004h> import struct
+[?2004l[?2004h> 
+[?2004l[?2004h> cp = []
+[?2004l[?2004h> def add_utf8(s):
+[?2004l[?2004h>     cp.append((1, s.encode('utf-8')))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_class(name_idx):
+[?2004l[?2004h>     cp.append((7, struct.pack('>H', name_idx)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_string(str_idx):
+[?2004l[?2004h>     cp.append((8, struct.pack('>H', str_idx)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_fieldref(class_idx, nt_idx):
+[?2004l[?2004h>     cp.append((9, struct.pack('>HH', class_idx, nt_idx)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_methodref(class_idx, nt_idx):
+[?2004l[?2004h>     cp.append((10, struct.pack('>HH', class_idx, nt_idx)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_name_and_type(name_idx, desc_idx):
+[?2004l[?2004h>     cp.append((12, struct.pack('>HH', name_idx, desc_idx)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> u_hello = add_utf8('Hello')
+[?2004l[?2004h> u_obj = add_utf8('java/lang/Object')
+[?2004l[?2004h> u_sys = add_utf8('java/lang/System')
+[?2004l[?2004h> u_out = add_utf8('out')
+[?2004l[?2004h> u_ps = add_utf8('Ljava/io/PrintStream;')
+[?2004l[?2004h> u_println = add_utf8('println')
+[?2004l[?2004h> u_print_desc = add_utf8('(Ljava/lang/String;)V')
+[?2004l[?2004h> u_main = add_utf8('main')
+[?2004l[?2004h> u_main_desc = add_utf8('([Ljava/lang/String;)V')
+[?2004l[?2004h> u_code = add_utf8('Code')
+[?2004l[?2004h> u_msg = add_utf8('TEST SUCCESS')
+[?2004l[?2004h> 
+[?2004l[?2004h> c_hello = add_class(u_hello)
+[?2004l[?2004h> c_obj = add_class(u_obj)
+[?2004l[?2004h> c_sys = add_class(u_sys)
+[?2004l[?2004h> 
+[?2004l[?2004h> s_msg = add_string(u_msg)
+[?2004l[?2004h> 
+[?2004l[?2004h> nt_out = add_name_and_type(u_out, u_ps)
+[?2004l[?2004h> f_out = add_fieldref(c_sys, nt_out)
+[?2004l[?2004h> 
+[?2004l[?2004h> nt_println = add_name_and_type(u_println, u_print_desc)
+[?2004l[?2004h> m_println = add_methodref(add_class(add_utf8('java/io/PrintStream')), nt_println)
+[?2004l[?2004h> 
+[?2004l[?2004h> bytecode = bytearray()
+[?2004l[?2004h> bytecode += b'\xb2' + struct.pack('>H', f_out)
+[?2004l[?2004h> if s_msg < 256:
+[?2004l[?2004h>     bytecode += b'\x12' + struct.pack('B', s_msg)
+[?2004l[?2004h> else:
+[?2004l[?2004h>     bytecode += b'\x13' + struct.pack('>H', s_msg)
+[?2004l[?2004h> bytecode += b'\xb6' + struct.pack('>H', m_println)
+[?2004l[?2004h> bytecode += b'\xb1'
+[?2004l[?2004h> 
+[?2004l[?2004h> code_attr = struct.pack('>H', u_code)
+[?2004l[?2004h> code_data = struct.pack('>HHI', 2, 1, len(bytecode)) + bytecode + struct.pack('>HH', 0, 0)
+[?2004l[?2004h> code_attr += struct.pack('>I', len(code_data)) + code_data
+[?2004l[?2004h> 
+[?2004l[?2004h> method_info = struct.pack('>HHHH', 0x0009, u_main, u_main_desc, 1) + code_attr
+[?2004l[?2004h> 
+[?2004l[?2004h> cp_bytes = bytearray()
+[?2004l[?2004h> for tag, val in cp:
+[?2004l[?2004h>     cp_bytes.append(tag)
+[?2004l[?2004h>     if tag == 1:
+[?2004l[?2004h>         cp_bytes += struct.pack('>H', len(val)) + val
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         cp_bytes += val
+[?2004l[?2004h> 
+[?2004l[?2004h> cf = struct.pack('>IHH', 0xCAFEBABE, 0, 52)
+[?2004l[?2004h> cf += struct.pack('>H', len(cp) + 1)
+[?2004l[?2004h> cf += cp_bytes
+[?2004l[?2004h> cf += struct.pack('>HHHH', 0x0001, c_hello, c_obj, 0)
+[?2004l[?2004h> cf += struct.pack('>H', 0)
+[?2004l[?2004h> cf += struct.pack('>H', 1)
+[?2004l[?2004h> cf += method_info
+[?2004l[?2004h> cf += struct.pack('>H', 0)
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/tmp/Hello.class', 'wb') as f:
+[?2004l[?2004h>     f.write(cf)
+[?2004l[?2004h> print('Wrote /tmp/Hello.class', len(cf))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/gen_hello.py && java -cp /tmp Hello
+[?2004lWrote /tmp/Hello.class 280
+TEST SUCCESS
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_writer.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMFileWriterFactory.class')
+[?2004l[?2004h> idx = 0
+[?2004l[?2004h> while True:
+[?2004l[?2004h>     idx = data.find(b'makeSAMWriter', idx)
+[?2004l[?2004h>     if idx == -1: break
+[?2004l[?2004h>     print(data[idx:idx+80])
+[?2004l[?2004h>     idx += 13
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_writer.py
+[?2004lb'makeSAMWriter\x01\x00U(Lhtsjdk/samtools/SAMFileHeader;ZLjava/nio/file/Path;)Lhtsjdk/sa'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_samstring.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> idx = 0
+[?2004l[?2004h> while True:
+[?2004l[?2004h>     idx = data.find(b'getSAMString', idx)
+[?2004l[?2004h>     if idx == -1: break
+[?2004l[?2004h>     print(data[idx:idx+60])
+[?2004l[?2004h>     idx += 12
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_samstring.py
+[?2004lb'getSAMString\x01\x00/(Lhtsjdk/samtools/SAMRecord;)Ljava/lang/Strin'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_rec.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> print([s for s in data.split(b'\x00') if b'getSAMString' in s or b'format' in s][:10])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_rec.py
+[?2004l[b'\x0eformatTagValue\x01', b'\x06format\x01', b'\x0cgetSAMString\x01']
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_rec2.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> for m in [b'getSAMString', b'format']: 
+[?2004l[?2004h>     idx = data.find(m)
+[?2004l[?2004h>     while idx != -1:
+[?2004l[?2004h>         print(m, repr(data[idx:idx+40]))
+[?2004l[?2004h>         idx = data.find(m, idx+len(m))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_rec2.py
+[?2004lb'getSAMString' b'getSAMString\x01\x00/(Lhtsjdk/samtools/SAMReco'
+b'format' b"formatTagValue\x01\x00'(SLjava/lang/Object;)Lj"
+b'format' b'format\x01\x009(Ljava/lang/String;[Ljava/lang/'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_factory2.py
+[?2004l[?2004h> import zipfile
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMFileWriterFactory.class')
+[?2004l[?2004h> idx = data.find(b'makeSAMOrBAMWriter')
+[?2004l[?2004h> print(repr(data[idx-10:idx+80]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_factory2.py
+[?2004lb'\x01\x0b\x0c\x01\x0c\x00\xf4\x01\x00\x12makeSAMOrBAMWriter\x0b\x00\x87\x01\x0e\x0c\x01\x0f\x00{\x01\x00\x0bgetFileName\x0b\x00\x87\x00\xb6\t\x01\x12\x01\x13\x07\x01\x14\x0c\x01\x15\x01\x16\x01\x00\x1ehtsjdk/samtools/S'
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_cp.py
+[?2004l[?2004h> import zipfile, struct
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_class(jar_path, class_name):
+[?2004l[?2004h>     z = zipfile.ZipFile(jar_path)
+[?2004l[?2004h>     data = z.read(class_name)
+[?2004l[?2004h>     magic, minor, major = struct.unpack('>IHH', data[:8])
+[?2004l[?2004h>     cp_count = struct.unpack('>H', data[8:10])[0]
+[?2004l[?2004h>     cp = [None]
+[?2004l[?2004h>     pos = 10
+[?2004l[?2004h>     while len(cp) < cp_count:
+[?2004l[?2004h>         tag = data[pos]
+[?2004l[?2004h>         pos += 1
+[?2004l[?2004h>         if tag == 1: # Utf8
+[?2004l[?2004h>             slen = struct.unpack('>H', data[pos:pos+2])[0]
+[?2004l[?2004h>             pos += 2
+[?2004l[?2004h>             cp.append(data[pos:pos+slen].decode('utf-8', 'replace'))
+[?2004l[?2004h>             pos += slen
+[?2004l[?2004h>         elif tag in (7, 8): # Class, String
+[?2004l[?2004h>             cp.append((tag, struct.unpack('>H', data[pos:pos+2])[0]))
+[?2004l[?2004h>             pos += 2
+[?2004l[?2004h>         elif tag in (9, 10, 11, 12): # Fieldref, Methodref, InterfaceMethodref, NameAndType
+[?2004l[?2004h>             cp.append((tag, *struct.unpack('>HH', data[pos:pos+4])))
+[?2004l[?2004h>             pos += 4
+[?2004l[?2004h>         elif tag in (3, 4): # Integer, Float
+[?2004l[?2004h>             pos += 4
+[?2004l[?2004h>             cp.append((tag,))
+[?2004l[?2004h>         elif tag in (5, 6): # Long, Double
+[?2004l[?2004h>             pos += 8
+[?2004l[?2004h>             cp.append((tag,))
+[?2004l[?2004h>             cp.append(None)
+[?2004l[?2004h>         elif tag in (15, 16, 18, 19, 20):
+[?2004l[?2004h>             pos += 3 if tag == 15 else 2 if tag == 16 else 4
+[?2004l[?2004h>             cp.append((tag,))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             raise ValueError(f'Unknown tag {tag} at pos {pos}')
+[?2004l[?2004h>     return cp
+[?2004l[?2004h> 
+[?2004l[?2004h> cp = parse_class('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar', 'htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> for item in cp:
+[?2004l[?2004h>     if isinstance(item, tuple) and item[0] in (10, 12):
+[?2004l[?2004h>         pass
+[?2004l[?2004h> print('SAMRecord methods/descriptors:')
+[?2004l[?2004h> for s in cp:
+[?2004l[?2004h>     if isinstance(s, str) and ('SAMString' in s or 'getSAM' in s or 'toString' in s):
+[?2004l[?2004h>         print(' ', s)
+[?2004l[?2004h> 
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_cp.py
+[?2004lSAMRecord methods/descriptors:
+  toString
+  getSAMString
+  getSAMFlags
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' >> /tmp/parse_cp.py
+[?2004l[?2004h> for item in cp:
+[?2004l[?2004h>     if isinstance(item, tuple) and item[0] == 12:
+[?2004l[?2004h>         name = cp[item[1]]
+[?2004l[?2004h>         desc = cp[item[2]]
+[?2004l[?2004h>         if name in ('getSAMString', 'toString'):
+[?2004l[?2004h>             print(name, desc)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_cp.py
+[?2004lSAMRecord methods/descriptors:
+  toString
+  getSAMString
+  getSAMFlags
+toString ()Ljava/lang/String;
+getSAMString (Lhtsjdk/samtools/SAMRecord;)Ljava/lang/String;
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_methods.py
+[?2004l[?2004h> import zipfile, struct
+[?2004l[?2004h> from parse_cp import parse_class
+[?2004l[?2004h> 
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> cp = parse_class('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar', 'htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Methods start after interfaces
+[?2004l[?2004h> # Read header and skip CP
+[?2004l[?2004h> pos = 10
+[?2004l[?2004h> cp_count = struct.unpack('>H', data[8:10])[0]
+[?2004l[?2004h> for i in range(1, cp_count):
+[?2004l[?2004h>     if cp[i] is None: continue
+[?2004l[?2004h>     # we know CP size from parse_class, but easier to just scan
+[?2004l[?2004h> # Let's search for 'getSAMString' in CP and find methods with that name
+[?2004l[?2004h> for i, s in enumerate(cp):
+[?2004l[?2004h>     if s == 'getSAMString':
+[?2004l[?2004h>         print('getSAMString is at CP index', i)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_methods.py
+[?2004lSAMRecord methods/descriptors:
+  toString
+  getSAMString
+  getSAMFlags
+toString ()Ljava/lang/String;
+getSAMString (Lhtsjdk/samtools/SAMRecord;)Ljava/lang/String;
+getSAMString is at CP index 1036
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/parse_samrecord_methods.py
+[?2004l[?2004h> import zipfile, struct
+[?2004l[?2004h> from parse_cp import parse_class
+[?2004l[?2004h> z = zipfile.ZipFile('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar')
+[?2004l[?2004h> data = z.read('htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> cp = parse_class('/opt/tools/lib/igv/htsjdk-4.3.0-module.jar', 'htsjdk/samtools/SAMRecord.class')
+[?2004l[?2004h> pos = 10
+[?2004l[?2004h> cp_count = struct.unpack('>H', data[8:10])[0]
+[?2004l[?2004h> i = 1
+[?2004l[?2004h> while i < cp_count:
+[?2004l[?2004h>     tag = data[pos]
+[?2004l[?2004h>     pos += 1
+[?2004l[?2004h>     if tag == 1:
+[?2004l[?2004h>         l = struct.unpack('>H', data[pos:pos+2])[0]
+[?2004l[?2004h>         pos += 2 + l
+[?2004l[?2004h>     elif tag in (7, 8):
+[?2004l[?2004h>         pos += 2
+[?2004l[?2004h>     elif tag in (9, 10, 11, 12):
+[?2004l[?2004h>         pos += 4
+[?2004l[?2004h>     elif tag in (3, 4):
+[?2004l[?2004h>         pos += 4
+[?2004l[?2004h>     elif tag in (5, 6):
+[?2004l[?2004h>         pos += 8
+[?2004l[?2004h>         i += 1
+[?2004l[?2004h>     elif tag in (15,):
+[?2004l[?2004h>         pos += 3
+[?2004l[?2004h>     elif tag in (16,):
+[?2004l[?2004h>         pos += 2
+[?2004l[?2004h>     elif tag in (18, 19, 20):
+[?2004l[?2004h>         pos += 4
+[?2004l[?2004h>     i += 1
+[?2004l[?2004h> access_flags, this_c, super_c, interfaces_count = struct.unpack('>HHHH', data[pos:pos+8])
+[?2004l[?2004h> pos += 8 + interfaces_count * 2
+[?2004l[?2004h> fields_count = struct.unpack('>H', data[pos:pos+2])[0]
+[?2004l[?2004h> pos += 2
+[?2004l[?2004h> for _ in range(fields_count):
+[?2004l[?2004h>     ac, name_idx, desc_idx, attrs_count = struct.unpack('>HHHH', data[pos:pos+8])
+[?2004l[?2004h>     pos += 8
+[?2004l[?2004h>     for _ in range(attrs_count):
+[?2004l[?2004h>         alen = struct.unpack('>I', data[pos+2:pos+6])[0]
+[?2004l[?2004h>         pos += 6 + alen
+[?2004l[?2004h> methods_count = struct.unpack('>H', data[pos:pos+2])[0]
+[?2004l[?2004h> pos += 2
+[?2004l[?2004h> for _ in range(methods_count):
+[?2004l[?2004h>     ac, name_idx, desc_idx, attrs_count = struct.unpack('>HHHH', data[pos:pos+8])
+[?2004l[?2004h>     pos += 8
+[?2004l[?2004h>     mname = cp[name_idx]
+[?2004l[?2004h>     mdesc = cp[desc_idx]
+[?2004l[?2004h>     if any(k in mname.lower() for k in ['sam', 'string', 'tostring', 'format']):
+[?2004l[?2004h>         print(f'{mname}: {mdesc}')
+[?2004l[?2004h>     for _ in range(attrs_count):
+[?2004l[?2004h>         alen = struct.unpack('>I', data[pos+2:pos+6])[0]
+[?2004l[?2004h>         pos += 6 + alen
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/parse_samrecord_methods.py
+[?2004lSAMRecord methods/descriptors:
+  toString
+  getSAMString
+  getSAMFlags
+toString ()Ljava/lang/String;
+getSAMString (Lhtsjdk/samtools/SAMRecord;)Ljava/lang/String;
+getReadString: ()Ljava/lang/String;
+setReadString: (Ljava/lang/String;)V
+getBaseQualityString: ()Ljava/lang/String;
+setBaseQualityString: (Ljava/lang/String;)V
+getCigarString: ()Ljava/lang/String;
+setCigarString: (Ljava/lang/String;)V
+getValidationStringency: ()Lhtsjdk/samtools/ValidationStringency;
+setValidationStringency: (Lhtsjdk/samtools/ValidationStringency;)V
+getStringAttribute: (Lhtsjdk/samtools/SAMTag;)Ljava/lang/String;
+getStringAttribute: (Ljava/lang/String;)Ljava/lang/String;
+format: ()Ljava/lang/String;
+formatTagValue: (SLjava/lang/Object;)Ljava/lang/String;
+toString: ()Ljava/lang/String;
+getSAMString: ()Ljava/lang/String;
+getSAMFlags: ()Ljava/util/Set;
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/gen_dumpsam.py
+[?2004l[?2004h> import struct
+[?2004l[?2004h> 
+[?2004l[?2004h> cp = []
+[?2004l[?2004h> def add_utf8(s):
+[?2004l[?2004h>     cp.append((1, s.encode('utf-8')))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_class(name):
+[?2004l[?2004h>     u = add_utf8(name)
+[?2004l[?2004h>     cp.append((7, struct.pack('>H', u)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_string(s):
+[?2004l[?2004h>     u = add_utf8(s)
+[?2004l[?2004h>     cp.append((8, struct.pack('>H', u)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_name_and_type(name, desc):
+[?2004l[?2004h>     u1 = add_utf8(name)
+[?2004l[?2004h>     u2 = add_utf8(desc)
+[?2004l[?2004h>     cp.append((12, struct.pack('>HH', u1, u2)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_methodref(cname, mname, mdesc):
+[?2004l[?2004h>     c = add_class(cname)
+[?2004l[?2004h>     nt = add_name_and_type(mname, mdesc)
+[?2004l[?2004h>     cp.append((10, struct.pack('>HH', c, nt)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> def add_intfmethodref(cname, mname, mdesc):
+[?2004l[?2004h>     c = add_class(cname)
+[?2004l[?2004h>     nt = add_name_and_type(mname, mdesc)
+[?2004l[?2004h>     cp.append((11, struct.pack('>HH', c, nt)))
+[?2004l[?2004h>     return len(cp)
+[?2004l[?2004h> 
+[?2004l[?2004h> c_dumpsam = add_class('DumpSam')
+[?2004l[?2004h> c_obj = add_class('java/lang/Object')
+[?2004l[?2004h> c_file = add_class('java/io/File')
+[?2004l[?2004h> c_ps = add_class('java/io/PrintStream')
+[?2004l[?2004h> c_samrec = add_class('htsjdk/samtools/SAMRecord')
+[?2004l[?2004h> 
+[?2004l[?2004h> s_ref = add_string('/task/input/reference/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> m_file_init = add_methodref('java/io/File', '<init>', '(Ljava/lang/String;)V')
+[?2004l[?2004h> m_ps_init = add_methodref('java/io/PrintStream', '<init>', '(Ljava/io/File;)V')
+[?2004l[?2004h> m_ps_print = add_methodref('java/io/PrintStream', 'print', '(Ljava/lang/String;)V')
+[?2004l[?2004h> m_ps_close = add_methodref('java/io/PrintStream', 'close', '()V')
+[?2004l[?2004h> 
+[?2004l[?2004h> m_srf_make = add_methodref('htsjdk/samtools/SamReaderFactory', 'makeDefault', '()Lhtsjdk/samtools/SamReaderFactory;')
+[?2004l[?2004h> m_srf_ref = add_methodref('htsjdk/samtools/SamReaderFactory', 'referenceSequence', '(Ljava/io/File;)Lhtsjdk/samtools/SamReaderFactory;')
+[?2004l[?2004h> m_srf_open = add_methodref('htsjdk/samtools/SamReaderFactory', 'open', '(Ljava/io/File;)Lhtsjdk/samtools/SamReader;')
+[?2004l[?2004h> 
+[?2004l[?2004h> m_sr_iter = add_intfmethodref('htsjdk/samtools/SamReader', 'iterator', '()Lhtsjdk/samtools/SAMRecordIterator;')
+[?2004l[?2004h> m_sr_close = add_intfmethodref('java/io/Closeable', 'close', '()V')
+[?2004l[?2004h> 
+[?2004l[?2004h> m_it_hasnext = add_intfmethodref('java/util/Iterator', 'hasNext', '()Z')
+[?2004l[?2004h> m_it_next = add_intfmethodref('java/util/Iterator', 'next', '()Ljava/lang/Object;')
+[?2004l[?2004h> 
+[?2004l[?2004h> m_rec_getstring = add_methodref('htsjdk/samtools/SAMRecord', 'getSAMString', '()Ljava/lang/String;')
+[?2004l[?2004h> 
+[?2004l[?2004h> u_main = add_utf8('main')
+[?2004l[?2004h> u_main_desc = add_utf8('([Ljava/lang/String;)V')
+[?2004l[?2004h> u_code = add_utf8('Code')
+[?2004l[?2004h> 
+[?2004l[?2004h> b = bytearray()
+[?2004l[?2004h> def emit(*ops):
+[?2004l[?2004h>     for op in ops:
+[?2004l[?2004h>         if isinstance(op, int):
+[?2004l[?2004h>             b.append(op)
+[?2004l[?2004h>         elif isinstance(op, bytes):
+[?2004l[?2004h>             b.extend(op)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0xbb, struct.pack('>H', c_file), 0x59)
+[?2004l[?2004h> if s_ref < 256:
+[?2004l[?2004h>     emit(0x12, bytes([s_ref]))
+[?2004l[?2004h> else:
+[?2004l[?2004h>     emit(0x13, struct.pack('>H', s_ref))
+[?2004l[?2004h> emit(0xb7, struct.pack('>H', m_file_init))
+[?2004l[?2004h> emit(0x4d)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0xb8, struct.pack('>H', m_srf_make))
+[?2004l[?2004h> emit(0x2c)
+[?2004l[?2004h> emit(0xb6, struct.pack('>H', m_srf_ref))
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0xbb, struct.pack('>H', c_file), 0x59)
+[?2004l[?2004h> emit(0x2a, 0x03, 0x32)
+[?2004l[?2004h> emit(0xb7, struct.pack('>H', m_file_init))
+[?2004l[?2004h> emit(0xb6, struct.pack('>H', m_srf_open))
+[?2004l[?2004h> emit(0x4e)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0xbb, struct.pack('>H', c_ps), 0x59)
+[?2004l[?2004h> emit(0xbb, struct.pack('>H', c_file), 0x59)
+[?2004l[?2004h> emit(0x2a, 0x04, 0x32)
+[?2004l[?2004h> emit(0xb7, struct.pack('>H', m_file_init))
+[?2004l[?2004h> emit(0xb7, struct.pack('>H', m_ps_init))
+[?2004l[?2004h> emit(0x3a, 0x04)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0x2d)
+[?2004l[?2004h> emit(0xb9, struct.pack('>H', m_sr_iter), 1, 0)
+[?2004l[?2004h> emit(0x3a, 0x05)
+[?2004l[?2004h> 
+[?2004l[?2004h> loop_target = len(b)
+[?2004l[?2004h> emit(0x19, 0x05)
+[?2004l[?2004h> emit(0xb9, struct.pack('>H', m_it_hasnext), 1, 0)
+[?2004l[?2004h> ifeq_offset_pos = len(b)
+[?2004l[?2004h> emit(0x99, 0x00, 0x00)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0x19, 0x05)
+[?2004l[?2004h> emit(0xb9, struct.pack('>H', m_it_next), 1, 0)
+[?2004l[?2004h> emit(0xc0, struct.pack('>H', c_samrec))
+[?2004l[?2004h> emit(0xb6, struct.pack('>H', m_rec_getstring))
+[?2004l[?2004h> emit(0x3a, 0x06)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0x19, 0x04)
+[?2004l[?2004h> emit(0x19, 0x06)
+[?2004l[?2004h> emit(0xb6, struct.pack('>H', m_ps_print))
+[?2004l[?2004h> 
+[?2004l[?2004h> goto_offset = loop_target - len(b)
+[?2004l[?2004h> emit(0xa7, struct.pack('>h', goto_offset))
+[?2004l[?2004h> 
+[?2004l[?2004h> end_target = len(b)
+[?2004l[?2004h> struct.pack_into('>h', b, ifeq_offset_pos + 1, end_target - ifeq_offset_pos)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0x19, 0x04)
+[?2004l[?2004h> emit(0xb6, struct.pack('>H', m_ps_close))
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0x2d)
+[?2004l[?2004h> emit(0xb9, struct.pack('>H', m_sr_close), 1, 0)
+[?2004l[?2004h> 
+[?2004l[?2004h> emit(0xb1)
+[?2004l[?2004h> 
+[?2004l[?2004h> code_attr = struct.pack('>H', u_code)
+[?2004l[?2004h> code_data = struct.pack('>HHI', 6, 7, len(b)) + b + struct.pack('>HH', 0, 0)
+[?2004l[?2004h> code_attr += struct.pack('>I', len(code_data)) + code_data
+[?2004l[?2004h> 
+[?2004l[?2004h> method_info = struct.pack('>HHHH', 0x0009, u_main, u_main_desc, 1) + code_attr
+[?2004l[?2004h> 
+[?2004l[?2004h> cp_bytes = bytearray()
+[?2004l[?2004h> for tag, val in cp:
+[?2004l[?2004h>     cp_bytes.append(tag)
+[?2004l[?2004h>     if tag == 1:
+[?2004l[?2004h>         cp_bytes += struct.pack('>H', len(val)) + val
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         cp_bytes += val
+[?2004l[?2004h> 
+[?2004l[?2004h> cf = struct.pack('>IHH', 0xCAFEBABE, 0, 52)
+[?2004l[?2004h> cf += struct.pack('>H', len(cp) + 1)
+[?2004l[?2004h> cf += cp_bytes
+[?2004l[?2004h> cf += struct.pack('>HHHH', 0x0001, c_dumpsam, c_obj, 0)
+[?2004l[?2004h> cf += struct.pack('>H', 0)
+[?2004l[?2004h> cf += struct.pack('>H', 1)
+[?2004l[?2004h> cf += method_info
+[?2004l[?2004h> cf += struct.pack('>H', 0)
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/tmp/DumpSam.class', 'wb') as f:
+[?2004l[?2004h>     f.write(cf)
+[?2004l[?2004h> print('Wrote /tmp/DumpSam.class', len(cf))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/gen_dumpsam.py
+[?2004lWrote /tmp/DumpSam.class 1233
+[?2004hroot@b54e64a175e0:/task# java -cp "/tmp:/opt/tools/lib/igv/*" DumpSam /task/input/cram/normal.cram /tmp/normal.sam
+[?2004lError: Unable to initialize main class DumpSam
+Caused by: java.lang.VerifyError: Expecting a stackmap frame at branch target 93
+Exception Details:
+  Location:
+    DumpSam.main([Ljava/lang/String;)V @65: ifeq
+  Reason:
+    Expected stackmap frame at this location.
+  Bytecode:
+    0000000: bb00 0659 120c b700 124d b800 2a2c b600
+    0000010: 30bb 0006 592a 0332 b700 12b6 0036 4ebb
+    0000020: 0008 59bb 0006 592a 0432 b700 12b7 0018
+    0000030: 3a04 2db9 003c 0100 3a05 1905 b900 4801
+    0000040: 0099 001c 1905 b900 4e01 00c0 000a b600
+    0000050: 543a 0619 0419 06b6 001e a7ff e019 04b6
+    0000060: 0024 2db9 0042 0100 b1                 
+
+[?2004hroot@b54e64a175e0:/task# head -n 20 /tmp/normal.sam; wc -l /tmp/normal.sam
+[?2004lhead: cannot open '/tmp/normal.sam' for reading: No such file or directory
+wc: /tmp/normal.sam: No such file or directory
+[?2004hroot@b54e64a175e0:/task# sed -i 's/0, 52/0, 50/' /tmp/gen_dumpsam.py && python3 /tmp/gen_dumpsam.py
+[?2004lWrote /tmp/DumpSam.class 1233
+[?2004hroot@b54e64a175e0:/task# java -cp "/tmp:/opt/tools/lib/igv/*" DumpSam /task/input/cram/normal.cram /tmp/normal.sam
+[?2004l[?2004hroot@b54e64a175e0:/task# head -n 5 /tmp/normal.sam; wc -l /tmp/normal.sam
+[?2004lN:10933	99	chr22_roi	2	60	100M	=	256	354	AGAGGAGACCTCGGTATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGC	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:normal
+N:7512	99	chr22_roi	6	60	100M	=	290	384	GAGACCTCGGTATGGAGGGGACAGTGATCTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAGCA	FFFFFFFFFFFFFFFFFFFFFFFFFFFF2FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:normal
+N:5657	99	chr22_roi	17	60	100M	=	295	378	ATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAGCATGCGGGGAAAT	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:normal
+N:7348	163	chr22_roi	17	60	100M	=	284	367	ATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAGCATGCGGGGAAAT	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:normal
+N:8085	163	chr22_roi	19	60	100M	=	175	256	GGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGATTGTTGCAGCATGCGGGGAAATGA	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF,FFFFFFFFFFFFFFFFFFFFFFF	RG:Z:normal
+28620 /tmp/normal.sam
+[?2004hroot@b54e64a175e0:/task# java -cp "/tmp:/opt/tools/lib/igv/*" DumpSam /task/input/cram/tumor.cram /tmp/tumor.sam
+[?2004l[?2004hroot@b54e64a175e0:/task# head -n 5 /tmp/tumor.sam; wc -l /tmp/tumor.sam
+[?2004lT:23088	99	chr22_roi	2	60	100M	=	243	341	AGAGGAGACCTCGGTATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGC	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:tumor
+T:2484	163	chr22_roi	3	60	100M	=	195	292	GAGGAGACCTCGGTATGGAGGGGACAATGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCA	FFFFFFFFFFFFFFFFFFFFFFFFFF-FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:tumor
+T:12242	163	chr22_roi	4	60	100M	=	250	346	AGGAGACCTCGGTATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAG	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:tumor
+T:17559	163	chr22_roi	7	60	100M	=	224	317	AGACCTCGGTATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAGCAT	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:tumor
+T:8939	99	chr22_roi	10	60	100M	=	246	336	CCTCGGTATGGAGGGGACAGTGATGTGACAGCCACCAAGTCCATGGTCTGACCCCCAGCAGCAGGGGTGCCAGCCTCATTGTGGAGTGTTGCAGCATGCG	FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF	RG:Z:tumor
+57854 /tmp/tumor.sam
+[?2004hroot@b54e64a175e0:/task# cat /task/input/candidates.vcf
+[?2004l##fileformat=VCFv4.2
+##contig=<ID=chr22_roi,length=60000>
+##source=candidate_caller_v3
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr22_roi	2434	cand_001	T	C	.	.	.
+chr22_roi	3357	cand_002	AT	A	.	.	.
+chr22_roi	3873	cand_003	A	C	.	.	.
+chr22_roi	4864	cand_004	C	G	.	.	.
+chr22_roi	5387	cand_005	T	G	.	.	.
+chr22_roi	6149	cand_006	A	C	.	.	.
+chr22_roi	7309	cand_007	AGGC	A	.	.	.
+chr22_roi	8267	cand_008	C	G	.	.	.
+chr22_roi	9169	cand_009	T	C	.	.	.
+chr22_roi	9775	cand_010	G	C	.	.	.
+chr22_roi	10354	cand_011	GA	G	.	.	.
+chr22_roi	11367	cand_012	T	C	.	.	.
+chr22_roi	11920	cand_013	C	G	.	.	.
+chr22_roi	12638	cand_014	G	A	.	.	.
+chr22_roi	13514	cand_015	TA	T	.	.	.
+chr22_roi	14552	cand_016	C	A	.	.	.
+chr22_roi	14553	cand_017	A	C	.	.	.
+chr22_roi	17481	cand_018	C	G	.	.	.
+chr22_roi	18306	cand_019	G	C	.	.	.
+chr22_roi	19235	cand_020	A	C	.	.	.
+chr22_roi	20103	cand_021	G	A	.	.	.
+chr22_roi	20999	cand_022	A	T	.	.	.
+chr22_roi	22250	cand_023	G	T	.	.	.
+chr22_roi	22942	cand_024	C	T	.	.	.
+chr22_roi	23832	cand_025	C	T	.	.	.
+chr22_roi	24796	cand_026	G	T	.	.	.
+chr22_roi	24797	cand_027	C	A	.	.	.
+chr22_roi	25814	cand_028	A	C	.	.	.
+chr22_roi	25815	cand_029	G	C	.	.	.
+chr22_roi	26591	cand_030	A	G	.	.	.
+chr22_roi	27861	cand_031	G	T	.	.	.
+chr22_roi	28672	cand_032	T	C	.	.	.
+chr22_roi	29401	cand_033	C	G	.	.	.
+chr22_roi	29402	cand_034	T	A	.	.	.
+chr22_roi	30535	cand_035	T	C	.	.	.
+chr22_roi	31303	cand_036	T	C	.	.	.
+chr22_roi	33416	cand_037	C	A	.	.	.
+chr22_roi	34070	cand_038	A	G	.	.	.
+chr22_roi	34071	cand_039	C	A	.	.	.
+chr22_roi	35142	cand_040	A	G	.	.	.
+chr22_roi	35143	cand_041	A	G	.	.	.
+chr22_roi	36124	cand_042	C	T	.	.	.
+chr22_roi	37035	cand_043	A	C	.	.	.
+chr22_roi	38079	cand_044	G	T	.	.	.
+chr22_roi	38080	cand_045	T	A	.	.	.
+chr22_roi	38828	cand_046	G	A	.	.	.
+chr22_roi	39698	cand_047	A	T	.	.	.
+chr22_roi	40638	cand_048	CTT	C	.	.	.
+chr22_roi	41686	cand_049	A	C	.	.	.
+chr22_roi	42455	cand_050	A	C	.	.	.
+chr22_roi	43394	cand_051	T	G	.	.	.
+chr22_roi	44443	cand_052	G	A	.	.	.
+chr22_roi	45313	cand_053	TA	T	.	.	.
+chr22_roi	45815	cand_054	T	A	.	.	.
+chr22_roi	46477	cand_055	A	G	.	.	.
+chr22_roi	47142	cand_056	A	T	.	.	.
+chr22_roi	48053	cand_057	G	C	.	.	.
+chr22_roi	48958	cand_058	G	C	.	.	.
+chr22_roi	49925	cand_059	C	T	.	.	.
+chr22_roi	51092	cand_060	A	G	.	.	.
+chr22_roi	51858	cand_061	G	T	.	.	.
+chr22_roi	52932	cand_062	C	G	.	.	.
+chr22_roi	53719	cand_063	A	C	.	.	.
+chr22_roi	54512	cand_064	A	C	.	.	.
+chr22_roi	55554	cand_065	T	A	.	.	.
+chr22_roi	56712	cand_066	C	G	.	.	.
+chr22_roi	56713	cand_067	T	A	.	.	.
+chr22_roi	57453	cand_068	C	A	.	.	.
+[?2004hroot@b54e64a175e0:/task# cat << 'EOF' > /tmp/check_flags.py
+[?2004l[?2004h> for name, path in [('normal', '/tmp/normal.sam'), ('tumor', '/tmp/tumor.sam')]:
+[?2004l[?2004h>     dups, sec, supp, total = 0, 0, 0, 0
+[?2004l[?2004h>     with open(path) as f:
+[?2004l[?2004h>         for line in f:
+[?2004l[?2004h>             total += 1
+[?2004l[?2004h>             flag = int(line.split('')[1])
+[?2004l[?2004h>             if flag & 1024: dups += 1
+[?2004l[?2004h>             if flag & 256: sec += 1
+[?2004l[?2004h>             if flag & 2048: supp += 1
+[?2004l[?2004h>     print(f'{name}: total={total}, dups={dups}, sec={sec}, supp={supp}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b54e64a175e0:/task# python3 /tmp/check_flags.py
+[?2004lTraceback (most recent call last):
+  File "/tmp/check_flags.py", line 6, in <module>
+    flag = int(line.split('')[1])
+               ^^^^^^^^^^^^^^
+ValueError: empty separator
+[?2004hroot@b54e64a175e0:/task# 

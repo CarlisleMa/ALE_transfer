@@ -1,0 +1,1636 @@
+[?2004hroot@9ca1cbb9ff53:/task# ls -la /task && ls -la /task/input && ls -la /task/input/models
+[?2004ltotal 20
+drwxr-xr-x 1 root root 4096 Nov 12 16:00 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:28 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 16:00 input
+drwxr-xr-x 2 root root 4096 Nov 12 01:49 output
+drwxr-xr-x 1 root root 4096 Nov 12 16:00 software
+total 32
+dr-xr-xr-x 1 root root 4096 Nov 12 16:00 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:00 ..
+-r--r--r-- 1 root root 1903 Nov 12 16:00 crosslinks.csv
+dr-xr-xr-x 1 root root 4096 Nov 12 16:00 models
+-r--r--r-- 1 root root  689 Nov 12 16:00 ranking.json
+-r--r--r-- 1 root root  830 Nov 12 16:00 sequences.fasta
+-r--r--r-- 1 root root 4160 Nov 12 16:00 xlms_notes.md
+total 11432
+dr-xr-xr-x 1 root root   4096 Nov 12 16:00 .
+dr-xr-xr-x 1 root root   4096 Nov 12 16:00 ..
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_01.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_02.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_03.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_04.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_05.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_06.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_07.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_08.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_09.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_10.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_11.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_12.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_13.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_14.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_15.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_16.pdb
+-r--r--r-- 1 root root 688044 Nov 12 16:00 model_17.pdb
+[?2004hroot@9ca1cbb9ff53:/task# cat /task/input/xlms_notes.md
+[?2004l# XL-MS hand-over notes
+
+## Sample and cross-linking
+- Sample: complex of XLCQ5E and XLMBQL (identities blinded for this hand-over), both full-length, co-expressed, purified by affinity and size-exclusion chromatography. SEC-MALS and native MS give a 2:2 assembly: two copies of each protein.
+- Cross-linker: BS3 (bis(sulfosuccinimidyl) suberate), amine-reactive, spacer arm 11.4 A. Only Lys-Lys cross-links are reported (protein N-termini, Ser/Thr/Tyr side reactions and mono-links were not considered).
+- Digest: trypsin, SCX enrichment of cross-linked peptides, LC-MS/MS on an Orbitrap instrument.
+
+## Identification
+- Database: the two sequences in `sequences.fasta` plus common contaminants. Positions in `crosslinks.csv` are positions in these sequences.
+- The table is collapsed to unique residue pairs. `n_csm` = number of cross-link spectrum matches supporting the pair, `score` = best match score (higher is better).
+- A row with the same protein and the same position on both sides comes from two linked peptides that cover the same lysine.
+- Error control: target-decoy, list cut at 5% FDR on the spectrum-match level, which the facility estimates to correspond to about 19% FDR on the residue-pair level. Decoy hits have been removed from the table; there was no manual validation.
+
+## How the group evaluates a cross-link against a structure
+- Distance measure. The cross-linker cannot pass through protein, so the group does not use the straight-line distance between the two lysines. It uses the surface distance defined below, measured between the CA atoms of the two linked lysines on the complete structure (all chains present). For BS3 a pair of residues is within range if its surface distance is at most 34.0 A.
+- Surface distance between two CA atoms P and Q of a structure:
+  1. Lattice. The lattice points are the points whose x, y and z coordinates are all whole numbers of angstrom, in the coordinate frame of the structure file as it is. The lattice is not bounded.
+  2. Blocked points. A lattice point is blocked if its distance to the centre of at least one non-hydrogen atom of the model is less than 3.0 A (every atom of every chain counts, the two linked lysines included). All other lattice points are open.
+  3. Paths. A path is a sequence of open lattice points in which consecutive points differ by at most 1 in each of x, y and z (a point has up to 26 neighbours). The length of a path is the sum of the straight-line distances between consecutive points (1, sqrt(2) or sqrt(3) A per step). A path may consist of a single point and then has length 0.
+  4. Tethers. P is joined to the first point of the path and Q to the last point of the path by straight segments. Each of the two segments may be at most 7.0 A long and is not tested against the protein (it stands for the lysine side chain).
+  5. The surface distance is the smallest value of (segment at P) + (path length) + (segment at Q) over all choices of an open first point, an open last point and a path between them. If there is no such choice, the surface distance is infinite and the pair is out of range.
+- Copies. The mass spectrometer cannot tell the two copies of a protein apart. A cross-link between position i of one protein and position j of a protein (the same or the other one) is satisfied by a structure if at least one assignment of the two positions to chains of the structure gives a pair of residues that is within range. The two ends of a cross-link are always two different residues, so for a row with the same protein and the same position on both sides the only assignment is that position in the two different copies.
+- A cross-link to a position that is absent from a structure cannot be evaluated for that structure; the group leaves it out of both the satisfied count and the total.
+- The group ranks structures by the number of cross-links they satisfy.
+
+## Models
+- The models come from the group's structure-prediction pipeline.
+- The model files are the unmodified output of the pipeline.
+- `ranking.json` holds the pipeline's ranking confidence (0.8 x ipTM + 0.2 x pTM); the model files are named in the order of that confidence.
+[?2004hroot@9ca1cbb9ff53:/task# cat /task/input/crosslinks.csv
+[?2004lxl_id,protein_a,position_a,protein_b,position_b,n_csm,score
+XL001,XLMBQL,139,XLMBQL,139,5,142.6
+XL002,XLCQ5E,166,XLMBQL,103,8,112.6
+XL003,XLCQ5E,108,XLCQ5E,108,4,118.8
+XL004,XLCQ5E,140,XLMBQL,261,6,87.0
+XL005,XLMBQL,212,XLMBQL,188,3,64.3
+XL006,XLCQ5E,214,XLCQ5E,214,5,88.3
+XL007,XLCQ5E,106,XLMBQL,261,2,102.0
+XL008,XLMBQL,92,XLMBQL,171,6,56.2
+XL009,XLMBQL,117,XLMBQL,89,8,119.9
+XL010,XLCQ5E,108,XLCQ5E,302,7,128.1
+XL011,XLCQ5E,166,XLMBQL,89,7,122.1
+XL012,XLCQ5E,180,XLMBQL,117,4,125.6
+XL013,XLMBQL,261,XLCQ5E,203,2,88.1
+XL014,XLCQ5E,110,XLMBQL,356,1,41.0
+XL015,XLMBQL,361,XLCQ5E,106,2,127.4
+XL016,XLMBQL,361,XLCQ5E,293,5,67.6
+XL017,XLCQ5E,242,XLMBQL,261,2,115.9
+XL018,XLMBQL,374,XLMBQL,148,6,118.0
+XL019,XLMBQL,325,XLMBQL,356,5,127.0
+XL020,XLMBQL,116,XLMBQL,171,5,111.7
+XL021,XLCQ5E,328,XLCQ5E,326,3,73.7
+XL022,XLMBQL,171,XLMBQL,374,3,127.2
+XL023,XLCQ5E,140,XLCQ5E,331,3,90.7
+XL024,XLCQ5E,314,XLCQ5E,242,4,89.5
+XL025,XLCQ5E,202,XLMBQL,89,7,146.5
+XL026,XLMBQL,158,XLMBQL,158,5,93.8
+XL027,XLMBQL,92,XLMBQL,148,6,101.1
+XL028,XLMBQL,148,XLMBQL,116,2,127.0
+XL029,XLMBQL,225,XLMBQL,374,5,141.6
+XL030,XLCQ5E,331,XLMBQL,15,2,56.9
+XL031,XLCQ5E,106,XLCQ5E,106,2,109.9
+XL032,XLMBQL,158,XLMBQL,361,1,121.3
+XL033,XLMBQL,172,XLCQ5E,202,3,77.0
+XL034,XLMBQL,89,XLMBQL,116,4,65.6
+XL035,XLCQ5E,293,XLCQ5E,203,1,80.8
+XL036,XLCQ5E,140,XLCQ5E,180,7,170.3
+XL037,XLCQ5E,293,XLCQ5E,140,2,65.8
+XL038,XLMBQL,139,XLCQ5E,108,5,112.7
+XL039,XLCQ5E,314,XLCQ5E,263,6,165.6
+XL040,XLMBQL,374,XLMBQL,172,2,117.5
+XL041,XLMBQL,117,XLCQ5E,203,5,137.7
+XL042,XLCQ5E,202,XLMBQL,158,4,132.0
+XL043,XLMBQL,92,XLMBQL,116,6,109.5
+XL044,XLMBQL,103,XLMBQL,103,2,61.4
+XL045,XLMBQL,261,XLCQ5E,331,3,94.3
+XL046,XLMBQL,172,XLMBQL,356,3,89.5
+XL047,XLMBQL,148,XLCQ5E,106,1,103.0
+XL048,XLMBQL,171,XLMBQL,103,5,146.4
+XL049,XLCQ5E,263,XLCQ5E,110,3,140.1
+XL050,XLMBQL,261,XLCQ5E,326,7,147.3
+XL051,XLCQ5E,263,XLCQ5E,302,3,87.2
+XL052,XLCQ5E,202,XLCQ5E,140,5,73.9
+[?2004hroot@9ca1cbb9ff53:/task# cat /task/input/ranking.json
+[?2004l{
+ "description": "ranking confidence = 0.8*ipTM + 0.2*pTM",
+ "order": [
+  "model_01",
+  "model_02",
+  "model_03",
+  "model_04",
+  "model_05",
+  "model_06",
+  "model_07",
+  "model_08",
+  "model_09",
+  "model_10",
+  "model_11",
+  "model_12",
+  "model_13",
+  "model_14",
+  "model_15",
+  "model_16",
+  "model_17"
+ ],
+ "confidence": {
+  "model_01": 0.856,
+  "model_02": 0.831,
+  "model_03": 0.795,
+  "model_04": 0.794,
+  "model_05": 0.752,
+  "model_06": 0.688,
+  "model_07": 0.659,
+  "model_08": 0.649,
+  "model_09": 0.598,
+  "model_10": 0.504,
+  "model_11": 0.493,
+  "model_12": 0.477,
+  "model_13": 0.47,
+  "model_14": 0.458,
+  "model_15": 0.444,
+  "model_16": 0.42,
+  "model_17": 0.398
+ }
+}[?2004hroot@9ca1cbb9ff53:/task# cat /task/input/sequences.fasta
+[?2004l>XLCQ5E blinded protein, full length, 346 aa
+MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+>XLMBQL blinded protein, full length, 381 aa
+MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+KAALAHPFFQDVTKPVPHLRL
+[?2004hroot@9ca1cbb9ff53:/task# head -n 30 /task/input/models/model_01.pdb
+[?2004lATOM      1  N   MET A   1      20.652  -2.924  22.139  1.00 69.03           N
+ATOM      2  CA  MET A   1      21.702  -2.116  22.799  1.00 69.03           C
+ATOM      3  C   MET A   1      22.835  -2.903  23.547  1.00 69.03           C
+ATOM      4  O   MET A   1      23.895  -2.343  23.867  1.00 69.03           O
+ATOM      5  CB  MET A   1      21.059  -1.042  23.687  1.00 69.03           C
+ATOM      6  CG  MET A   1      21.763   0.314  23.686  1.00 69.03           C
+ATOM      7  SD  MET A   1      22.027   0.963  22.026  1.00 69.03           S
+ATOM      8  CE  MET A   1      20.462   0.633  21.344  1.00 69.03           C
+ATOM      9  N   GLU A   2      22.610  -4.198  23.802  1.00 68.27           N
+ATOM     10  CA  GLU A   2      23.570  -5.053  24.510  1.00 68.27           C
+ATOM     11  C   GLU A   2      24.869  -5.328  23.765  1.00 68.27           C
+ATOM     12  O   GLU A   2      25.844  -5.786  24.370  1.00 68.27           O
+ATOM     13  CB  GLU A   2      22.945  -6.389  24.915  1.00 68.27           C
+ATOM     14  CG  GLU A   2      21.454  -6.367  25.043  1.00 68.27           C
+ATOM     15  CD  GLU A   2      20.751  -6.518  23.699  1.00 68.27           C
+ATOM     16  OE1 GLU A   2      21.322  -7.157  22.776  1.00 68.27           O
+ATOM     17  OE2 GLU A   2      19.614  -6.007  23.580  1.00 68.27           O
+ATOM     18  N   ASN A   3      24.886  -5.084  22.460  1.00 78.84           N
+ATOM     19  CA  ASN A   3      26.101  -5.322  21.704  1.00 78.84           C
+ATOM     20  C   ASN A   3      26.965  -4.088  21.675  1.00 78.84           C
+ATOM     21  O   ASN A   3      27.894  -4.015  20.881  1.00 78.84           O
+ATOM     22  CB  ASN A   3      25.786  -5.747  20.282  1.00 78.84           C
+ATOM     23  CG  ASN A   3      25.268  -7.144  20.218  1.00 78.84           C
+ATOM     24  OD1 ASN A   3      25.580  -7.958  21.088  1.00 78.84           O
+ATOM     25  ND2 ASN A   3      24.393  -7.414  19.255  1.00 78.84           N
+ATOM     26  N   PHE A   4      26.647  -3.104  22.513  1.00 94.06           N
+ATOM     27  CA  PHE A   4      27.431  -1.877  22.534  1.00 94.06           C
+ATOM     28  C   PHE A   4      28.162  -1.624  23.833  1.00 94.06           C
+ATOM     29  O   PHE A   4      27.600  -1.755  24.917  1.00 94.06           O
+ATOM     30  CB  PHE A   4      26.580  -0.682  22.175  1.00 94.06           C
+[?2004hroot@9ca1cbb9ff53:/task# grep '^ATOM' /task/input/models/model_01.pdb | cut -c22 | sort | uniq -c
+[?2004l   2307 A
+   2307 B
+   2047 C
+   2047 D
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> p='/task/input/models/model_01.pdb'
+[?2004l[?2004h> chains=defaultdict(lambda: {'res':set(),'atoms':0,'nonH':0,'het':set()})
+[?2004l[?2004h> for line in open(p):
+[?2004l[?2004h>     if line.startswith(('ATOM','HETATM')):
+[?2004l[?2004h>         ch=line[21]
+[?2004l[?2004h>         resi=line[22:27].strip()
+[?2004l[?2004h>         elem=line[76:78].strip()
+[?2004l[?2004h>         chains[ch]['res'].add(resi)
+[?2004l[?2004h>         chains[ch]['atoms']+=1
+[?2004l[?2004h>         if elem!='H': chains[ch]['nonH']+=1
+[?2004l[?2004h>         if line.startswith('HETATM'): chains[ch]['het'].add(line[17:20].strip())
+[?2004l[?2004h> for ch,d in sorted(chains.items()):
+[?2004l[?2004h>     rr=sorted(d['res'], key=lambda x:int(x) if x.lstrip('-').isdigit() else x)
+[?2004l[?2004h>     print(ch, 'atoms', d['atoms'], 'nonH', d['nonH'], 'nres', len(d['res']), 'firstlast', rr[:3], rr[-3:], 'het', d['het'])
+[?2004l[?2004h> PY
+[?2004lA atoms 2307 nonH 2307 nres 285 firstlast ['1', '2', '3'] ['283', '284', '285'] het set()
+B atoms 2307 nonH 2307 nres 285 firstlast ['1', '2', '3'] ['283', '284', '285'] het set()
+C atoms 2047 nonH 2047 nres 253 firstlast ['1', '2', '3'] ['251', '252', '253'] het set()
+D atoms 2047 nonH 2047 nres 253 firstlast ['1', '2', '3'] ['251', '252', '253'] het set()
+[?2004hroot@9ca1cbb9ff53:/task# ls -la /task/output
+[?2004ltotal 8
+drwxr-xr-x 2 root root 4096 Nov 12 01:49 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:00 ..
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> p='/task/input/models/model_01.pdb'
+[?2004l[?2004h> # get sequences per chain by CA order
+[?2004l[?2004h> seqs={}
+[?2004l[?2004h> for line in open(p):
+[?2004l[?2004h>     if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>         ch=line[21]; resi=int(line[22:26]); ins=line[26]; aa=m.get(line[17:20].strip().title(),'X')
+[?2004l[?2004h>         seqs.setdefault(ch,[]).append((resi,ins,aa))
+[?2004l[?2004h> for ch,lst in seqs.items():
+[?2004l[?2004h>     seq=''.join(x[2] for x in lst)
+[?2004l[?2004h>     print('MODEL',ch,len(lst),seq[:30],seq[-30:])
+[?2004l[?2004h>     print('firstlast',lst[0][:2],lst[-1][:2])
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse('/task/input/sequences.fasta','fasta')}
+[?2004l[?2004h> for pid,s in full.items(): print('FULL',pid,len(s),s[:30],s[-30:])
+[?2004l[?2004h> aligner=Align.PairwiseAligner()
+[?2004l[?2004h> aligner.mode='global'
+[?2004l[?2004h> aligner.match_score=2
+[?2004l[?2004h> aligner.mismatch_score=-1
+[?2004l[?2004h> aligner.open_gap_score=-10
+[?2004l[?2004h> aligner.extend_gap_score=-0.5
+[?2004l[?2004h> for ch,lst in seqs.items():
+[?2004l[?2004h>     seq=''.join(x[2] for x in lst)
+[?2004l[?2004h>     for pid,s in full.items():
+[?2004l[?2004h>         al=aligner.align(s,seq)[0]
+[?2004l[?2004h>         print('ALIGN',ch,pid,'score',al.score)
+[?2004l[?2004h>         print(al)
+[?2004l[?2004h> PY
+[?2004lMODEL A 285 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+firstlast (1, ' ') (285, ' ')
+MODEL C 253 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+firstlast (1, ' ') (253, ' ')
+MODEL B 285 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+firstlast (1, ' ') (285, ' ')
+MODEL D 253 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+firstlast (1, ' ') (253, ' ')
+FULL XLCQ5E 346 MANNEEGSAQPSGQELDQEVEGSSPEGELG QHAQQSIREKYKNSKYHGVSLLNPPETLNL
+FULL XLMBQL 381 MTSSQQLLSQPEDAKEPLKPGLEKPEREKP YDPNKRISAKAALAHPFFQDVTKPVPHLRL
+ALIGN A XLCQ5E score -325.0
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 -...........................................................
+query             0 -XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ............................................................
+query            59 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 ............................................................
+query           119 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+                240 ............................................................
+query           179 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 346
+                300 .............................................. 346
+query           239 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 285
+
+ALIGN A XLMBQL score -342.5
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 ------------------------------------........................
+query             0 ------------------------------------XXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 ............................................................
+query            24 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 ............................................................
+query            84 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+                240 ............................................................
+query           144 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+                300 ............................................................
+query           204 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          360 KAALAHPFFQDVTKPVPHLRL 381
+                360 ..................... 381
+query           264 XXXXXXXXXXXXXXXXXXXXX 285
+
+ALIGN C XLCQ5E score -309.0
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 ---------------------------------...........................
+query             0 ---------------------------------XXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ............................................................
+query            27 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 ............................................................
+query            87 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+                240 ............................................................
+query           147 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 346
+                300 .............................................. 346
+query           207 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 253
+
+ALIGN C XLMBQL score -326.5
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 --------....................................................
+query             0 --------XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 ............................................................
+query            52 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+                240 ............................................................
+query           112 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+                300 ............................................................
+query           172 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          360 KAALAHPFFQDVTKPVPHLRL 381
+                360 ..................... 381
+query           232 XXXXXXXXXXXXXXXXXXXXX 253
+
+ALIGN B XLCQ5E score -325.0
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 -...........................................................
+query             0 -XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ............................................................
+query            59 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 ............................................................
+query           119 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+                240 ............................................................
+query           179 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 346
+                300 .............................................. 346
+query           239 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 285
+
+ALIGN B XLMBQL score -342.5
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 ------------------------------------........................
+query             0 ------------------------------------XXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 ............................................................
+query            24 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 ............................................................
+query            84 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+                240 ............................................................
+query           144 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+                300 ............................................................
+query           204 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          360 KAALAHPFFQDVTKPVPHLRL 381
+                360 ..................... 381
+query           264 XXXXXXXXXXXXXXXXXXXXX 285
+
+ALIGN D XLCQ5E score -309.0
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 ---------------------------------...........................
+query             0 ---------------------------------XXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ............................................................
+query            27 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 ............................................................
+query            87 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+                240 ............................................................
+query           147 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 346
+                300 .............................................. 346
+query           207 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX 253
+
+ALIGN D XLMBQL score -326.5
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 --------....................................................
+query             0 --------XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 ............................................................
+query            52 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          240 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+                240 ............................................................
+query           112 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          300 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+                300 ............................................................
+query           172 XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+target          360 KAALAHPFFQDVTKPVPHLRL 381
+                360 ..................... 381
+query           232 XXXXXXXXXXXXXXXXXXXXX 253
+
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> p='/task/input/models/model_01.pdb'
+[?2004l[?2004h> seqs={}
+[?2004l[?2004h> for line in open(p):
+[?2004l[?2004h>     if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>         ch=line[21]; resi=int(line[22:26]); ins=line[26]; aa=m.get(line[17:20].strip(),'X')
+[?2004l[?2004h>         seqs.setdefault(ch,[]).append((resi,ins,aa))
+[?2004l[?2004h> for ch,lst in seqs.items():
+[?2004l[?2004h>     seq=''.join(x[2] for x in lst)
+[?2004l[?2004h>     print('MODEL',ch,len(lst),seq[:40],seq[-40:])
+[?2004l[?2004h>     print('firstlast',lst[0][:2],lst[-1][:2])
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse('/task/input/sequences.fasta','fasta')}
+[?2004l[?2004h> aligner=Align.PairwiseAligner()
+[?2004l[?2004h> aligner.mode='global'
+[?2004l[?2004h> aligner.match_score=2
+[?2004l[?2004h> aligner.mismatch_score=-1
+[?2004l[?2004h> aligner.open_gap_score=-10
+[?2004l[?2004h> aligner.extend_gap_score=-0.5
+[?2004l[?2004h> for ch,lst in seqs.items():
+[?2004l[?2004h>     seq=''.join(x[2] for x in lst)
+[?2004l[?2004h>     best=None
+[?2004l[?2004h>     for pid,s in full.items():
+[?2004l[?2004h>         al=aligner.align(s,seq)[0]
+[?2004l[?2004h>         if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>     al,pid=best
+[?2004l[?2004h>     print('BEST',ch,pid,'score',al.score)
+[?2004l[?2004h>     # map query positions to target full positions
+[?2004l[?2004h>     # print first/last aligned coordinate and alignment blocks around first 80
+[?2004l[?2004h>     blocks=al.aligned_blocks
+[?2004l[?2004h>     print('blocks',len(blocks),blocks[:5],blocks[-3:])
+[?2004l[?2004h>     print(al[:200])
+[?2004l[?2004h> PY
+[?2004lMODEL A 285 MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTE GRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL
+firstlast (1, ' ') (285, ' ')
+MODEL C 253 NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRA DLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+firstlast (1, ' ') (253, ' ')
+MODEL B 285 MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTE GRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL
+firstlast (1, ' ') (285, ' ')
+MODEL D 253 NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRA DLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+firstlast (1, ' ') (253, ' ')
+BEST A XLMBQL score 503.0
+Traceback (most recent call last):
+  File "<stdin>", line 30, in <module>
+AttributeError: 'Alignment' object has no attribute 'aligned_blocks'
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse('/task/input/sequences.fasta','fasta')}
+[?2004l[?2004h> for model in ['model_01','model_17']:
+[?2004l[?2004h>     print('===',model)
+[?2004l[?2004h>     p=f'/task/input/models/{model}.pdb'
+[?2004l[?2004h>     seqs={}
+[?2004l[?2004h>     for line in open(p):
+[?2004l[?2004h>         if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>             ch=line[21]; resi=int(line[22:26]); ins=line[26]; aa=m.get(line[17:20].strip(),'X')
+[?2004l[?2004h>             seqs.setdefault(ch,[]).append((resi,ins,aa))
+[?2004l[?2004h>     for ch,lst in seqs.items():
+[?2004l[?2004h>         seq=''.join(x[2] for x in lst)
+[?2004l[?2004h>         for pid,s in full.items():
+[?2004l[?2004h>             idx=s.find(seq)
+[?2004l[?2004h>             if idx!=-1:
+[?2004l[?2004h>                 print(ch,pid,'fullstart1',idx+1,'modelfirst',lst[0][:2],'modellast',lst[-1][:2],'fulllen',len(s),'modelres',len(lst))
+[?2004l[?2004h> PY
+[?2004l=== model_01
+=== model_17
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> models=[]
+[?2004l[?2004h> for n in range(1,18):
+[?2004l[?2004h>     p=f'/task/input/models/model_{n:02d}.pdb'
+[?2004l[?2004h>     d={}
+[?2004l[?2004h>     for line in open(p):
+[?2004l[?2004h>         if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>             ch=line[21]; key=(int(line[22:26]),line[26]); aa=m.get(line[17:20].strip(),'X')
+[?2004l[?2004h>             d.setdefault(ch,[]).append((key,aa))
+[?2004l[?2004h>     models.append(d)
+[?2004l[?2004h> base=models[0]
+[?2004l[?2004h> for i,d in enumerate(models[1:],2):
+[?2004l[?2004h>     same=True
+[?2004l[?2004h>     for ch in 'ABCD':
+[?2004l[?2004h>         if d.get(ch)!=base.get(ch): same=False
+[?2004l[?2004h>     print('model_%02d same_CA_residues'%i, same)
+[?2004l[?2004h> PY
+[?2004lmodel_02 same_CA_residues False
+model_03 same_CA_residues False
+model_04 same_CA_residues True
+model_05 same_CA_residues True
+model_06 same_CA_residues True
+model_07 same_CA_residues False
+model_08 same_CA_residues False
+model_09 same_CA_residues False
+model_10 same_CA_residues False
+model_11 same_CA_residues False
+model_12 same_CA_residues True
+model_13 same_CA_residues True
+model_14 same_CA_residues False
+model_15 same_CA_residues False
+model_16 same_CA_residues True
+model_17 same_CA_residues True
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse('/task/input/sequences.fasta','fasta')}
+[?2004l[?2004h> p='/task/input/models/model_01.pdb'
+[?2004l[?2004h> seqs={}
+[?2004l[?2004h> for line in open(p):
+[?2004l[?2004h>     if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>         ch=line[21]; resi=int(line[22:26]); ins=line[26]; aa=m.get(line[17:20].strip(),'X')
+[?2004l[?2004h>         seqs.setdefault(ch,[]).append((resi,ins,aa))
+[?2004l[?2004h> aligner=Align.PairwiseAligner()
+[?2004l[?2004h> aligner.mode='global'
+[?2004l[?2004h> aligner.match_score=2
+[?2004l[?2004h> aligner.mismatch_score=-1
+[?2004l[?2004h> aligner.open_gap_score=-10
+[?2004l[?2004h> aligner.extend_gap_score=-0.5
+[?2004l[?2004h> for ch,lst in seqs.items():
+[?2004l[?2004h>     qseq=''.join(x[2] for x in lst)
+[?2004l[?2004h>     best=None
+[?2004l[?2004h>     for pid,s in full.items():
+[?2004l[?2004h>         al=aligner.align(s,qseq)[0]
+[?2004l[?2004h>         if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>     al,pid=best
+[?2004l[?2004h>     print('=== chain',ch,'best',pid,'score',al.score,'qlen',len(qseq))
+[?2004l[?2004h>     print('aligned blocks attr?', hasattr(al,'aligned'))
+[?2004l[?2004h>     print('coordinates shape', getattr(al,'coordinates',None).shape if hasattr(al,'coordinates') else None)
+[?2004l[?2004h>     print('first target/query coords', al.coordinates[:,0] if hasattr(al,'coordinates') else None, al.coordinates[:,-1] if hasattr(al,'coordinates') else None)
+[?2004l[?2004h>     # Print compact alignment using custom operation from aligned pairs
+[?2004l[?2004h>     if hasattr(al,'aligned'):
+[?2004l[?2004h>         print('aligned', al.aligned)
+[?2004l[?2004h>     print(str(al)[:1000])
+[?2004l[?2004h> PY
+[?2004l=== chain A best XLMBQL score 503.0 qlen 285
+aligned blocks attr? True
+coordinates shape (2, 5)
+first target/query coords [0 0] [381 285]
+aligned [[[ 83 175]
+  [188 381]]
+
+ [[  0  92]
+  [ 92 285]]]
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 -----------------------|||||||||||||||||||||||||||||||||||||
+query             0 -----------------------MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query            37 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMD-----
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 --------||||||||||||||||||||||||||||||||||||||||||||||||||||
+query            92 --------SYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+
+target          240 TYTH
+=== chain C best XLCQ5E score 440.5 qlen 253
+aligned blocks attr? True
+coordinates shape (2, 5)
+first target/query coords [0 0] [346 253]
+aligned [[[ 86 235]
+  [242 346]]
+
+ [[  0 149]
+  [149 253]]]
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 --------------------------||||||||||||||||||||||||||||||||||
+query             0 --------------------------NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query            34 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query            94 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLH-----
+
+target          240 CKVE
+=== chain B best XLMBQL score 503.0 qlen 285
+aligned blocks attr? True
+coordinates shape (2, 5)
+first target/query coords [0 0] [381 285]
+aligned [[[ 83 175]
+  [188 381]]
+
+ [[  0  92]
+  [ 92 285]]]
+target            0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 -----------------------|||||||||||||||||||||||||||||||||||||
+query             0 -----------------------MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+
+target          120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+                120 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query            37 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMD-----
+
+target          180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 --------||||||||||||||||||||||||||||||||||||||||||||||||||||
+query            92 --------SYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+
+target          240 TYTH
+=== chain D best XLCQ5E score 440.5 qlen 253
+aligned blocks attr? True
+coordinates shape (2, 5)
+first target/query coords [0 0] [346 253]
+aligned [[[ 86 235]
+  [242 346]]
+
+ [[  0 149]
+  [149 253]]]
+target            0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+                  0 ------------------------------------------------------------
+query             0 ------------------------------------------------------------
+
+target           60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 --------------------------||||||||||||||||||||||||||||||||||
+query             0 --------------------------NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+
+target          120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query            34 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+
+target          180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+                180 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query            94 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLH-----
+
+target          240 CKVE
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> import pandas as pd, math
+[?2004l[?2004h> base='/task/input'
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse(f'{base}/sequences.fasta','fasta')}
+[?2004l[?2004h> xls=pd.read_csv(f'{base}/crosslinks.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_model(path):
+[?2004l[?2004h>     atoms=[]; residues={}
+[?2004l[?2004h>     for line in open(path):
+[?2004l[?2004h>         if line.startswith(('ATOM','HETATM')):
+[?2004l[?2004h>             ch=line[21]; resi=int(line[22:26]); ic=line[26].strip(); name=line[12:16].strip(); elem=line[76:78].strip() or name[0]
+[?2004l[?2004h>             x=float(line[30:38]); y=float(line[38:46]); z=float(line[46:54])
+[?2004l[?2004h>             atoms.append((ch,resi,ic,name,elem,x,y,z))
+[?2004l[?2004h>             key=(ch,resi,ic)
+[?2004l[?2004h>             if key not in residues:
+[?2004l[?2004h>                 residues[key]={'aa':m.get(line[17:20].strip(),'X'),'CA':None,'atoms':[]}
+[?2004l[?2004h>             residues[key]['atoms'].append((name,elem,x,y,z))
+[?2004l[?2004h>             if name=='CA': residues[key]['CA']=(x,y,z)
+[?2004l[?2004h>     return atoms,residues
+[?2004l[?2004h> 
+[?2004l[?2004h> atoms,residues=parse_model(f'{base}/models/model_01.pdb')
+[?2004l[?2004h> # sequences by chain in PDB order
+[?2004l[?2004h> from collections import OrderedDict
+[?2004l[?2004h> chain_order=[]; chain_res={}
+[?2004l[?2004h> for key in residues:
+[?2004l[?2004h>     ch=key[0]
+[?2004l[?2004h>     if ch not in chain_res:
+[?2004l[?2004h>         chain_res[ch]=[]; chain_order.append(ch)
+[?2004l[?2004h>     chain_res[ch].append(key)
+[?2004l[?2004h> print('chains',chain_order,[len(chain_res[c]) for c in chain_order])
+[?2004l[?2004h> aligner=Align.PairwiseAligner(); aligner.mode='global'; aligner.match_score=2; aligner.mismatch_score=-1; aligner.open_gap_score=-10; aligner.extend_gap_score=-0.5
+[?2004l[?2004h> maps={}
+[?2004l[?2004h> for ch in chain_order:
+[?2004l[?2004h>     keys=chain_res[ch]; qseq=''.join(residues[k]['aa'] for k in keys)
+[?2004l[?2004h>     best=None
+[?2004l[?2004h>     for pid,s in full.items():
+[?2004l[?2004h>         al=aligner.align(s,qseq)[0]
+[?2004l[?2004h>         if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>     al,pid=best
+[?2004l[?2004h>     mp={}
+[?2004l[?2004h>     coords=al.coordinates
+[?2004l[?2004h>     for j in range(coords.shape[1]-1):
+[?2004l[?2004h>         t0,t1=coords[0,j],coords[0,j+1]; q0,q1=coords[1,j],coords[1,j+1]
+[?2004l[?2004h>         if t1-t0==q1-q0 and t1>t0:
+[?2004l[?2004h>             for off in range(t1-t0): mp[keys[q0+off]]=t0+off+1
+[?2004l[?2004h>         elif q1>q0 and t1==t0:
+[?2004l[?2004h>             for off in range(q1-q0): mp[keys[q0+off]]=None
+[?2004l[?2004h>     maps[ch]=(pid,mp)
+[?2004l[?2004h>     mapped=[v for v in mp.values() if v]
+[?2004l[?2004h>     print(ch,pid,'mapped',len(mapped),'range',min(mapped),max(mapped),'unmapped',len(mp)-len(mapped))
+[?2004l[?2004h> 
+[?2004l[?2004h> prot_chains={}
+[?2004l[?2004h> for ch,(pid,mp) in maps.items(): prot_chains.setdefault(pid,[]).append(ch)
+[?2004l[?2004h> print('prot_chains',prot_chains)
+[?2004l[?2004h> # evaluability and euclidean distances
+[?2004l[?2004h> print('\nCrosslink Euclidean CA distances model_01:')
+[?2004l[?2004h> for _,row in xls.iterrows():
+[?2004l[?2004h>     pa,pb=row.protein_a,row.protein_b; ia,ib=int(row.position_a),int(row.position_b)
+[?2004l[?2004h>     chains_a=prot_chains[pa]; chains_b=prot_chains[pb]
+[?2004l[?2004h>     # get model keys per chain for full pos
+[?2004l[?2004h>     keys_a={ch: next((k for k,v in maps[ch][1].items() if v==ia), None) for ch in chains_a}
+[?2004l[?2004h>     keys_b={ch: next((k for k,v in maps[ch][1].items() if v==ib), None) for ch in chains_b}
+[?2004l[?2004h>     dists=[]
+[?2004l[?2004h>     for ca in chains_a:
+[?2004l[?2004h>         for cb in chains_b:
+[?2004l[?2004h>             ka,kb=keys_a[ca],keys_b[cb]
+[?2004l[?2004h>             if ka is None or kb is None: continue
+[?2004l[?2004h>             if ca==cb and ia==ib: continue
+[?2004l[?2004h>             p=residues[ka]['CA']; q=residues[kb]['CA']
+[?2004l[?2004h>             d=math.dist(p,q); dists.append((ca,cb,d))
+[?2004l[?2004h>     ev=bool(dists)
+[?2004l[?2004h>     print(row.xl_id,pa,ia,pb,ib,'eval',ev,'minEuclid',round(min(d for *_,d in dists),1) if dists else None,'all',[(a,b,round(d,1)) for a,b,d in dists])
+[?2004l[?2004h> PY
+[?2004lchains ['A', 'C', 'B', 'D'] [285, 253, 285, 253]
+A XLMBQL mapped 285 range 84 381 unmapped 0
+C XLCQ5E mapped 253 range 87 346 unmapped 0
+B XLMBQL mapped 285 range 84 381 unmapped 0
+D XLCQ5E mapped 253 range 87 346 unmapped 0
+prot_chains {'XLMBQL': ['A', 'B'], 'XLCQ5E': ['C', 'D']}
+
+Crosslink Euclidean CA distances model_01:
+XL001 XLMBQL 139 XLMBQL 139 eval True minEuclid 25.6 all [('A', 'B', 25.6), ('B', 'A', 25.6)]
+XL002 XLCQ5E 166 XLMBQL 103 eval True minEuclid 38.3 all [('C', 'A', 41.3), ('C', 'B', 42.0), ('D', 'A', 38.3), ('D', 'B', 41.3)]
+XL003 XLCQ5E 108 XLCQ5E 108 eval True minEuclid 18.6 all [('C', 'D', 18.6), ('D', 'C', 18.6)]
+XL004 XLCQ5E 140 XLMBQL 261 eval True minEuclid 17.4 all [('C', 'A', 17.4), ('C', 'B', 62.3), ('D', 'A', 71.4), ('D', 'B', 18.3)]
+XL005 XLMBQL 212 XLMBQL 188 eval False minEuclid None all []
+XL006 XLCQ5E 214 XLCQ5E 214 eval True minEuclid 25.4 all [('C', 'D', 25.4), ('D', 'C', 25.4)]
+XL007 XLCQ5E 106 XLMBQL 261 eval True minEuclid 32.1 all [('C', 'A', 32.1), ('C', 'B', 42.3), ('D', 'A', 42.2), ('D', 'B', 32.3)]
+XL008 XLMBQL 92 XLMBQL 171 eval True minEuclid 18.1 all [('A', 'A', 18.1), ('A', 'B', 48.6), ('B', 'A', 56.1), ('B', 'B', 18.5)]
+XL009 XLMBQL 117 XLMBQL 89 eval True minEuclid 11.6 all [('A', 'A', 11.6), ('A', 'B', 32.1), ('B', 'A', 28.2), ('B', 'B', 11.8)]
+XL010 XLCQ5E 108 XLCQ5E 302 eval True minEuclid 17.6 all [('C', 'C', 21.1), ('C', 'D', 17.6), ('D', 'C', 36.7), ('D', 'D', 21.4)]
+XL011 XLCQ5E 166 XLMBQL 89 eval True minEuclid 38.4 all [('C', 'A', 40.3), ('C', 'B', 46.7), ('D', 'A', 38.4), ('D', 'B', 40.6)]
+XL012 XLCQ5E 180 XLMBQL 117 eval True minEuclid 19.2 all [('C', 'A', 19.2), ('C', 'B', 47.6), ('D', 'A', 40.2), ('D', 'B', 19.2)]
+XL013 XLMBQL 261 XLCQ5E 203 eval True minEuclid 36.1 all [('A', 'C', 36.1), ('A', 'D', 69.3), ('B', 'C', 46.8), ('B', 'D', 37.3)]
+XL014 XLCQ5E 110 XLMBQL 356 eval True minEuclid 32.1 all [('C', 'A', 43.4), ('C', 'B', 32.1), ('D', 'A', 42.5), ('D', 'B', 43.5)]
+XL015 XLMBQL 361 XLCQ5E 106 eval True minEuclid 26.3 all [('A', 'C', 26.3), ('A', 'D', 34.9), ('B', 'C', 33.3), ('B', 'D', 26.5)]
+XL016 XLMBQL 361 XLCQ5E 293 eval True minEuclid 20.3 all [('A', 'C', 20.3), ('A', 'D', 46.9), ('B', 'C', 52.4), ('B', 'D', 20.6)]
+XL017 XLCQ5E 242 XLMBQL 261 eval False minEuclid None all []
+XL018 XLMBQL 374 XLMBQL 148 eval True minEuclid 20.4 all [('A', 'A', 20.6), ('A', 'B', 49.9), ('B', 'A', 45.4), ('B', 'B', 20.4)]
+XL019 XLMBQL 325 XLMBQL 356 eval True minEuclid 21.6 all [('A', 'A', 21.6), ('A', 'B', 89.1), ('B', 'A', 95.5), ('B', 'B', 21.9)]
+XL020 XLMBQL 116 XLMBQL 171 eval True minEuclid 20.0 all [('A', 'A', 20.0), ('A', 'B', 45.5), ('B', 'A', 51.1), ('B', 'B', 20.2)]
+XL021 XLCQ5E 328 XLCQ5E 326 eval True minEuclid 5.5 all [('C', 'C', 5.6), ('C', 'D', 68.5), ('D', 'C', 66.3), ('D', 'D', 5.5)]
+XL022 XLMBQL 171 XLMBQL 374 eval True minEuclid 19.4 all [('A', 'A', 19.7), ('A', 'B', 56.8), ('B', 'A', 69.5), ('B', 'B', 19.4)]
+XL023 XLCQ5E 140 XLCQ5E 331 eval True minEuclid 12.3 all [('C', 'C', 12.3), ('C', 'D', 67.0), ('D', 'C', 72.3), ('D', 'D', 12.4)]
+XL024 XLCQ5E 314 XLCQ5E 242 eval False minEuclid None all []
+XL025 XLCQ5E 202 XLMBQL 89 eval True minEuclid 33.5 all [('C', 'A', 33.5), ('C', 'B', 43.3), ('D', 'A', 40.3), ('D', 'B', 33.6)]
+XL026 XLMBQL 158 XLMBQL 158 eval True minEuclid 34.5 all [('A', 'B', 34.5), ('B', 'A', 34.5)]
+XL027 XLMBQL 92 XLMBQL 148 eval True minEuclid 19.0 all [('A', 'A', 19.2), ('A', 'B', 31.0), ('B', 'A', 44.7), ('B', 'B', 19.0)]
+XL028 XLMBQL 148 XLMBQL 116 eval True minEuclid 12.7 all [('A', 'A', 12.7), ('A', 'B', 37.3), ('B', 'A', 26.6), ('B', 'B', 12.8)]
+XL029 XLMBQL 225 XLMBQL 374 eval True minEuclid 13.8 all [('A', 'A', 13.8), ('A', 'B', 53.2), ('B', 'A', 58.7), ('B', 'B', 13.8)]
+XL030 XLCQ5E 331 XLMBQL 15 eval False minEuclid None all []
+XL031 XLCQ5E 106 XLCQ5E 106 eval True minEuclid 14.3 all [('C', 'D', 14.3), ('D', 'C', 14.3)]
+XL032 XLMBQL 158 XLMBQL 361 eval True minEuclid 31.0 all [('A', 'A', 38.6), ('A', 'B', 31.0), ('B', 'A', 55.7), ('B', 'B', 38.9)]
+XL033 XLMBQL 172 XLCQ5E 202 eval True minEuclid 41.5 all [('A', 'C', 43.7), ('A', 'D', 56.2), ('B', 'C', 41.5), ('B', 'D', 42.8)]
+XL034 XLMBQL 89 XLMBQL 116 eval True minEuclid 11.3 all [('A', 'A', 11.3), ('A', 'B', 27.5), ('B', 'A', 33.7), ('B', 'B', 11.3)]
+XL035 XLCQ5E 293 XLCQ5E 203 eval True minEuclid 32.9 all [('C', 'C', 46.4), ('C', 'D', 60.3), ('D', 'C', 32.9), ('D', 'D', 46.4)]
+XL036 XLCQ5E 140 XLCQ5E 180 eval True minEuclid 14.0 all [('C', 'C', 14.1), ('C', 'D', 59.1), ('D', 'C', 56.2), ('D', 'D', 14.0)]
+XL037 XLCQ5E 293 XLCQ5E 140 eval True minEuclid 32.7 all [('C', 'C', 33.2), ('C', 'D', 56.9), ('D', 'C', 38.9), ('D', 'D', 32.7)]
+XL038 XLMBQL 139 XLCQ5E 108 eval True minEuclid 18.0 all [('A', 'C', 18.0), ('A', 'D', 18.8), ('B', 'C', 29.3), ('B', 'D', 18.1)]
+XL039 XLCQ5E 314 XLCQ5E 263 eval True minEuclid 19.5 all [('C', 'C', 19.5), ('C', 'D', 41.5), ('D', 'C', 33.5), ('D', 'D', 19.7)]
+XL040 XLMBQL 374 XLMBQL 172 eval True minEuclid 20.0 all [('A', 'A', 20.0), ('A', 'B', 69.9), ('B', 'A', 56.9), ('B', 'B', 20.0)]
+XL041 XLMBQL 117 XLCQ5E 203 eval True minEuclid 21.4 all [('A', 'C', 21.4), ('A', 'D', 43.9), ('B', 'C', 40.7), ('B', 'D', 21.4)]
+XL042 XLCQ5E 202 XLMBQL 158 eval True minEuclid 17.0 all [('C', 'A', 17.8), ('C', 'B', 48.0), ('D', 'A', 46.2), ('D', 'B', 17.0)]
+XL043 XLMBQL 92 XLMBQL 116 eval True minEuclid 9.8 all [('A', 'A', 10.1), ('A', 'B', 35.4), ('B', 'A', 39.2), ('B', 'B', 9.8)]
+XL044 XLMBQL 103 XLMBQL 103 eval True minEuclid 32.4 all [('A', 'B', 32.4), ('B', 'A', 32.4)]
+XL045 XLMBQL 261 XLCQ5E 331 eval True minEuclid 18.2 all [('A', 'C', 18.2), ('A', 'D', 73.2), ('B', 'C', 68.9), ('B', 'D', 18.2)]
+XL046 XLMBQL 172 XLMBQL 356 eval True minEuclid 32.4 all [('A', 'A', 32.5), ('A', 'B', 71.6), ('B', 'A', 80.2), ('B', 'B', 32.4)]
+XL047 XLMBQL 148 XLCQ5E 106 eval True minEuclid 20.6 all [('A', 'C', 21.4), ('A', 'D', 20.6), ('B', 'C', 34.1), ('B', 'D', 22.0)]
+XL048 XLMBQL 171 XLMBQL 103 eval True minEuclid 18.7 all [('A', 'A', 18.7), ('A', 'B', 50.9), ('B', 'A', 47.3), ('B', 'B', 19.0)]
+XL049 XLCQ5E 263 XLCQ5E 110 eval True minEuclid 8.7 all [('C', 'C', 8.9), ('C', 'D', 27.8), ('D', 'C', 18.3), ('D', 'D', 8.7)]
+XL050 XLMBQL 261 XLCQ5E 326 eval True minEuclid 24.4 all [('A', 'C', 24.4), ('A', 'D', 70.1), ('B', 'C', 62.2), ('B', 'D', 24.9)]
+XL051 XLCQ5E 263 XLCQ5E 302 eval True minEuclid 13.9 all [('C', 'C', 13.9), ('C', 'D', 15.4), ('D', 'C', 30.4), ('D', 'D', 13.9)]
+XL052 XLCQ5E 202 XLCQ5E 140 eval True minEuclid 21.2 all [('C', 'C', 21.6), ('C', 'D', 56.6), ('D', 'C', 69.6), ('D', 'D', 21.2)]
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> p='/task/input/models/model_01.pdb'
+[?2004l[?2004h> atoms=[]
+[?2004l[?2004h> for line in open(p):
+[?2004l[?2004h>     if line.startswith(('ATOM','HETATM')):
+[?2004l[?2004h>         elem=line[76:78].strip() or line[12:16].strip()[0]
+[?2004l[?2004h>         if elem!='H':
+[?2004l[?2004h>             atoms.append([float(line[30:38]),float(line[38:46]),float(line[46:54])])
+[?2004l[?2004h> a=np.array(atoms)
+[?2004l[?2004h> print('nonH atoms',len(a))
+[?2004l[?2004h> print('min',a.min(axis=0),'max',a.max(axis=0))
+[?2004l[?2004h> print('span',a.max(axis=0)-a.min(axis=0))
+[?2004l[?2004h> print('volume integer box',np.prod(np.ceil(a.max(axis=0))-np.floor(a.min(axis=0))+1))
+[?2004l[?2004h> PY
+[?2004lnonH atoms 8708
+min [-24.982 -53.181 -32.386] max [50.646 54.308 48.932]
+span [ 75.628 107.489  81.318]
+volume integer box 703010.0
+[?2004hroot@9ca1cbb9ff53:/task# cat > /tmp/test_surface.py <<'PY'
+[?2004l[?2004h> import math, time, heapq
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> base='/task/input'
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse(f'{base}/sequences.fasta','fasta')}
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_model(path):
+[?2004l[?2004h>     atoms=[]; residues={}; chain_order=[]
+[?2004l[?2004h>     for line in open(path):
+[?2004l[?2004h>         if line.startswith(('ATOM','HETATM')):
+[?2004l[?2004h>             ch=line[21]
+[?2004l[?2004h>             if ch not in chain_order: chain_order.append(ch)
+[?2004l[?2004h>             resi=int(line[22:26]); ic=line[26].strip(); name=line[12:16].strip()
+[?2004l[?2004h>             elem=line[76:78].strip() or name[0]
+[?2004l[?2004h>             x=float(line[30:38]); y=float(line[38:46]); z=float(line[46:54])
+[?2004l[?2004h>             key=(ch,resi,ic)
+[?2004l[?2004h>             if key not in residues:
+[?2004l[?2004h>                 residues[key]={'aa':m.get(line[17:20].strip(),'X'),'CA':None,'atoms':[]}
+[?2004l[?2004h>             residues[key]['atoms'].append((name,elem,x,y,z))
+[?2004l[?2004h>             if name=='CA': residues[key]['CA']=(x,y,z)
+[?2004l[?2004h>             if elem!='H': atoms.append((x,y,z))
+[?2004l[?2004h>     return np.array(atoms), residues, chain_order
+[?2004l[?2004h> 
+[?2004l[?2004h> def align_chains(residues, chain_order):
+[?2004l[?2004h>     aligner=Align.PairwiseAligner(); aligner.mode='global'; aligner.match_score=2; aligner.mismatch_score=-1; aligner.open_gap_score=-10; aligner.extend_gap_score=-0.5
+[?2004l[?2004h>     maps={}
+[?2004l[?2004h>     for ch in chain_order:
+[?2004l[?2004h>         keys=[k for k in residues if k[0]==ch]
+[?2004l[?2004h>         qseq=''.join(residues[k]['aa'] for k in keys)
+[?2004l[?2004h>         best=None
+[?2004l[?2004h>         for pid,s in full.items():
+[?2004l[?2004h>             al=aligner.align(s,qseq)[0]
+[?2004l[?2004h>             if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>         al,pid=best
+[?2004l[?2004h>         mp={}
+[?2004l[?2004h>         coords=al.coordinates
+[?2004l[?2004h>         for j in range(coords.shape[1]-1):
+[?2004l[?2004h>             t0,t1=coords[0,j],coords[0,j+1]; q0,q1=coords[1,j],coords[1,j+1]
+[?2004l[?2004h>             if t1-t0==q1-q0 and t1>t0:
+[?2004l[?2004h>                 for off in range(t1-t0): mp[keys[q0+off]]=t0+off+1
+[?2004l[?2004h>         maps[ch]=(pid,mp)
+[?2004l[?2004h>     return maps
+[?2004l[?2004h> 
+[?2004l[?2004h> def build_blocked(atoms):
+[?2004l[?2004h>     lo=np.floor(atoms.min(axis=0)).astype(int)-4
+[?2004l[?2004h>     hi=np.ceil(atoms.max(axis=0)).astype(int)+4
+[?2004l[?2004h>     shape=tuple((hi-lo+1).tolist())
+[?2004l[?2004h>     blocked=np.zeros(shape,dtype=bool)
+[?2004l[?2004h>     for ax,ay,az in atoms:
+[?2004l[?2004h>         xlo=int(math.floor(ax))-3; xhi=int(math.ceil(ax))+3
+[?2004l[?2004h>         ylo=int(math.floor(ay))-3; yhi=int(math.ceil(ay))+3
+[?2004l[?2004h>         zlo=int(math.floor(az))-3; zhi=int(math.ceil(az))+3
+[?2004l[?2004h>         xs=np.arange(xlo,xhi+1); ys=np.arange(ylo,yhi+1); zs=np.arange(zlo,zhi+1)
+[?2004l[?2004h>         d2=(xs[:,None,None]-ax)**2+(ys[None,:,None]-ay)**2+(zs[None,None,:]-az)**2
+[?2004l[?2004h>         mask=d2 < 9.0-1e-9
+[?2004l[?2004h>         blocked[xlo-lo[0]:xhi-lo[0]+1, ylo-lo[1]:yhi-lo[1]+1, zlo-lo[2]:zhi-lo[2]+1] |= mask
+[?2004l[?2004h>     return blocked, lo, hi
+[?2004l[?2004h> 
+[?2004l[?2004h> NEI=[(dx,dy,dz,math.sqrt(dx*dx+dy*dy+dz*dz)) for dx in (-1,0,1) for dy in (-1,0,1) for dz in (-1,0,1) if not (dx==dy==dz==0)]
+[?2004l[?2004h> 
+[?2004l[?2004h> def surface_dist(P,Q,blocked,lo,hi):
+[?2004l[?2004h>     pq=math.dist(P,Q)
+[?2004l[?2004h>     if pq > 34.0+1e-9: return math.inf
+[?2004l[?2004h>     nx,ny,nz=blocked.shape
+[?2004l[?2004h>     lo0,lo1,lo2=lo; hi0,hi1,hi2=hi
+[?2004l[?2004h>     def is_open(x,y,z):
+[?2004l[?2004h>         if lo0<=x<=hi0 and lo1<=y<=hi1 and lo2<=z<=hi2:
+[?2004l[?2004h>             return not blocked[x-lo0,y-lo1,z-lo2]
+[?2004l[?2004h>         return True
+[?2004l[?2004h>     def h(x,y,z):
+[?2004l[?2004h>         d=math.dist((x,y,z),Q)
+[?2004l[?2004h>         return d-7.0 if d>7.0 else 0.0
+[?2004l[?2004h>     heap=[]; gs={}
+[?2004l[?2004h>     xlo=int(math.floor(P[0]-7.0)); xhi=int(math.ceil(P[0]+7.0))
+[?2004l[?2004h>     ylo=int(math.floor(P[1]-7.0)); yhi=int(math.ceil(P[1]+7.0))
+[?2004l[?2004h>     zlo=int(math.floor(P[2]-7.0)); zhi=int(math.ceil(P[2]+7.0))
+[?2004l[?2004h>     for x in range(xlo,xhi+1):
+[?2004l[?2004h>         for y in range(ylo,yhi+1):
+[?2004l[?2004h>             for z in range(zlo,zhi+1):
+[?2004l[?2004h>                 dp=math.dist(P,(x,y,z))
+[?2004l[?2004h>                 if dp>7.0+1e-12 or not is_open(x,y,z): continue
+[?2004l[?2004h>                 f=dp+h(x,y,z)
+[?2004l[?2004h>                 if f<=34.0+1e-9:
+[?2004l[?2004h>                     gs[(x,y,z)]=dp
+[?2004l[?2004h>                     heapq.heappush(heap,(f,dp,x,y,z))
+[?2004l[?2004h>     if not heap: return math.inf
+[?2004l[?2004h>     while heap:
+[?2004l[?2004h>         f,g,x,y,z=heapq.heappop(heap)
+[?2004l[?2004h>         if f>34.0+1e-9: break
+[?2004l[?2004h>         if g!=gs.get((x,y,z)): continue
+[?2004l[?2004h>         dq=math.dist((x,y,z),Q)
+[?2004l[?2004h>         if dq<=7.0+1e-12:
+[?2004l[?2004h>             total=g+dq
+[?2004l[?2004h>             if total<=34.0+1e-9:
+[?2004l[?2004h>                 return total
+[?2004l[?2004h>         for dx,dy,dz,step in NEI:
+[?2004l[?2004h>             xx,yy,zz=x+dx,y+dy,z+dz
+[?2004l[?2004h>             if not is_open(xx,yy,zz): continue
+[?2004l[?2004h>             ng=g+step
+[?2004l[?2004h>             if ng>34.0+1e-9: continue
+[?2004l[?2004h>             hh=h(xx,yy,zz)
+[?2004l[?2004h>             if ng+hh>34.0+1e-9: continue
+[?2004l[?2004h>             old=gs.get((xx,yy,zz))
+[?2004l[?2004h>             if old is None or ng<old-1e-12:
+[?2004l[?2004h>                 gs[(xx,yy,zz)]=ng
+[?2004l[?2004h>                 heapq.heappush(heap,(ng+hh,ng,xx,yy,zz))
+[?2004l[?2004h>     return math.inf
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     t=time.time()
+[?2004l[?2004h>     atoms,residues,chain_order=parse_model(f'{base}/models/model_01.pdb')
+[?2004l[?2004h>     print('parsed',len(atoms),'atoms',len(residues),'residues',time.time()-t)
+[?2004l[?2004h>     maps=align_chains(residues,chain_order)
+[?2004l[?2004h>     print('aligned',[(ch,maps[ch][0],len(maps[ch][1])) for ch in chain_order],time.time()-t)
+[?2004l[?2004h>     blocked,lo,hi=build_blocked(atoms)
+[?2004l[?2004h>     print('blocked shape',blocked.shape,'nblocked',blocked.sum(),'time',time.time()-t)
+[?2004l[?2004h>     # evaluate selected pairs using simple hardcoded mapping lookups
+[?2004l[?2004h>     xls=pd.read_csv(f'{base}/crosslinks.csv').head(8)
+[?2004l[?2004h>     prot_chains={}
+[?2004l[?2004h>     for ch,(pid,mp) in maps.items(): prot_chains.setdefault(pid,[]).append(ch)
+[?2004l[?2004h>     for _,row in xls.iterrows():
+[?2004l[?2004h>         pa,pb=row.protein_a,row.protein_b; ia,ib=int(row.position_a),int(row.position_b)
+[?2004l[?2004h>         combos=[]
+[?2004l[?2004h>         for ca in prot_chains[pa]:
+[?2004l[?2004h>             ka=next((k for k,v in maps[ca][1].items() if v==ia),None)
+[?2004l[?2004h>             for cb in prot_chains[pb]:
+[?2004l[?2004h>                 kb=next((k for k,v in maps[cb][1].items() if v==ib),None)
+[?2004l[?2004h>                 if ka is None or kb is None: continue
+[?2004l[?2004h>                 if ca==cb and ia==ib: continue
+[?2004l[?2004h>                 combos.append((ca,cb,ka,kb))
+[?2004l[?2004h>         best=math.inf; bestc=None
+[?2004l[?2004h>         for ca,cb,ka,kb in combos:
+[?2004l[?2004h>             d=surface_dist(residues[ka]['CA'],residues[kb]['CA'],blocked,lo,hi)
+[?2004l[?2004h>             if d<best: best=d; bestc=(ca,cb)
+[?2004l[?2004h>         print(row.xl_id,pa,ia,pb,ib,'eval',bool(combos),'surf',round(best,3) if best<math.inf else 'inf','bestchain',bestc,'time',round(time.time()-t,2))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@9ca1cbb9ff53:/task# python3 /tmp/test_surface.py
+[?2004lparsed 8708 atoms 1076 residues 0.014640331268310547
+aligned [('A', 'XLMBQL', 285), ('C', 'XLCQ5E', 253), ('B', 'XLMBQL', 285), ('D', 'XLCQ5E', 253)] 0.028261899948120117
+blocked shape (85, 118, 91) nblocked 197506 time 0.35860371589660645
+XL001 XLMBQL 139 XLMBQL 139 eval True surf 26.963 bestchain ('B', 'A') time 0.49
+XL002 XLCQ5E 166 XLMBQL 103 eval True surf inf bestchain None time 0.49
+XL003 XLCQ5E 108 XLCQ5E 108 eval True surf 19.73 bestchain ('D', 'C') time 0.51
+XL004 XLCQ5E 140 XLMBQL 261 eval True surf 18.04 bestchain ('C', 'A') time 0.51
+XL005 XLMBQL 212 XLMBQL 188 eval False surf inf bestchain None time 0.51
+XL006 XLCQ5E 214 XLCQ5E 214 eval True surf 27.191 bestchain ('C', 'D') time 0.55
+XL007 XLCQ5E 106 XLMBQL 261 eval True surf inf bestchain None time 0.57
+XL008 XLMBQL 92 XLMBQL 171 eval True surf 22.652 bestchain ('B', 'B') time 0.61
+[?2004hroot@9ca1cbb9ff53:/task# cat > /tmp/run_model01.py <<'PY'
+[?2004l[?2004h> import math, time, heapq
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> base='/task/input'
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse(f'{base}/sequences.fasta','fasta')}
+[?2004l[?2004h> EPS=1e-9; RANGE=34.0; TETHER=7.0; BLOCK_R=3.0
+[?2004l[?2004h> 
+[?2004l[?2004h> def parse_model(path):
+[?2004l[?2004h>     atoms=[]; residues={}; chain_order=[]
+[?2004l[?2004h>     for line in open(path):
+[?2004l[?2004h>         if line.startswith(('ATOM','HETATM')):
+[?2004l[?2004h>             ch=line[21]
+[?2004l[?2004h>             if ch not in chain_order: chain_order.append(ch)
+[?2004l[?2004h>             resi=int(line[22:26]); ic=line[26].strip(); name=line[12:16].strip()
+[?2004l[?2004h>             elem=line[76:78].strip() or name[0]
+[?2004l[?2004h>             x=float(line[30:38]); y=float(line[38:46]); z=float(line[46:54])
+[?2004l[?2004h>             key=(ch,resi,ic)
+[?2004l[?2004h>             if key not in residues:
+[?2004l[?2004h>                 residues[key]={'aa':m.get(line[17:20].strip(),'X'),'CA':None}
+[?2004l[?2004h>             if name=='CA': residues[key]['CA']=(x,y,z)
+[?2004l[?2004h>             if elem!='H': atoms.append((x,y,z))
+[?2004l[?2004h>     return np.array(atoms), residues, chain_order
+[?2004l[?2004h> 
+[?2004l[?2004h> def align_chains(residues, chain_order):
+[?2004l[?2004h>     aligner=Align.PairwiseAligner(); aligner.mode='global'; aligner.match_score=2; aligner.mismatch_score=-1; aligner.open_gap_score=-10; aligner.extend_gap_score=-0.5
+[?2004l[?2004h>     maps={}
+[?2004l[?2004h>     for ch in chain_order:
+[?2004l[?2004h>         keys=sorted([k for k in residues if k[0]==ch], key=lambda k:(k[1],k[2]))
+[?2004l[?2004h>         qseq=''.join(residues[k]['aa'] for k in keys)
+[?2004l[?2004h>         best=None
+[?2004l[?2004h>         for pid,s in full.items():
+[?2004l[?2004h>             al=aligner.align(s,qseq)[0]
+[?2004l[?2004h>             if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>         al,pid=best
+[?2004l[?2004h>         mp={}
+[?2004l[?2004h>         coords=al.coordinates
+[?2004l[?2004h>         for j in range(coords.shape[1]-1):
+[?2004l[?2004h>             t0,t1=coords[0,j],coords[0,j+1]; q0,q1=coords[1,j],coords[1,j+1]
+[?2004l[?2004h>             if t1-t0==q1-q0 and t1>t0:
+[?2004l[?2004h>                 for off in range(t1-t0): mp[keys[q0+off]]=t0+off+1
+[?2004l[?2004h>         maps[ch]=(pid,mp)
+[?2004l[?2004h>     return maps
+[?2004l[?2004h> 
+[?2004l[?2004h> def build_blocked(atoms):
+[?2004l[?2004h>     lo=np.floor(atoms.min(axis=0)).astype(int)-4
+[?2004l[?2004h>     hi=np.ceil(atoms.max(axis=0)).astype(int)+4
+[?2004l[?2004h>     shape=tuple((hi-lo+1).tolist())
+[?2004l[?2004h>     blocked=np.zeros(shape,dtype=bool)
+[?2004l[?2004h>     for ax,ay,az in atoms:
+[?2004l[?2004h>         xlo=int(math.floor(ax))-3; xhi=int(math.ceil(ax))+3
+[?2004l[?2004h>         ylo=int(math.floor(ay))-3; yhi=int(math.ceil(ay))+3
+[?2004l[?2004h>         zlo=int(math.floor(az))-3; zhi=int(math.ceil(az))+3
+[?2004l[?2004h>         xs=np.arange(xlo,xhi+1); ys=np.arange(ylo,yhi+1); zs=np.arange(zlo,zhi+1)
+[?2004l[?2004h>         d2=(xs[:,None,None]-ax)**2+(ys[None,:,None]-ay)**2+(zs[None,None,:]-az)**2
+[?2004l[?2004h>         blocked[xlo-lo[0]:xhi-lo[0]+1, ylo-lo[1]:yhi-lo[1]+1, zlo-lo[2]:zhi-lo[2]+1] |= (d2 < 9.0-1e-9)
+[?2004l[?2004h>     return blocked, lo, hi
+[?2004l[?2004h> 
+[?2004l[?2004h> NEI=[(dx,dy,dz,math.sqrt(dx*dx+dy*dy+dz*dz)) for dx in (-1,0,1) for dy in (-1,0,1) for dz in (-1,0,1) if not (dx==dy==dz==0)]
+[?2004l[?2004h> 
+[?2004l[?2004h> def surface_dist(P,Q,blocked,lo,hi):
+[?2004l[?2004h>     if math.dist(P,Q) > RANGE+EPS: return math.inf
+[?2004l[?2004h>     lo0,lo1,lo2=lo; hi0,hi1,hi2=hi
+[?2004l[?2004h>     def is_open(x,y,z):
+[?2004l[?2004h>         if lo0<=x<=hi0 and lo1<=y<=hi1 and lo2<=z<=hi2:
+[?2004l[?2004h>             return not blocked[x-lo0,y-lo1,z-lo2]
+[?2004l[?2004h>         return True
+[?2004l[?2004h>     heap=[]; gs={}
+[?2004l[?2004h>     xlo=int(math.floor(P[0]-TETHER)); xhi=int(math.ceil(P[0]+TETHER))
+[?2004l[?2004h>     ylo=int(math.floor(P[1]-TETHER)); yhi=int(math.ceil(P[1]+TETHER))
+[?2004l[?2004h>     zlo=int(math.floor(P[2]-TETHER)); zhi=int(math.ceil(P[2]+TETHER))
+[?2004l[?2004h>     for x in range(xlo,xhi+1):
+[?2004l[?2004h>         for y in range(ylo,yhi+1):
+[?2004l[?2004h>             for z in range(zlo,zhi+1):
+[?2004l[?2004h>                 dp=math.dist(P,(x,y,z))
+[?2004l[?2004h>                 if dp>TETHER+EPS or not is_open(x,y,z): continue
+[?2004l[?2004h>                 hq=math.dist((x,y,z),Q)
+[?2004l[?2004h>                 f=dp+hq
+[?2004l[?2004h>                 if f<=RANGE+EPS:
+[?2004l[?2004h>                     gs[(x,y,z)]=dp
+[?2004l[?2004h>                     heapq.heappush(heap,(f,dp,x,y,z))
+[?2004l[?2004h>     while heap:
+[?2004l[?2004h>         f,g,x,y,z=heapq.heappop(heap)
+[?2004l[?2004h>         if f>RANGE+EPS: break
+[?2004l[?2004h>         if g!=gs.get((x,y,z)): continue
+[?2004l[?2004h>         dq=math.dist((x,y,z),Q)
+[?2004l[?2004h>         if dq<=TETHER+EPS:
+[?2004l[?2004h>             return g+dq
+[?2004l[?2004h>         for dx,dy,dz,step in NEI:
+[?2004l[?2004h>             xx,yy,zz=x+dx,y+dy,z+dz
+[?2004l[?2004h>             if not is_open(xx,yy,zz): continue
+[?2004l[?2004h>             ng=g+step
+[?2004l[?2004h>             hq=math.dist((xx,yy,zz),Q)
+[?2004l[?2004h>             if ng+hq>RANGE+EPS: continue
+[?2004l[?2004h>             old=gs.get((xx,yy,zz))
+[?2004l[?2004h>             if old is None or ng<old-1e-12:
+[?2004l[?2004h>                 gs[(xx,yy,zz)]=ng
+[?2004l[?2004h>                 heapq.heappush(heap,(ng+hq,ng,xx,yy,zz))
+[?2004l[?2004h>     return math.inf
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     t=time.time()
+[?2004l[?2004h>     atoms,residues,chain_order=parse_model(f'{base}/models/model_01.pdb')
+[?2004l[?2004h>     maps=align_chains(residues,chain_order)
+[?2004l[?2004h>     blocked,lo,hi=build_blocked(atoms)
+[?2004l[?2004h>     prot_chains={}
+[?2004l[?2004h>     rev={}
+[?2004l[?2004h>     for ch,(pid,mp) in maps.items():
+[?2004l[?2004h>         prot_chains.setdefault(pid,[]).append(ch)
+[?2004l[?2004h>         rev[ch]={v:k for k,v in mp.items()}
+[?2004l[?2004h>     print('setup',round(time.time()-t,2),'s blocked',blocked.sum())
+[?2004l[?2004h>     xls=pd.read_csv(f'{base}/crosslinks.csv')
+[?2004l[?2004h>     cache={}
+[?2004l[?2004h>     inter_s=inter_t=intra_s=intra_t=0
+[?2004l[?2004h>     for _,row in xls.iterrows():
+[?2004l[?2004h>         pa,pb=row.protein_a,row.protein_b; ia,ib=int(row.position_a),int(row.position_b)
+[?2004l[?2004h>         chains_a=prot_chains[pa]; chains_b=prot_chains[pb]
+[?2004l[?2004h>         evaluable=False; satisfied=False
+[?2004l[?2004h>         for ca in chains_a:
+[?2004l[?2004h>             ka=rev[ca].get(ia)
+[?2004l[?2004h>             if ka is None or residues[ka]['CA'] is None: continue
+[?2004l[?2004h>             for cb in chains_b:
+[?2004l[?2004h>                 kb=rev[cb].get(ib)
+[?2004l[?2004h>                 if kb is None or residues[kb]['CA'] is None: continue
+[?2004l[?2004h>                 if ca==cb and ia==ib: continue
+[?2004l[?2004h>                 evaluable=True
+[?2004l[?2004h>                 key=tuple(sorted([(ca,ka),(cb,kb)]))
+[?2004l[?2004h>                 d=cache.get(key)
+[?2004l[?2004h>                 if d is None:
+[?2004l[?2004h>                     P=residues[ka]['CA']; Q=residues[kb]['CA']
+[?2004l[?2004h>                     if math.dist(P,Q) <= RANGE+EPS:
+[?2004l[?2004h>                         d=surface_dist(P,Q,blocked,lo,hi)
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         d=math.inf
+[?2004l[?2004h>                     cache[key]=d
+[?2004l[?2004h>                 if d<=RANGE+EPS:
+[?2004l[?2004h>                     satisfied=True; break
+[?2004l[?2004h>             if satisfied: break
+[?2004l[?2004h>         if pa!=pb:
+[?2004l[?2004h>             if evaluable:
+[?2004l[?2004h>                 inter_t+=1; inter_s+=int(satisfied)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if evaluable:
+[?2004l[?2004h>                 intra_t+=1; intra_s+=int(satisfied)
+[?2004l[?2004h>         print(row.xl_id, 'eval' if evaluable else 'noteval', 'sat' if satisfied else 'viol', 'cum',inter_s,inter_t,intra_s,intra_t,'time',round(time.time()-t,1))
+[?2004l[?2004h>     print('FINAL',inter_s,inter_t,intra_s,intra_t,'cache',len(cache),'total time',round(time.time()-t,2))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@9ca1cbb9ff53:/task# python3 /tmp/run_model01.py
+[?2004lsetup 0.27 s blocked 197506
+XL001 eval sat cum 0 0 1 1 time 0.3
+XL002 eval viol cum 0 1 1 1 time 0.3
+XL003 eval sat cum 0 1 2 2 time 0.3
+XL004 eval sat cum 1 2 2 2 time 0.3
+XL005 noteval viol cum 1 2 2 2 time 0.3
+XL006 eval sat cum 1 2 3 3 time 0.3
+XL007 eval viol cum 1 3 3 3 time 0.3
+XL008 eval sat cum 1 3 4 4 time 0.3
+XL009 eval sat cum 1 3 5 5 time 0.3
+XL010 eval sat cum 1 3 6 6 time 0.3
+XL011 eval viol cum 1 4 6 6 time 0.3
+XL012 eval sat cum 2 5 6 6 time 0.4
+XL013 eval viol cum 2 6 6 6 time 0.4
+XL014 eval viol cum 2 7 6 6 time 0.4
+XL015 eval sat cum 3 8 6 6 time 0.4
+XL016 eval sat cum 4 9 6 6 time 0.4
+XL017 noteval viol cum 4 9 6 6 time 0.4
+XL018 eval sat cum 4 9 7 7 time 0.4
+XL019 eval sat cum 4 9 8 8 time 0.4
+XL020 eval sat cum 4 9 9 9 time 0.4
+XL021 eval sat cum 4 9 10 10 time 0.4
+XL022 eval sat cum 4 9 11 11 time 0.4
+XL023 eval sat cum 4 9 12 12 time 0.4
+XL024 noteval viol cum 4 9 12 12 time 0.4
+XL025 eval viol cum 4 10 12 12 time 0.4
+XL026 eval viol cum 4 10 12 13 time 0.4
+XL027 eval sat cum 4 10 13 14 time 0.5
+XL028 eval sat cum 4 10 14 15 time 0.5
+XL029 eval sat cum 4 10 15 16 time 0.5
+XL030 noteval viol cum 4 10 15 16 time 0.5
+XL031 eval sat cum 4 10 16 17 time 0.5
+XL032 eval viol cum 4 10 16 18 time 0.5
+XL033 eval viol cum 4 11 16 18 time 0.5
+XL034 eval sat cum 4 11 17 19 time 0.5
+XL035 eval viol cum 4 11 17 20 time 0.5
+XL036 eval sat cum 4 11 18 21 time 0.5
+XL037 eval viol cum 4 11 18 22 time 0.5
+XL038 eval sat cum 5 12 18 22 time 0.5
+XL039 eval sat cum 5 12 19 23 time 0.5
+XL040 eval sat cum 5 12 20 24 time 0.5
+XL041 eval sat cum 6 13 20 24 time 0.5
+XL042 eval sat cum 7 14 20 24 time 0.5
+XL043 eval sat cum 7 14 21 25 time 0.6
+XL044 eval viol cum 7 14 21 26 time 0.6
+XL045 eval sat cum 8 15 21 26 time 0.6
+XL046 eval viol cum 8 15 21 27 time 0.6
+XL047 eval sat cum 9 16 21 27 time 0.6
+XL048 eval sat cum 9 16 22 28 time 0.6
+XL049 eval sat cum 9 16 23 29 time 0.6
+XL050 eval sat cum 10 17 23 29 time 0.6
+XL051 eval sat cum 10 17 24 30 time 0.6
+XL052 eval sat cum 10 17 25 31 time 0.6
+FINAL 10 17 25 31 cache 84 total time 0.61
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> from Bio import SeqIO, Align
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> full={r.id.split()[0]:str(r.seq) for r in SeqIO.parse('/task/input/sequences.fasta','fasta')}
+[?2004l[?2004h> aligner=Align.PairwiseAligner(); aligner.mode='global'; aligner.match_score=2; aligner.mismatch_score=-1; aligner.open_gap_score=-10; aligner.extend_gap_score=-0.5
+[?2004l[?2004h> for n in range(1,18):
+[?2004l[?2004h>     path=f'/task/input/models/model_{n:02d}.pdb'
+[?2004l[?2004h>     chains={}
+[?2004l[?2004h>     for line in open(path):
+[?2004l[?2004h>         if line.startswith('ATOM') and line[12:16].strip()=='CA':
+[?2004l[?2004h>             ch=line[21]; resi=int(line[22:26]); ic=line[26].strip(); aa=m.get(line[17:20].strip(),'X')
+[?2004l[?2004h>             chains.setdefault(ch,[]).append((resi,ic,aa))
+[?2004l[?2004h>     print('model_%02d'%n, end=' ')
+[?2004l[?2004h>     for ch,keys in chains.items():
+[?2004l[?2004h>         qseq=''.join(x[2] for x in keys)
+[?2004l[?2004h>         best=None
+[?2004l[?2004h>         for pid,s in full.items():
+[?2004l[?2004h>             al=aligner.align(s,qseq)[0]
+[?2004l[?2004h>             if best is None or al.score>best[0].score: best=(al,pid)
+[?2004l[?2004h>         al,pid=best
+[?2004l[?2004h>         coords=al.coordinates
+[?2004l[?2004h>         mapped=0; mismatch=0; gaps=0; ranges=[]
+[?2004l[?2004h>         for j in range(coords.shape[1]-1):
+[?2004l[?2004h>             t0,t1=coords[0,j],coords[0,j+1]; q0,q1=coords[1,j],coords[1,j+1]
+[?2004l[?2004h>             if t1-t0==q1-q0 and t1>t0:
+[?2004l[?2004h>                 mapped += t1-t0
+[?2004l[?2004h>                 ranges.append((t0+1,t1))
+[?2004l[?2004h>                 for off in range(t1-t0):
+[?2004l[?2004h>                     if s[t0+off]!=qseq[q0+off]: mismatch+=1
+[?2004l[?2004h>             elif t1>t0 and q1==q0:
+[?2004l[?2004h>                 gaps += t1-t0
+[?2004l[?2004h>         print(f'{ch}:{pid}:mapped{mapped}:gaps{gaps}:mm{mismatch}:ranges{ranges[:2]}', end=' | ')
+[?2004l[?2004h>     print()
+[?2004l[?2004h> PY
+[?2004lmodel_01 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_02 A:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_03 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_04 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_05 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_06 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_07 B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | E:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_08 A:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_09 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_10 A:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_11 A:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_12 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_13 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_14 A:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_15 B:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | D:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | E:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | 
+model_16 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+model_17 A:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | C:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | B:XLMBQL:mapped285:gaps96:mm0:ranges[(np.int64(84), np.int64(175)), (np.int64(189), np.int64(381))] | D:XLCQ5E:mapped253:gaps93:mm235:ranges[(np.int64(87), np.int64(235)), (np.int64(243), np.int64(346))] | 
+[?2004hroot@9ca1cbb9ff53:/task# cat > /tmp/run_all.py <<'PY'
+[?2004l[?2004h> import sys, math, json, time
+[?2004l[?2004h> sys.path.insert(0, '/tmp')
+[?2004l[?2004h> import run_model01 as r
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> base = '/task/input'
+[?2004l[?2004h> out = '/task/output'
+[?2004l[?2004h> xls = pd.read_csv(f'{base}/crosslinks.csv')
+[?2004l[?2004h> models = [f'model_{i:02d}' for i in range(1, 18)]
+[?2004l[?2004h> res_rows = []
+[?2004l[?2004h> status_rows = []
+[?2004l[?2004h> totals = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> for model in models:
+[?2004l[?2004h>     t0 = time.time()
+[?2004l[?2004h>     atoms, residues, chain_order = r.parse_model(f'{base}/models/{model}.pdb')
+[?2004l[?2004h>     maps = r.align_chains(residues, chain_order)
+[?2004l[?2004h>     blocked, lo, hi = r.build_blocked(atoms)
+[?2004l[?2004h> 
+[?2004l[?2004h>     prot_chains = {}
+[?2004l[?2004h>     rev = {}
+[?2004l[?2004h>     for ch, (pid, mp) in maps.items():
+[?2004l[?2004h>         prot_chains.setdefault(pid, []).append(ch)
+[?2004l[?2004h>         rev[ch] = {v: k for k, v in mp.items()}
+[?2004l[?2004h> 
+[?2004l[?2004h>     counts = {'inter_s': 0, 'inter_t': 0, 'intra_s': 0, 'intra_t': 0}
+[?2004l[?2004h>     cache = {}
+[?2004l[?2004h> 
+[?2004l[?2004h>     for _, row in xls.iterrows():
+[?2004l[?2004h>         pa, pb = row.protein_a, row.protein_b
+[?2004l[?2004h>         ia, ib = int(row.position_a), int(row.position_b)
+[?2004l[?2004h>         evaluable = False
+[?2004l[?2004h>         satisfied = False
+[?2004l[?2004h> 
+[?2004l[?2004h>         for ca in prot_chains.get(pa, []):
+[?2004l[?2004h>             ka = rev[ca].get(ia)
+[?2004l[?2004h>             if ka is None or residues[ka]['CA'] is None:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             ca_xyz = residues[ka]['CA']
+[?2004l[?2004h>             for cb in prot_chains.get(pb, []):
+[?2004l[?2004h>                 kb = rev[cb].get(ib)
+[?2004l[?2004h>                 if kb is None or residues[kb]['CA'] is None:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 if ca == cb and ia == ib:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 evaluable = True
+[?2004l[?2004h>                 key = tuple(sorted(((ca, ka), (cb, kb))))
+[?2004l[?2004h>                 d = cache.get(key)
+[?2004l[?2004h>                 if d is None:
+[?2004l[?2004h>                     cb_xyz = residues[kb]['CA']
+[?2004l[?2004h>                     if math.dist(ca_xyz, cb_xyz) <= r.RANGE + r.EPS:
+[?2004l[?2004h>                         d = r.surface_dist(ca_xyz, cb_xyz, blocked, lo, hi)
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         d = math.inf
+[?2004l[?2004h>                     cache[key] = d
+[?2004l[?2004h>                 if d <= r.RANGE + r.EPS:
+[?2004l[?2004h>                     satisfied = True
+[?2004l[?2004h>                     break
+[?2004l[?2004h>             if satisfied:
+[?2004l[?2004h>                 break
+[?2004l[?2004h> 
+[?2004l[?2004h>         if pa != pb:
+[?2004l[?2004h>             if evaluable:
+[?2004l[?2004h>                 counts['inter_t'] += 1
+[?2004l[?2004h>                 counts['inter_s'] += int(satisfied)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if evaluable:
+[?2004l[?2004h>                 counts['intra_t'] += 1
+[?2004l[?2004h>                 counts['intra_s'] += int(satisfied)
+[?2004l[?2004h> 
+[?2004l[?2004h>         status = 'not_evaluable' if not evaluable else ('satisfied' if satisfied else 'violated')
+[?2004l[?2004h>         status_rows.append((model, row.xl_id, status))
+[?2004l[?2004h> 
+[?2004l[?2004h>     total = counts['inter_s'] + counts['intra_s']
+[?2004l[?2004h>     totals[model] = total
+[?2004l[?2004h>     res_rows.append((model, counts['inter_s'], counts['inter_t'], counts['intra_s'], counts['intra_t']))
+[?2004l[?2004h>     print(model, counts, 'total', total, 'time', round(time.time() - t0, 2), flush=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(f'{out}/restraints.tsv', 'w') as f:
+[?2004l[?2004h>     f.write('model\tinter_satisfied\tinter_total\tintra_satisfied\tintra_total\n')
+[?2004l[?2004h>     for row in res_rows:
+[?2004l[?2004h>         f.write('\t'.join(map(str, row)) + '\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> with open(f'{out}/link_status.tsv', 'w') as f:
+[?2004l[?2004h>     f.write('model\txl_id\tstatus\n')
+[?2004l[?2004h>     for row in status_rows:
+[?2004l[?2004h>         f.write('\t'.join(map(str, row)) + '\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> ranking = sorted(models, key=lambda m: (-totals[m], m))
+[?2004l[?2004h> with open(f'{out}/selection.json', 'w') as f:
+[?2004l[?2004h>     json.dump({'best_model': ranking[0], 'ranking': ranking}, f)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('BEST', ranking[0], totals[ranking[0]])
+[?2004l[?2004h> print('ranking', ranking)
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@9ca1cbb9ff53:/task# python3 /tmp/run_all.py
+[?2004lmodel_01 {'inter_s': 10, 'inter_t': 17, 'intra_s': 25, 'intra_t': 31} total 35 time 0.51
+model_02 {'inter_s': 10, 'inter_t': 17, 'intra_s': 22, 'intra_t': 31} total 32 time 0.44
+model_03 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.48
+model_04 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.42
+model_05 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.45
+model_06 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.46
+model_07 {'inter_s': 13, 'inter_t': 17, 'intra_s': 26, 'intra_t': 31} total 39 time 0.51
+model_08 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.53
+model_09 {'inter_s': 13, 'inter_t': 17, 'intra_s': 26, 'intra_t': 31} total 39 time 0.48
+model_10 {'inter_s': 11, 'inter_t': 17, 'intra_s': 23, 'intra_t': 31} total 34 time 0.51
+model_11 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.48
+model_12 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.54
+model_13 {'inter_s': 10, 'inter_t': 17, 'intra_s': 20, 'intra_t': 31} total 30 time 0.56
+model_14 {'inter_s': 13, 'inter_t': 17, 'intra_s': 26, 'intra_t': 31} total 39 time 0.72
+model_15 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.46
+model_16 {'inter_s': 10, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 31 time 0.48
+model_17 {'inter_s': 14, 'inter_t': 17, 'intra_s': 21, 'intra_t': 31} total 35 time 0.41
+BEST model_07 39
+ranking ['model_07', 'model_09', 'model_14', 'model_01', 'model_17', 'model_10', 'model_02', 'model_03', 'model_04', 'model_05', 'model_06', 'model_08', 'model_11', 'model_12', 'model_15', 'model_16', 'model_13']
+[?2004hroot@9ca1cbb9ff53:/task# cat /task/output/restraints.tsv
+[?2004lmodel	inter_satisfied	inter_total	intra_satisfied	intra_total
+model_01	10	17	25	31
+model_02	10	17	22	31
+model_03	10	17	21	31
+model_04	10	17	21	31
+model_05	10	17	21	31
+model_06	10	17	21	31
+model_07	13	17	26	31
+model_08	10	17	21	31
+model_09	13	17	26	31
+model_10	11	17	23	31
+model_11	10	17	21	31
+model_12	10	17	21	31
+model_13	10	17	20	31
+model_14	13	17	26	31
+model_15	10	17	21	31
+model_16	10	17	21	31
+model_17	14	17	21	31
+[?2004hroot@9ca1cbb9ff53:/task# cat /task/output/selection.json
+[?2004l{"best_model": "model_07", "ranking": ["model_07", "model_09", "model_14", "model_01", "model_17", "model_10", "model_02", "model_03", "model_04", "model_05", "model_06", "model_08", "model_11", "model_12", "model_15", "model_16", "model_13"]}[?2004hroot@9ca1cbb9ff53:/task# wc -l /task/output/restraints.tsv /task/output/link_status.tsv && head -n 5 /task/output/link_status.tsv && tail -n 5 /task/output/link_status.tsv
+[?2004l   18 /task/output/restraints.tsv
+  885 /task/output/link_status.tsv
+  903 total
+model	xl_id	status
+model_01	XL001	satisfied
+model_01	XL002	violated
+model_01	XL003	satisfied
+model_01	XL004	satisfied
+model_17	XL048	satisfied
+model_17	XL049	satisfied
+model_17	XL050	satisfied
+model_17	XL051	satisfied
+model_17	XL052	satisfied
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> x=pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> print('rows',len(x),'inter rows', (x.protein_a!=x.protein_b).sum(),'intra rows',(x.protein_a==x.protein_b).sum())
+[?2004l[?2004h> for kind,mask in [('inter',x.protein_a!=x.protein_b),('intra',x.protein_a==x.protein_b)]:
+[?2004l[?2004h>     print(kind, x[mask].xl_id.tolist())
+[?2004l[?2004h> ls=pd.read_csv('/task/output/link_status.tsv',sep='\t')
+[?2004l[?2004h> print('status rows',len(ls),'models',ls.model.nunique(),'xls',ls.xl_id.nunique())
+[?2004l[?2004h> print(ls.groupby(['model','status']).size().unstack(fill_value=0))
+[?2004l[?2004h> PY
+[?2004lrows 52 inter rows 19 intra rows 33
+inter ['XL002', 'XL004', 'XL007', 'XL011', 'XL012', 'XL013', 'XL014', 'XL015', 'XL016', 'XL017', 'XL025', 'XL030', 'XL033', 'XL038', 'XL041', 'XL042', 'XL045', 'XL047', 'XL050']
+intra ['XL001', 'XL003', 'XL005', 'XL006', 'XL008', 'XL009', 'XL010', 'XL018', 'XL019', 'XL020', 'XL021', 'XL022', 'XL023', 'XL024', 'XL026', 'XL027', 'XL028', 'XL029', 'XL031', 'XL032', 'XL034', 'XL035', 'XL036', 'XL037', 'XL039', 'XL040', 'XL043', 'XL044', 'XL046', 'XL048', 'XL049', 'XL051', 'XL052']
+status rows 884 models 17 xls 52
+status    not_evaluable  satisfied  violated
+model                                       
+model_01              4         35        13
+model_02              4         32        16
+model_03              4         31        17
+model_04              4         31        17
+model_05              4         31        17
+model_06              4         31        17
+model_07              4         39         9
+model_08              4         31        17
+model_09              4         39         9
+model_10              4         34        14
+model_11              4         31        17
+model_12              4         31        17
+model_13              4         30        18
+model_14              4         39         9
+model_15              4         31        17
+model_16              4         31        17
+model_17              4         35        13
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, json
+[?2004l[?2004h> base='/task/output'
+[?2004l[?2004h> res=pd.read_csv(f'{base}/restraints.tsv',sep='\t')
+[?2004l[?2004h> ls=pd.read_csv(f'{base}/link_status.tsv',sep='\t')
+[?2004l[?2004h> print('restraints columns',res.columns.tolist())
+[?2004l[?2004h> print('link_status columns',ls.columns.tolist())
+[?2004l[?2004h> assert res.columns.tolist()==['model','inter_satisfied','inter_total','intra_satisfied','intra_total']
+[?2004l[?2004h> assert ls.columns.tolist()==['model','xl_id','status']
+[?2004l[?2004h> assert len(res)==17
+[?2004l[?2004h> assert len(ls)==17*52
+[?2004l[?2004h> assert ls.model.nunique()==17 and ls.xl_id.nunique()==52
+[?2004l[?2004h> assert set(ls.status.unique()) <= {'satisfied','violated','not_evaluable'}
+[?2004l[?2004h> assert res[['inter_satisfied','inter_total','intra_satisfied','intra_total']].applymap(lambda x: isinstance(x,(int,)) or (hasattr(x,'item') and isinstance(x.item(),int))).all().all()
+[?2004l[?2004h> for _,row in res.iterrows():
+[?2004l[?2004h>     sub=ls[ls.model==row.model]
+[?2004l[?2004h>     inter_total=(sub.xl_id.str.startswith('XL')).sum()
+[?2004l[?2004h>     inter_s=(sub.status=='satisfied').sum()
+[?2004l[?2004h>     # derive class from xl IDs using input crosslinks
+[?2004l[?2004h>     xl=pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h>     inter_ids=set(xl.loc[xl.protein_a!=xl.protein_b,'xl_id'])
+[?2004l[?2004h>     intra_ids=set(xl.loc[xl.protein_a==xl.protein_b,'xl_id'])
+[?2004l[?2004h>     si=sub[sub.xl_id.isin(inter_ids)]
+[?2004l[?2004h>     sa=sub[sub.xl_id.isin(intra_ids)]
+[?2004l[?2004h>     assert (si.status!='not_evaluable').sum()==row.inter_total
+[?2004l[?2004h>     assert (sa.status!='not_evaluable').sum()==row.intra_total
+[?2004l[?2004h>     assert (si.status=='satisfied').sum()==row.inter_satisfied
+[?2004l[?2004h>     assert (sa.status=='satisfied').sum()==row.intra_satisfied
+[?2004l[?2004h> print('cross-file consistency OK')
+[?2004l[?2004h> sel=json.load(open(f'{base}/selection.json'))
+[?2004l[?2004h> print('selection',sel)
+[?2004l[?2004h> assert set(sel)=={'best_model','ranking'}
+[?2004l[?2004h> assert len(sel['ranking'])==17 and set(sel['ranking'])==set(res.model)
+[?2004l[?2004h> assert sel['ranking'][0]==sel['best_model']
+[?2004l[?2004h> print('selection validation OK')
+[?2004l[?2004h> PY
+[?2004lrestraints columns ['model', 'inter_satisfied', 'inter_total', 'intra_satisfied', 'intra_total']
+link_status columns ['model', 'xl_id', 'status']
+Traceback (most recent call last):
+  File "<stdin>", line 13, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 6434, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'applymap'
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, json
+[?2004l[?2004h> base='/task/output'
+[?2004l[?2004h> res=pd.read_csv(f'{base}/restraints.tsv',sep='\t')
+[?2004l[?2004h> ls=pd.read_csv(f'{base}/link_status.tsv',sep='\t')
+[?2004l[?2004h> xl=pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> assert res.columns.tolist()==['model','inter_satisfied','inter_total','intra_satisfied','intra_total']
+[?2004l[?2004h> assert ls.columns.tolist()==['model','xl_id','status']
+[?2004l[?2004h> assert len(res)==17 and len(ls)==17*52
+[?2004l[?2004h> assert ls.model.nunique()==17 and ls.xl_id.nunique()==52
+[?2004l[?2004h> assert set(ls.status.unique()) <= {'satisfied','violated','not_evaluable'}
+[?2004l[?2004h> assert all(str(res[c].dtype).startswith('int') for c in res.columns[1:])
+[?2004l[?2004h> inter_ids=set(xl.loc[xl.protein_a!=xl.protein_b,'xl_id'])
+[?2004l[?2004h> intra_ids=set(xl.loc[xl.protein_a==xl.protein_b,'xl_id'])
+[?2004l[?2004h> for _,row in res.iterrows():
+[?2004l[?2004h>     sub=ls[ls.model==row.model]
+[?2004l[?2004h>     si=sub[sub.xl_id.isin(inter_ids)]
+[?2004l[?2004h>     sa=sub[sub.xl_id.isin(intra_ids)]
+[?2004l[?2004h>     assert (si.status!='not_evaluable').sum()==row.inter_total
+[?2004l[?2004h>     assert (sa.status!='not_evaluable').sum()==row.intra_total
+[?2004l[?2004h>     assert (si.status=='satisfied').sum()==row.inter_satisfied
+[?2004l[?2004h>     assert (sa.status=='satisfied').sum()==row.intra_satisfied
+[?2004l[?2004h> print('cross-file consistency OK')
+[?2004l[?2004h> sel=json.load(open(f'{base}/selection.json'))
+[?2004l[?2004h> assert set(sel)=={'best_model','ranking'}
+[?2004l[?2004h> assert len(sel['ranking'])==17 and set(sel['ranking'])==set(res.model)
+[?2004l[?2004h> assert sel['ranking'][0]==sel['best_model']
+[?2004l[?2004h> totals={m:int(r.inter_satisfied+r.intra_satisfied) for m,r in res.set_index('model').iterrows()}
+[?2004l[?2004h> assert all(totals[m]>=totals[n] for m,n in zip(sel['ranking'],sel['ranking'][1:]))
+[?2004l[?2004h> print('selection validation OK')
+[?2004l[?2004h> print(res.to_string(index=False))
+[?2004l[?2004h> PY
+[?2004lcross-file consistency OK
+selection validation OK
+   model  inter_satisfied  inter_total  intra_satisfied  intra_total
+model_01               10           17               25           31
+model_02               10           17               22           31
+model_03               10           17               21           31
+model_04               10           17               21           31
+model_05               10           17               21           31
+model_06               10           17               21           31
+model_07               13           17               26           31
+model_08               10           17               21           31
+model_09               13           17               26           31
+model_10               11           17               23           31
+model_11               10           17               21           31
+model_12               10           17               21           31
+model_13               10           17               20           31
+model_14               13           17               26           31
+model_15               10           17               21           31
+model_16               10           17               21           31
+model_17               14           17               21           31
+[?2004hroot@9ca1cbb9ff53:/task# python3 - <<'PY'
+[?2004l[?2004h> import sys, math, heapq
+[?2004l[?2004h> sys.path.insert(0,'/tmp')
+[?2004l[?2004h> import run_model01 as r
+[?2004l[?2004h> from Bio.Data.PDBData import protein_letters_3to1_extended as m
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> base='/task/input'
+[?2004l[?2004h> atoms,residues,chain_order=r.parse_model(f'{base}/models/model_01.pdb')
+[?2004l[?2004h> maps=r.align_chains(residues,chain_order)
+[?2004l[?2004h> blocked,lo,hi=r.build_blocked(atoms)
+[?2004l[?2004h> 
+[?2004l[?2004h> prot_chains={}; rev={}
+[?2004l[?2004h> for ch,(pid,mp) in maps.items():
+[?2004l[?2004h>     prot_chains.setdefault(pid,[]).append(ch)
+[?2004l[?2004h>     rev[ch]={v:k for k,v in mp.items()}
+[?2004l[?2004h> 
+[?2004l[?2004h> xl=pd.read_csv(f'{base}/crosslinks.csv').set_index('xl_id')
+[?2004l[?2004h> 
+[?2004l[?2004h> def dijkstra(P,Q):
+[?2004l[?2004h>     if math.dist(P,Q)>r.RANGE+r.EPS: return math.inf
+[?2004l[?2004h>     def is_open(x,y,z):
+[?2004l[?2004h>         return not (lo[0]<=x<=hi[0] and lo[1]<=y<=hi[1] and lo[2]<=z<=hi[2] and blocked[x-lo[0],y-lo[1],z-lo[2]])
+[?2004l[?2004h>     gs={}; heap=[]
+[?2004l[?2004h>     for x in range(math.floor(P[0]-7), math.ceil(P[0]+7)+1):
+[?2004l[?2004h>         for y in range(math.floor(P[1]-7), math.ceil(P[1]+7)+1):
+[?2004l[?2004h>             for z in range(math.floor(P[2]-7), math.ceil(P[2]+7)+1):
+[?2004l[?2004h>                 if not is_open(x,y,z): continue
+[?2004l[?2004h>                 d=math.dist(P,(x,y,z))
+[?2004l[?2004h>                 if d<=7+r.EPS:
+[?2004l[?2004h>                     gs[(x,y,z)]=d; heapq.heappush(heap,(d,x,y,z))
+[?2004l[?2004h>     best=math.inf
+[?2004l[?2004h>     while heap:
+[?2004l[?2004h>         g,x,y,z=heapq.heappop(heap)
+[?2004l[?2004h>         if g!=gs.get((x,y,z)): continue
+[?2004l[?2004h>         if g>r.RANGE+r.EPS: break
+[?2004l[?2004h>         dq=math.dist((x,y,z),Q)
+[?2004l[?2004h>         if dq<=7+r.EPS:
+[?2004l[?2004h>             best=min(best,g+dq)
+[?2004l[?2004h>         for dx,dy,dz,step in r.NEI:
+[?2004l[?2004h>             xx,yy,zz=x+dx,y+dy,z+dz
+[?2004l[?2004h>             if not is_open(xx,yy,zz): continue
+[?2004l[?2004h>             ng=g+step
+[?2004l[?2004h>             if ng>r.RANGE+r.EPS: continue
+[?2004l[?2004h>             if ng+math.dist((xx,yy,zz),Q)>r.RANGE+r.EPS: continue
+[?2004l[?2004h>             if ng<gs.get((xx,yy,zz),1e99)-1e-12:
+[?2004l[?2004h>                 gs[(xx,yy,zz)]=ng; heapq.heappush(heap,(ng,xx,yy,zz))
+[?2004l[?2004h>     return best
+[?2004l[?2004h> 
+[?2004l[?2004h> for xid, ca, posa, cb, posb in [
+[?2004l[?2004h>     ('XL001','B',139,'A',139),
+[?2004l[?2004h>     ('XL004','C',140,'A',261),
+[?2004l[?2004h>     ('XL007','D',106,'B',261),
+[?2004l[?2004h>     ('XL013','B',261,'D',203),
+[?2004l[?2004h>     ('XL008','A',92,'A',171),
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     ka=rev[ca][posa]; kb=rev[cb][posb]
+[?2004l[?2004h>     P=residues[ka]['CA']; Q=residues[kb]['CA']
+[?2004l[?2004h>     astar=r.surface_dist(P,Q,blocked,lo,hi)
+[?2004l[?2004h>     dij=dijkstra(P,Q)
+[?2004l[?2004h>     print(xid,ca,posa,cb,posb,'astar',astar,'dijkstra',dij,'diff',abs(astar-dij) if math.isfinite(astar) and math.isfinite(dij) else None)
+[?2004l[?2004h> PY
+[?2004lXL001 B 139 A 139 astar 26.962638372494037 dijkstra 26.962638372494037 diff 0.0
+XL004 C 140 A 261 astar 17.859051886346776 dijkstra 17.859051886346776 diff 0.0
+XL007 D 106 B 261 astar inf dijkstra inf diff None
+XL013 B 261 D 203 astar inf dijkstra inf diff None
+XL008 A 92 A 171 astar 22.681701345373654 dijkstra 22.681701345373654 diff 0.0
+[?2004hroot@9ca1cbb9ff53:/task# 

@@ -1,0 +1,1585 @@
+[?2004hroot@de027e2e2b14:/task# find /task -type f | head -50
+[?2004l/task/input/reference_genes.tsv
+/task/input/samples.tsv
+/task/input/handover/hits_mailed.tsv
+/task/input/handover/count_guides.py
+/task/input/handover/analyse_screen.py
+/task/input/handover/counts_draft.tsv
+/task/input/handover/HANDOVER.md
+/task/input/handover/gene_draft.tsv
+/task/input/library.tsv
+/task/input/fastq/LIB14.fastq.gz
+/task/input/fastq/LIB11.fastq.gz
+/task/input/fastq/LIB12.fastq.gz
+/task/input/fastq/LIB15.fastq.gz
+/task/input/fastq/LIB9.fastq.gz
+/task/input/fastq/LIB13.fastq.gz
+/task/input/fastq/LIB8.fastq.gz
+/task/input/fastq/LIB10.fastq.gz
+/task/input/screen_sop.md
+/task/input/screen_design.md
+/task/software/README.txt
+[?2004hroot@de027e2e2b14:/task# cat /task/input/samples.tsv
+[?2004lsample_id	arm	replicate	fastq_file	sequencing_run
+LIB8	T0	1	LIB8.fastq.gz	A
+LIB9	T0	2	LIB9.fastq.gz	A
+LIB10	vehicle	1	LIB10.fastq.gz	A
+LIB11	vehicle	2	LIB11.fastq.gz	A
+LIB12	vehicle	3	LIB12.fastq.gz	A
+LIB13	drug	1	LIB13.fastq.gz	A
+LIB14	drug	2	LIB14.fastq.gz	A
+LIB15	drug	3	LIB15.fastq.gz	B
+[?2004hroot@de027e2e2b14:/task# cat /task/input/screen_design.md
+[?2004l# Screen design notes (wet lab)
+
+- Cells: Cas9-stable clone (identity blinded by the client), lentiviral infection at MOI ~0.3, 500x library coverage until the arms were split.
+- Library: VAL-2 secondary validation library in lentiGuide-Puro. 190 genes carried forward as candidate fitness genes from the primary genome-wide dropout screen and 40 genes picked as putative neutral; 4 sgRNAs per gene, plus 80 non-targeting sgRNAs. The reference genes for the compound class are part of these genes.
+- Arms: T0 = day 3 after puromycin selection (2 replicates). The culture was then split into a vehicle arm (DMSO, 3 replicates) and a drug arm (compound at IC70, 3 replicates), both harvested 14 days later.
+- Harvest: vehicle arm about 150000 cells per replicate went into the gDNA prep (about 150 cells per sgRNA). The drug arm was limited by the treatment: all surviving cells were taken, about 25000 per replicate (about 25 per sgRNA).
+- gDNA PCR: one-step PCR with the P5 stagger primer mix (8 forward primers, 0-7 nt stagger) and one P7 index primer per library.
+- Amplicon, sense strand 5'->3': ...TCTTGTGGAAAGGACGAAACACCG [20-nt spacer] GTTTTAGAGCTAGAAATAGCAAGTTAAAAT... (sgRNA scaffold).
+- Sequencing run A: NextSeq 550, 75-cycle single read.
+- LIB15 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
+- The day-14 gDNA tubes were re-racked when the -20 freezer was replaced; the sample sheet was filled in from the new rack positions.
+[?2004hroot@de027e2e2b14:/task# cat /task/input/screen_sop.md
+[?2004l# SOP FG-017: pooled CRISPR drug-modifier screens, analysis and release (rev. 4)
+
+## 1. Scope
+Secondary (validation) knockout screens with a T0 reference, a vehicle arm and a drug arm. This
+SOP defines the quantities of a released analysis. It does not prescribe software.
+
+## 2. Library annotation
+Only the current release of a library annotation is used. For VAL-2 this is release 2
+(`library.tsv`). Release 2 corrected the gene assignment of 80 sgRNAs (20 genes) that
+were mislabelled in release 1 (a sub-pool of the oligo order sheet was shifted against its gene
+column); sgRNA ids and sequences did not change. Release 1 is withdrawn.
+
+## 3. Counting
+- A read is counted for an sgRNA if it carries that sgRNA's spacer in the amplicon context
+  described in the wet-lab notes. Every library of the sample sheet is counted and reported.
+
+## 4. Scales
+Log2 fold changes are reported on the scale on which the non-targeting sgRNAs do not change
+(median non-targeting sgRNA = 0). The fitness effect is vehicle day 14 against T0. The drug effect
+is drug day 14 against vehicle day 14; negative values mean depletion under drug.
+
+## 5. Erratum
+If results have left the facility, an erratum lists every gene of the mailed list with one verdict:
+`confirmed` if the gene is a modifier (either class) in the released analysis, `retracted` if not.
+[?2004hroot@de027e2e2b14:/task# cat /task/input/handover/HANDOVER.md
+[?2004l# Hand-over, VAL-2 drug screen (K.B.)
+
+Sorry for the state of this, my last week was short.
+
+- `count_guides.py` - my counting script. `counts_draft.tsv` is its output for the eight libraries.
+- `analyse_screen.py` - gene table and hit list from a count table and the sample sheet.
+  `gene_draft.tsv` and `hits_mailed.tsv` are its output for `counts_draft.tsv`.
+- `hits_mailed.tsv` went to the PI by mail on Friday as "top 40 modifier candidates". Nobody has
+  ordered reagents on it yet as far as I know.
+
+Reads assigned per library in `counts_draft.tsv`:
+
+- LIB8: 99717
+- LIB9: 106565
+- LIB10: 114203
+- LIB11: 103010
+- LIB12: 110250
+- LIB13: 109237
+- LIB14: 114795
+- LIB15: 0
+
+Not done: the reference genes, anything on the re-sequenced library beyond counting it
+the way the script does. I used the dropout workflow we always use and adapted it for two arms.
+[?2004hroot@de027e2e2b14:/task# cat /task/input/handover/count_guides.py
+[?2004l#!/usr/bin/env python3
+"""count_guides.py - sgRNA read counts for the VAL-2 screens (K.B.)
+
+usage: count_guides.py LIBRARY.tsv SAMPLES.tsv OUT.tsv FASTQ [FASTQ ...]
+
+One FASTQ per row of the sample sheet, given in the same order as the rows.
+Only exact matches to a library spacer are counted.
+"""
+import gzip
+import sys
+
+COMP = str.maketrans("ACGTN", "TGCAN")
+SCAFFOLD = "GTTTTAGAGCTA"
+
+
+def revcomp(s):
+    return s.translate(COMP)[::-1]
+
+def candidates(read):
+    # the spacer is the 20 nt in front of the scaffold
+    k = read.find(SCAFFOLD)
+    if k >= 20:
+        yield read[k - 20:k]
+
+
+def main():
+    lib_path, sheet_path, out_path = sys.argv[1:4]
+    fastqs = sys.argv[4:]
+    guides, by_seq = [], {}
+    with open(lib_path) as fh:
+        head = fh.readline().rstrip("\n").split("\t")
+        i_id, i_seq, i_gene = head.index("sgRNA"), head.index("sequence"), head.index("gene")
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            by_seq[f[i_seq]] = len(guides)
+            guides.append((f[i_id], f[i_gene]))
+    with open(sheet_path) as fh:
+        fh.readline()
+        samples = [line.split("\t")[0] for line in fh if line.strip()]
+    if len(fastqs) != len(samples):
+        sys.exit("need one FASTQ per sample sheet row")
+    counts = [[0] * len(samples) for _ in guides]
+    for j, path in enumerate(fastqs):
+        with gzip.open(path, "rt") as fh:
+            for n, line in enumerate(fh):
+                if n % 4 != 1:
+                    continue
+                for spacer in candidates(line.rstrip()):
+                    k = by_seq.get(spacer)
+                    if k is not None:
+                        counts[k][j] += 1
+                        break
+    with open(out_path, "w") as out:
+        out.write("sgRNA\tgene\t" + "\t".join(samples) + "\n")
+        for (sg, gene), row in zip(guides, counts):
+            out.write(sg + "\t" + gene + "\t" + "\t".join(map(str, row)) + "\n")
+
+
+if __name__ == "__main__":
+    main()
+[?2004hroot@de027e2e2b14:/task# cat /task/input/handover/analyse_screen.py
+[?2004l#!/usr/bin/env python3
+"""analyse_screen.py - gene table and hit list for the VAL-2 drug screen (K.B.)
+
+usage: analyse_screen.py COUNTS.tsv SAMPLES.tsv OUT_GENES.tsv OUT_HITS.tsv
+"""
+import sys
+
+import numpy as np
+
+TOP = 40                             # genes that go into the hit list
+counts_path, sheet_path, out_genes, out_hits = sys.argv[1:5]
+
+rows = [line.rstrip("\n").split("\t") for line in open(counts_path) if line.strip()]
+cols, rows = rows[0][2:], rows[1:]
+gene = np.array([r[1] for r in rows])
+C = np.array([[float(v) for v in r[2:]] for r in rows])
+arm = {}
+for line in list(open(sheet_path))[1:]:
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 1:
+        arm[f[0]] = f[1]
+
+keep = [j for j in range(len(cols)) if C[:, j].sum() > 0]        # a library without reads is left out
+t0 = [j for j in keep if arm[cols[j]] == "T0"]
+veh = [j for j in keep if arm[cols[j]] == "vehicle"]
+drug = [j for j in keep if arm[cols[j]] == "drug"]
+ntc = gene == "NON_TARGETING"
+
+# size factors: median of ratios to the geometric mean, all sgRNAs
+size = np.ones(len(cols))
+with np.errstate(divide="ignore", invalid="ignore"):
+    logc = np.log(np.where(C[:, keep] > 0, C[:, keep], np.nan))
+    size[keep] = np.exp(np.nanmedian(logc - np.nanmean(logc, axis=1, keepdims=True), axis=0))
+N = C / size
+
+
+def lfc(a, b):
+    return np.log2((N[:, a].mean(axis=1) + 0.5) / (N[:, b].mean(axis=1) + 0.5))
+
+
+fit = lfc(veh, t0)
+drg = lfc(drug, veh)
+
+# gene level: median over the sgRNAs; z against the spread of the non-targeting sgRNAs
+null_sd = np.std(drg[ntc]) / 2.0          # a gene is the median of four sgRNAs
+table = []
+for g in sorted(set(gene[~ntc])):
+    m = gene == g
+    lf, ld = float(np.median(fit[m])), float(np.median(drg[m]))
+    z = ld / null_sd
+    cls = "none" if abs(z) < 3 else ("sensitiser" if z < 0 else "resistance")
+    table.append((g, lf, ld, z, cls))
+
+with open(out_genes, "w") as out:
+    out.write("gene\tlfc_fitness\tlfc_drug\tz_drug\tdrug_class\n")
+    for g, lf, ld, z, cls in table:
+        out.write("%s\t%.4f\t%.4f\t%.2f\t%s\n" % (g, lf, ld, z, cls))
+
+with open(out_hits, "w") as out:
+    out.write("rank\tgene\tz_drug\n")
+    for i, (g, lf, ld, z, cls) in enumerate(sorted(table, key=lambda r: -abs(r[3]))[:TOP]):
+        out.write("%d\t%s\t%.2f\n" % (i + 1, g, z))
+[?2004hroot@de027e2e2b14:/task# cat /task/software/README.txt
+[?2004lAll tools are on PATH (conda env at /opt/tools).
+[?2004hroot@de027e2e2b14:/task# cat /task/input/reference_genes.tsv
+[?2004lgene	expected_class
+TGT0255	none
+TGT0672	none
+TGT1011	sensitiser
+TGT1197	sensitiser
+TGT1202	sensitiser
+TGT1692	none
+TGT2005	none
+TGT2139	resistance
+TGT2213	none
+TGT2353	none
+TGT2915	sensitiser
+TGT3004	none
+TGT3121	none
+TGT3151	none
+TGT3315	none
+TGT3375	none
+TGT3416	none
+TGT3504	resistance
+TGT3810	none
+TGT3882	none
+TGT4084	none
+TGT4120	none
+TGT4585	none
+TGT4613	none
+TGT4695	sensitiser
+TGT5019	none
+TGT5785	none
+TGT6085	none
+TGT6147	resistance
+TGT6222	none
+TGT6655	resistance
+TGT6709	none
+TGT6837	none
+TGT7056	none
+TGT7428	none
+TGT7491	resistance
+TGT7675	none
+TGT8097	none
+TGT8219	none
+TGT8861	none
+[?2004hroot@de027e2e2b14:/task# head -5 /task/input/library.tsv; wc -l /task/input/library.tsv
+[?2004lsgRNA	sequence	gene
+VAL2_0001	AGGCCTCGATTAACGCGTTC	TGT5871
+VAL2_0002	AAACCTGCGGTTCCAACGCT	TGT6646
+VAL2_0003	TTCGCGCGGAAGATCCTAAC	TGT6147
+VAL2_0004	AAGACCAGAATCAGGCGGCG	TGT6132
+1001 /task/input/library.tsv
+[?2004hroot@de027e2e2b14:/task# cat /task/input/handover/hits_mailed.tsv
+[?2004lrank	gene	z_drug
+1	TGT4344	-19.75
+2	TGT0462	-19.12
+3	TGT3601	-17.59
+4	TGT3362	-16.54
+5	TGT1371	-16.02
+6	TGT3977	-15.63
+7	TGT2524	-13.34
+8	TGT2478	-13.19
+9	TGT1202	-12.71
+10	TGT0177	-12.28
+11	TGT3471	-11.78
+12	TGT4695	-9.91
+13	TGT8274	9.35
+14	TGT3680	9.32
+15	TGT4232	9.23
+16	TGT1505	9.12
+17	TGT1011	-8.90
+18	TGT1007	8.55
+19	TGT7491	8.32
+20	TGT2139	7.86
+21	TGT6147	7.09
+22	TGT2002	7.01
+23	TGT1197	-6.99
+24	TGT4662	-6.84
+25	TGT2438	6.79
+26	TGT2915	-6.78
+27	TGT7728	-6.78
+28	TGT1790	6.39
+29	TGT5816	-6.28
+30	TGT1915	6.25
+31	TGT2522	6.03
+32	TGT6655	5.79
+33	TGT1284	5.68
+34	TGT3979	-5.40
+35	TGT1012	-5.31
+36	TGT2987	5.15
+37	TGT0409	-5.00
+38	TGT3504	4.91
+39	TGT1378	4.77
+40	TGT4120	-4.74
+[?2004hroot@de027e2e2b14:/task# head -5 /task/input/handover/counts_draft.tsv; head -8 /task/input/handover/gene_draft.tsv
+[?2004lsgRNA	gene	LIB8	LIB9	LIB10	LIB11	LIB12	LIB13	LIB14	LIB15
+VAL2_0001	TGT5871	61	76	21	33	50	35	54	0
+VAL2_0002	TGT6646	27	43	13	3	13	9	5	0
+VAL2_0003	TGT6147	57	59	145	138	151	134	174	0
+VAL2_0004	TGT6132	89	89	13	16	37	3	23	0
+gene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0030	0.3170	0.2075	1.85	none
+TGT0059	-0.6474	0.3384	3.02	resistance
+TGT0141	-1.4170	0.0963	0.86	none
+TGT0177	-1.1992	-1.3762	-12.28	sensitiser
+TGT0179	-0.3698	-0.2174	-1.94	none
+TGT0211	-0.5122	0.0408	0.36	none
+TGT0255	-0.5006	-0.1709	-1.53	none
+[?2004hroot@de027e2e2b14:/task# paste <(cut -f1,2 /task/input/library.tsv) <(cut -f1,2 /task/input/handover/counts_draft.tsv) | head -3
+[?2004lsgRNA	sequence	sgRNA	gene
+VAL2_0001	AGGCCTCGATTAACGCGTTC	VAL2_0001	TGT5871
+VAL2_0002	AAACCTGCGGTTCCAACGCT	VAL2_0002	TGT6646
+[?2004hroot@de027e2e2b14:/task# join -t $'\t' -1 1 -2 1 <(sort /task/input/library.tsv | head -0; tail -n +2 /task/input/library.tsv | sort) <(tail -n +2 /task/input/handover/counts_draft.tsv | cut -f1,2 | sort) | awk -F'\t' '$2!=$3' | wc -l
+[?2004l1000
+[?2004hroot@de027e2e2b14:/task# zcat /task/input/fastq/LIB8.fastq.gz | head -8
+[?2004l@NB551608:214:HV2KJBGXK:1:1128:1112:1149 1:N:0:1
+CTAAATCTCTTGTGGAAAGGACGAAACACCGAGCCCTCATCTAGAGGGAAGGTTTTAGAGCTAGAAATAGCAAGT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+@NB551608:214:HV2KJBGXK:1:1115:17636:20971 1:N:0:1
+AGTCAATCTTGTGGAAAGGACGAAACACCGTAAACCGCCAACCATTCGTTGTTTTAGAGCTAGAAATAGCAAGTT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+[?2004hroot@de027e2e2b14:/task# zcat /task/input/fastq/LIB8.fastq.gz | awk 'NR%4==2{print length($0)}' | sort | uniq -c | head
+[?2004l 112684 75
+[?2004hroot@de027e2e2b14:/task# zcat /task/input/fastq/LIB15.fastq.gz | head -8
+[?2004l@A01789:96:HFG7TDSX5:3:1135:5151:12544 2:N:0:1
+TAGGTATGACTAGCCTTATTTTAACTTGCTATTTCTAGCTCTAAAACGAAATGCGACATGGTGCGGACGGTGTTT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+@A01789:96:HFG7TDSX5:3:1119:12916:3895 2:N:0:1
+CGTTGGACTAGCCTTATTTTAACTTGCTATTTCTAGCTCTAAAACAGTCTGACCCGTGGTTAATTCGGTGTTTCG
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+[?2004hroot@de027e2e2b14:/task# zcat /task/input/fastq/LIB15.fastq.gz | awk 'NR%4==2{print length($0)}' | sort | uniq -c | head
+[?2004l 129296 75
+[?2004hroot@de027e2e2b14:/task# join -t $'\t' -1 1 -2 1 <(tail -n +2 /task/input/library.tsv | cut -f1,3 | sort) <(tail -n +2 /task/input/handover/counts_draft.tsv | cut -f1,2 | sort) | awk -F'\t' '$2!=$3' | wc -l
+[?2004l80
+[?2004hroot@de027e2e2b14:/task# mkdir -p /task/output /tmp/work && cat > /tmp/work/count.py <<'EOF'
+[?2004l[?2004h> import gzip, sys, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> COMP = str.maketrans("ACGTN", "TGCAN")
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> 
+[?2004l[?2004h> FWD_SCAF = "GTTTTAGAGCTA"
+[?2004l[?2004h> REV_SCAF = revcomp(FWD_SCAF)  # TAGCTCTAAAAC
+[?2004l[?2004h> 
+[?2004l[?2004h> lib = pd.read_csv("/task/input/library.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> by_seq = {s: i for i, s in enumerate(lib["sequence"])}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = [[0]*len(samples) for _ in range(len(lib))]
+[?2004l[?2004h> qc = {}
+[?2004l[?2004h> for j, row in enumerate(samples.itertuples()):
+[?2004l[?2004h>     path = "/task/input/fastq/" + row.fastq_file
+[?2004l[?2004h>     total = 0; mapped = 0
+[?2004l[?2004h>     with gzip.open(path, "rt") as fh:
+[?2004l[?2004h>         for n, line in enumerate(fh):
+[?2004l[?2004h>             if n % 4 != 1: continue
+[?2004l[?2004h>             total += 1
+[?2004l[?2004h>             r = line.rstrip()
+[?2004l[?2004h>             k = r.find(FWD_SCAF)
+[?2004l[?2004h>             if k >= 20:
+[?2004l[?2004h>                 sp = r[k-20:k]
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 k = r.find(REV_SCAF)
+[?2004l[?2004h>                 if k < 0 or k + len(REV_SCAF) + 20 > len(r): continue
+[?2004l[?2004h>                 sp = revcomp(r[k+len(REV_SCAF):k+len(REV_SCAF)+20])
+[?2004l[?2004h>             idx = by_seq.get(sp)
+[?2004l[?2004h>             if idx is not None:
+[?2004l[?2004h>                 C[idx][j] += 1
+[?2004l[?2004h>                 mapped += 1
+[?2004l[?2004h>     qc[row.sample_id] = {"total_reads": total, "mapped_reads": mapped, "arm": row.arm}
+[?2004l[?2004h>     print(row.sample_id, total, mapped, flush=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> out = pd.DataFrame(C, columns=samples["sample_id"])
+[?2004l[?2004h> out.insert(0, "gene", lib["gene"])
+[?2004l[?2004h> out.insert(0, "sgRNA", lib["sgRNA"])
+[?2004l[?2004h> out.to_csv("/task/output/counts.tsv", sep="\t", index=False)
+[?2004l[?2004h> with open("/tmp/work/qc_raw.json", "w") as f:
+[?2004l[?2004h>     json.dump(qc, f, indent=2)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/count.py
+[?2004lLIB8 112684 99717
+LIB9 119542 106565
+LIB10 126498 114203
+LIB11 113752 103010
+LIB12 122481 110250
+LIB13 120408 109237
+LIB14 127498 114795
+LIB15 129296 116805
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/explore.py <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep="\t").set_index("sgRNA")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> lib = c["gene"]
+[?2004l[?2004h> C = c[samples["sample_id"]].values.astype(float)
+[?2004l[?2004h> cols = list(c.columns[2:])
+[?2004l[?2004h> 
+[?2004l[?2004h> # log2 CPM-ish for correlation
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> L = np.log2(N + 1)
+[?2004l[?2004h> cc = np.corrcoef(L.T)
+[?2004l[?2004h> print("corr matrix:")
+[?2004l[?2004h> print(pd.DataFrame(cc, index=cols, columns=cols).round(3).to_string())
+[?2004l[?2004h> 
+[?2004l[?2004h> # reference genes
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> arm = dict(zip(samples.sample_id, samples.arm))
+[?2004l[?2004h> t0 = [i for i,s in enumerate(cols) if arm[s]=="T0"]
+[?2004l[?2004h> veh = [i for i,s in enumerate(cols) if arm[s]=="vehicle"]
+[?2004l[?2004h> drug = [i for i,s in enumerate(cols) if arm[s]=="drug"]
+[?2004l[?2004h> 
+[?2004l[?2004h> def lfc_per_sample(j):
+[?2004l[?2004h>     # sgRNA-level lfc vs vehicle mean, normalized so median NTC sgRNA = 0
+[?2004l[?2004h>     base = N[:, veh].mean(axis=1)
+[?2004l[?2004h>     l = np.log2((N[:, j] + 0.5) / (base + 0.5))
+[?2004l[?2004h>     ntc = (lib == "NON_TARGETING").values
+[?2004l[?2004h>     return l - np.median(l[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> print("\nper day-14 sample: median lfc_drug of reference sgRNAs (vs vehicle mean, NTC-centered)")
+[?2004l[?2004h> for j, s in enumerate(cols):
+[?2004l[?2004h>     if arm[s] == "T0": continue
+[?2004l[?2004h>     l = lfc_per_sample(j)
+[?2004l[?2004h>     out = {}
+[?2004l[?2004h>     for cls in ["sensitiser", "resistance"]:
+[?2004l[?2004h>         gs = ref.loc[ref.expected_class == cls, "gene"]
+[?2004l[?2004h>         m = lib.isin(gs).values
+[?2004l[?2004h>         out[cls] = np.median(l[m])
+[?2004l[?2004h>     print(s, arm[s], {k: round(v,3) for k,v in out.items()})
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/explore.py
+[?2004lcorr matrix:
+Traceback (most recent call last):
+  File "/tmp/work/explore.py", line 14, in <module>
+    print(pd.DataFrame(cc, index=cols, columns=cols).round(3).to_string())
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 578, in __init__
+    mgr = ndarray_to_mgr(
+          ^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/internals/construction.py", line 302, in ndarray_to_mgr
+    _check_values_indices_shape_match(values, index, columns)
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/internals/construction.py", line 375, in _check_values_indices_shape_match
+    raise ValueError(f"Shape of passed values is {passed}, indices imply {implied}")
+ValueError: Shape of passed values is (8, 8), indices imply (7, 7)
+[?2004hroot@de027e2e2b14:/task# sed -i 's/c.columns\[2:\]/c.columns[1:]/' /tmp/work/explore.py && python3 /tmp/work/explore.py
+[?2004lcorr matrix:
+        LIB8   LIB9  LIB10  LIB11  LIB12  LIB13  LIB14  LIB15
+LIB8   1.000  0.924  0.374  0.443  0.446  0.353  0.377  0.448
+LIB9   0.924  1.000  0.382  0.456  0.450  0.370  0.381  0.460
+LIB10  0.374  0.382  1.000  0.774  0.780  0.768  0.823  0.783
+LIB11  0.443  0.456  0.774  1.000  0.948  0.777  0.770  0.947
+LIB12  0.446  0.450  0.780  0.948  1.000  0.773  0.775  0.954
+LIB13  0.353  0.370  0.768  0.777  0.773  1.000  0.807  0.773
+LIB14  0.377  0.381  0.823  0.770  0.775  0.807  1.000  0.787
+LIB15  0.448  0.460  0.783  0.947  0.954  0.773  0.787  1.000
+
+per day-14 sample: median lfc_drug of reference sgRNAs (vs vehicle mean, NTC-centered)
+LIB10 vehicle {'sensitiser': np.float64(-1.116), 'resistance': np.float64(0.861)}
+LIB11 vehicle {'sensitiser': np.float64(0.285), 'resistance': np.float64(-0.704)}
+LIB12 vehicle {'sensitiser': np.float64(0.276), 'resistance': np.float64(-0.787)}
+LIB13 drug {'sensitiser': np.float64(-0.77), 'resistance': np.float64(0.722)}
+LIB14 drug {'sensitiser': np.float64(-1.169), 'resistance': np.float64(0.759)}
+LIB15 drug {'sensitiser': np.float64(0.325), 'resistance': np.float64(-0.653)}
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/analyse.py <<'EOF'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> cols = list(samples.sample_id)
+[?2004l[?2004h> 
+[?2004l[?2004h> # corrected arms after detecting the re-racking swap (LIB10<->LIB15)
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> 
+[?2004l[?2004h> # check for zeros in group means
+[?2004l[?2004h> grp = {a: [i for i,s in enumerate(cols) if arm[s]==a] for a in ("T0","vehicle","drug")}
+[?2004l[?2004h> means = {a: C[:, idx].mean(axis=1) for a, idx in grp.items()}
+[?2004l[?2004h> print("min group means:", {a: float(m.min()) for a, m in means.items()})
+[?2004l[?2004h> 
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6   # depth-normalised abundance per million mapped reads
+[?2004l[?2004h> Nm = {a: N[:, idx].mean(axis=1) for a, idx in grp.items()}
+[?2004l[?2004h> 
+[?2004l[?2004h> lfc_fit = np.log2(Nm["vehicle"] / Nm["T0"])
+[?2004l[?2004h> lfc_fit -= np.median(lfc_fit[ntc])
+[?2004l[?2004h> lfc_drg = np.log2(Nm["drug"] / Nm["vehicle"])
+[?2004l[?2004h> lfc_drg -= np.median(lfc_drg[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> null_sd = lfc_drg[ntc].std(ddof=1)
+[?2004l[?2004h> sem = null_sd / np.sqrt(4)   # gene = median/mean of 4 sgRNAs
+[?2004l[?2004h> print("NTC null sd:", null_sd)
+[?2004l[?2004h> 
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m = gene == g
+[?2004l[?2004h>     lf = float(np.median(lfc_fit[m]))
+[?2004l[?2004h>     ld = float(np.median(lfc_drg[m]))
+[?2004l[?2004h>     z = ld / sem
+[?2004l[?2004h>     p = 2 * stats.norm.sf(abs(z))
+[?2004l[?2004h>     rows.append((g, lf, ld, z, p))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","lfc_fitness","lfc_drug","z_drug","p_drug"])
+[?2004l[?2004h> 
+[?2004l[?2004h> # Benjamini-Hochberg FDR 5%
+[?2004l[?2004h> n = len(res)
+[?2004l[?2004h> order = np.argsort(res.p_drug.values)
+[?2004l[?2004h> ranks = np.empty(n, int); ranks[order] = np.arange(1, n+1)
+[?2004l[?2004h> q = res.p_drug.values * n / ranks
+[?2004l[?2004h> q = np.minimum.accumulate(q[order][::-1])[::-1][np.argsort(order)]
+[?2004l[?2004h> res["q_drug"] = np.minimum(q, 1.0)
+[?2004l[?2004h> res["drug_class"] = np.where(res.q_drug < 0.05,
+[?2004l[?2004h>                              np.where(res.lfc_drug < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> print(res.drug_class.value_counts())
+[?2004l[?2004h> 
+[?2004l[?2004h> res.to_csv("/task/output/gene_summary.tsv", sep="\t", index=False,
+[?2004l[?2004h>            columns=["gene","lfc_fitness","lfc_drug","z_drug","p_drug","q_drug","drug_class"])
+[?2004l[?2004h> 
+[?2004l[?2004h> # erratum
+[?2004l[?2004h> hits = pd.read_csv("/task/input/handover/hits_mailed.tsv", sep="\t")
+[?2004l[?2004h> cls = dict(zip(res.gene, res.drug_class))
+[?2004l[?2004h> err = pd.DataFrame({"gene": hits.gene,
+[?2004l[?2004h>                     "verdict": ["confirmed" if cls[g] in ("sensitiser","resistance") else "retracted" for g in hits.gene]})
+[?2004l[?2004h> err.to_csv("/task/output/erratum.tsv", sep="\t", index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> # qc
+[?2004l[?2004h> qc_raw = json.load(open("/tmp/work/qc_raw.json"))
+[?2004l[?2004h> qc = {"samples": {s: {"total_reads": qc_raw[s]["total_reads"],
+[?2004l[?2004h>                       "mapped_reads": qc_raw[s]["mapped_reads"],
+[?2004l[?2004h>                       "arm": arm[s]} for s in cols}}
+[?2004l[?2004h> json.dump(qc, open("/task/output/qc.json","w"), indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h> # reference check
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print(chk[["gene","expected_class","lfc_drug","drug_class","q_drug"]].to_string(index=False))
+[?2004l[?2004h> print("mismatches:", (chk.expected_class != chk.drug_class).sum())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/analyse.py
+[?2004lmin group means: {'T0': 17.5, 'vehicle': 3.3333333333333335, 'drug': 0.0}
+/tmp/work/analyse.py:27: RuntimeWarning: divide by zero encountered in log2
+  lfc_drg = np.log2(Nm["drug"] / Nm["vehicle"])
+NTC null sd: 0.19185474188317597
+drug_class
+none          158
+resistance     37
+sensitiser     35
+Name: count, dtype: int64
+   gene expected_class  lfc_drug drug_class        q_drug
+TGT0255           none -0.004385       none  9.849523e-01
+TGT0672           none  0.176366       none  1.531245e-01
+TGT1011     sensitiser -1.443229 sensitiser  3.722337e-50
+TGT1197     sensitiser -1.095236 sensitiser  2.830385e-29
+TGT1202     sensitiser -1.635889 sensitiser  3.991457e-64
+TGT1692           none -0.040499       none  7.856120e-01
+TGT2005           none  0.169968       none  1.706503e-01
+TGT2139     resistance  1.686204 resistance  4.646750e-68
+TGT2213           none  0.264106 resistance  2.154602e-02
+TGT2353           none  0.210700       none  7.967608e-02
+TGT2915     sensitiser -0.899133 sensitiser  4.910999e-20
+TGT3004           none  0.112387       none  3.937150e-01
+TGT3121           none -0.025175       none  8.726611e-01
+TGT3151           none -0.144420       none  2.576630e-01
+TGT3315           none  0.406475 resistance  1.131013e-04
+TGT3375           none  0.215475       none  7.396938e-02
+TGT3416           none  0.002207       none  9.886121e-01
+TGT3504     resistance  1.003500 resistance  9.373681e-25
+TGT3810           none -0.096639       none  4.842847e-01
+TGT3882           none -0.212265       none  7.936106e-02
+TGT4084           none  0.192016       none  1.158141e-01
+TGT4120           none -0.265078 sensitiser  2.122574e-02
+TGT4585           none -0.246965 sensitiser  3.498295e-02
+TGT4613           none  0.497939 resistance  1.120064e-06
+TGT4695     sensitiser -1.532247 sensitiser  2.158711e-56
+TGT5019           none  0.330239 resistance  2.598369e-03
+TGT5785           none -0.136612       none  2.864114e-01
+TGT6085           none  0.055150       none  6.989727e-01
+TGT6147     resistance  2.767371 resistance 6.066188e-181
+TGT6222           none  0.010075       none  9.580091e-01
+TGT6655     resistance  1.067896 resistance  6.694177e-28
+TGT6709           none -0.065324       none  6.407571e-01
+TGT6837           none  0.161744       none  1.972735e-01
+TGT7056           none  0.192694       none  1.151658e-01
+TGT7428           none -0.113703       none  3.915427e-01
+TGT7491     resistance  2.272110 resistance 1.939391e-122
+TGT7675           none  0.270414 resistance  1.816705e-02
+TGT8097           none  0.241823 resistance  3.846079e-02
+TGT8219           none -0.056101       none  6.945515e-01
+TGT8861           none  0.053966       none  7.018985e-01
+mismatches: 8
+[?2004hroot@de027e2e2b14:/task# python3 -c "
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c = pd.read_csv('/task/output/counts.tsv', sep='\\t')
+[?2004l[?2004h> cols=['LIB8','LIB9','LIB10','LIB11','LIB12','LIB13','LIB14','LIB15']
+[?2004l[?2004h> drug=['LIB10','LIB13','LIB14']
+[?2004l[?2004h> m = c[drug].mean(axis=1)
+[?2004l[?2004h> print(c.loc[m==0].to_string())
+[?2004l[?2004h> "
+[?2004l         sgRNA     gene  LIB8  LIB9  LIB10  LIB11  LIB12  LIB13  LIB14  LIB15
+579  VAL2_0580  TGT7971    51    60      0     34     31      0      0     37
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/analyse2.py <<'EOF'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> cols = list(samples.sample_id)
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> L = np.log2(N + 1)   # pseudocount 1 for replicate-level values
+[?2004l[?2004h> # NTC centering per sample
+[?2004l[?2004h> L = L - np.median(L[ntc], axis=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = [i for i,s in enumerate(cols) if arm[s]=="vehicle"]
+[?2004l[?2004h> drg = [i for i,s in enumerate(cols) if arm[s]=="drug"]
+[?2004l[?2004h> t0  = [i for i,s in enumerate(cols) if arm[s]=="T0"]
+[?2004l[?2004h> 
+[?2004l[?2004h> # SOP-defined gene LFCs on raw scale, median over sgRNAs, NTC-centered
+[?2004l[?2004h> Nveh = N[:, veh].mean(axis=1); Ndrg = N[:, drg].mean(axis=1); Nt0 = N[:, t0].mean(axis=1)
+[?2004l[?2004h> lfc_fit = np.log2((Nveh + 0.5) / (Nt0 + 0.5)); lfc_fit -= np.median(lfc_fit[ntc])
+[?2004l[?2004h> lfc_drg = np.log2((Ndrg + 0.5) / (Nveh + 0.5)); lfc_drg -= np.median(lfc_drg[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m = np.where(gene == g)[0]
+[?2004l[?2004h>     lf = float(np.median(lfc_fit[m])); ld = float(np.median(lfc_drg[m]))
+[?2004l[?2004h>     # per-sgRNA replicate drug-vs-vehicle values, pooled
+[?2004l[?2004h>     a = L[np.ix_(m, drg)].ravel(); b = L[np.ix_(m, veh)].ravel()
+[?2004l[?2004h>     t, p = stats.ttest_ind(a, b, equal_var=False)
+[?2004l[?2004h>     rows.append((g, lf, ld, float(t), float(p)))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","lfc_fitness","lfc_drug","t_drug","p_drug"])
+[?2004l[?2004h> n = len(res)
+[?2004l[?2004h> order = np.argsort(res.p_drug.values)
+[?2004l[?2004h> ranks = np.empty(n, int); ranks[order] = np.arange(1, n+1)
+[?2004l[?2004h> q = (res.p_drug.values * n / ranks)
+[?2004l[?2004h> q = np.minimum.accumulate(q[order][::-1])[::-1][np.argsort(order)]
+[?2004l[?2004h> res["q_drug"] = np.minimum(q, 1.0)
+[?2004l[?2004h> res["drug_class"] = np.where(res.q_drug < 0.05,
+[?2004l[?2004h>                              np.where(res.lfc_drug < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> print(res.drug_class.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> mis = chk[chk.expected_class != chk.drug_class]
+[?2004l[?2004h> print("mismatches:", len(mis))
+[?2004l[?2004h> print(mis[["gene","expected_class","lfc_drug","drug_class","q_drug"]].to_string(index=False))
+[?2004l[?2004h> res.to_csv("/tmp/work/gene_summary_v2.tsv", sep="\t", index=False)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/analyse2.py
+[?2004ldrug_class
+none          206
+resistance     14
+sensitiser     10
+Name: count, dtype: int64
+mismatches: 1
+   gene expected_class  lfc_drug drug_class   q_drug
+TGT1011     sensitiser -1.440119       none 0.120237
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/diag.py <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> veh = [i for i,s in enumerate(cols) if arm[s]=="vehicle"]
+[?2004l[?2004h> drg = [i for i,s in enumerate(cols) if arm[s]=="drug"]
+[?2004l[?2004h> 
+[?2004l[?2004h> # approach A: sgRNA lfc of group means (pseudocount 0.5)
+[?2004l[?2004h> Nv = N[:, veh].mean(axis=1); Nd = N[:, drg].mean(axis=1)
+[?2004l[?2004h> l = np.log2((Nd+0.5)/(Nv+0.5)); l -= np.median(l[ntc])
+[?2004l[?2004h> ntc_genes_med = [np.median(l[i*4:(i+1)*4]) for i in range(20)]
+[?2004l[?2004h> print("A: sd of NTC gene-medians (lfc of means):", np.std(ntc_genes_med))
+[?2004l[?2004h> print("A: NTC gene-medians:", np.round(ntc_genes_med,3))
+[?2004l[?2004h> 
+[?2004l[?2004h> # approach B: gene value = mean over sgRNAs of mean replicate logCPM; diff drug-veh
+[?2004l[?2004h> L = np.log2(N + 1); L -= np.median(L[ntc], axis=0)
+[?2004l[?2004h> gv_d = L[:, drg].mean(axis=1); gv_v = L[:, veh].mean(axis=1)
+[?2004l[?2004h> d = gv_d - gv_v
+[?2004l[?2004h> ntc_d = [np.median(d[i*4:(i+1)*4]) for i in range(20)]
+[?2004l[?2004h> print("B: sd of NTC gene-medians (diff of mean logCPM):", np.std(ntc_d))
+[?2004l[?2004h> print("B: NTC gene-medians:", np.round(ntc_d,3))
+[?2004l[?2004h> 
+[?2004l[?2004h> # replicate scatter at gene level: var of gene value within groups
+[?2004l[?2004h> ntc_idx = np.arange(80)*4[:, None] if False else None
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for i in range(20):
+[?2004l[?2004h>     m = np.arange(i*4,(i+1)*4)
+[?2004l[?2004h>     vd = L[np.ix_(m,drg)].mean(axis=0)
+[?2004l[?2004h>     vv = L[np.ix_(m,veh)].mean(axis=0)
+[?2004l[?2004h>     rows.append((vd.var(ddof=1), vv.var(ddof=1)))
+[?2004l[?2004h> rows=np.array(rows)
+[?2004l[?2004h> print("mean within-group var of gene-level values: drug", rows[:,0].mean(), "veh", rows[:,1].mean())
+[?2004l[?2004h> print("sd of gene-level diff from rep scatter:", np.sqrt(rows[:,0].mean()/3 + rows[:,1].mean()/3))
+[?2004l[?2004h> 
+[?2004l[?2004h> # z-test with empirical null sd from B
+[?2004l[?2004h> sdB = np.std(ntc_d)
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> out=[]
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m = np.where(gene==g)[0]
+[?2004l[?2004h>     ld = float(np.median(d[m]))
+[?2004l[?2004h>     z = ld/sdB; p = 2*stats.norm.sf(abs(z))
+[?2004l[?2004h>     out.append((g, ld, z, p))
+[?2004l[?2004h> r = pd.DataFrame(out, columns=["gene","ld","z","p"])
+[?2004l[?2004h> n=len(r); o=np.argsort(r.p.values); rk=np.empty(n,int); rk[o]=np.arange(1,n+1)
+[?2004l[?2004h> q=r.p.values*n/rk; q=np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> r["q"]=np.minimum(q,1)
+[?2004l[?2004h> r["cls"]=np.where(r.q<0.05, np.where(r.ld<0,"sensitiser","resistance"),"none")
+[?2004l[?2004h> print(r.cls.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(r,on="gene")
+[?2004l[?2004h> mis = chk[chk.expected_class!=chk.cls]
+[?2004l[?2004h> print("mismatches:", len(mis))
+[?2004l[?2004h> print(mis.to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/diag.py
+[?2004l/tmp/work/diag.py:31: SyntaxWarning: 'int' object is not subscriptable; perhaps you missed a comma?
+  ntc_idx = np.arange(80)*4[:, None] if False else None
+A: sd of NTC gene-medians (lfc of means): 0.3094898547848691
+A: NTC gene-medians: [ 0.054  0.095 -0.557 -0.212 -0.025  0.186  0.072 -0.08  -0.064 -0.007
+  0.06  -0.009 -0.284  0.077  0.224  0.067  0.079 -1.21   0.038 -0.076]
+B: sd of NTC gene-medians (diff of mean logCPM): 0.309304428471869
+B: NTC gene-medians: [-0.002  0.039 -0.611 -0.311 -0.096  0.055  0.049 -0.099 -0.149 -0.054
+  0.017 -0.083 -0.339  0.021  0.211  0.044  0.048 -1.242  0.024 -0.121]
+mean within-group var of gene-level values: drug 0.2374614987408563 veh 0.044851176686722026
+sd of gene-level diff from rep scatter: 0.306764119711752
+cls
+none          192
+sensitiser     20
+resistance     18
+Name: count, dtype: int64
+mismatches: 0
+Empty DataFrame
+Columns: [gene, expected_class, ld, z, p, q, cls]
+Index: []
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/v4.py <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = counts[cols].values.astype(float); gene = counts["gene"].values; ntc = gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> L = np.log2(N+1); L -= np.median(L[ntc], axis=0)
+[?2004l[?2004h> veh=[i for i,s in enumerate(cols) if arm[s]=="vehicle"]; drg=[i for i,s in enumerate(cols) if arm[s]=="drug"]
+[?2004l[?2004h> genes=sorted(set(gene[~ntc])); rows=[]
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m=np.where(gene==g)[0]
+[?2004l[?2004h>     a=L[np.ix_(m,drg)].mean(axis=0); b=L[np.ix_(m,veh)].mean(axis=0)
+[?2004l[?2004h>     t,p=stats.ttest_ind(a,b,equal_var=False)
+[?2004l[?2004h>     rows.append((g,float(b.mean()-a.mean())*-1 if False else float(a.mean()-b.mean()),float(t),float(p)))
+[?2004l[?2004h> r=pd.DataFrame(rows,columns=["gene","d","t","p"])
+[?2004l[?2004h> n=len(r); o=np.argsort(r.p.values); rk=np.empty(n,int); rk[o]=np.arange(1,n+1)
+[?2004l[?2004h> q=r.p.values*n/rk; q=np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> r["q"]=np.minimum(q,1)
+[?2004l[?2004h> r["cls"]=np.where(r.q<0.05,np.where(r.d<0,"sensitiser","resistance"),"none")
+[?2004l[?2004h> print(r.cls.value_counts())
+[?2004l[?2004h> ref=pd.read_csv("/task/input/reference_genes.tsv",sep="\t"); chk=ref.merge(r,on="gene")
+[?2004l[?2004h> print("mismatches:",(chk.expected_class!=chk.cls).sum())
+[?2004l[?2004h> print(chk[chk.expected_class!=chk.cls].to_string(index=False))
+[?2004l[?2004h> r.to_csv("/tmp/work/v4.tsv",sep="\t",index=False)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/v4.py
+[?2004lcls
+none          214
+resistance     13
+sensitiser      3
+Name: count, dtype: int64
+mismatches: 2
+   gene expected_class         d         t        p        q  cls
+TGT1011     sensitiser -2.027120 -2.952826 0.087440 0.418985 none
+TGT2915     sensitiser -0.913975 -9.095118 0.007563 0.086969 none
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/final.py <<'EOF'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> cols = list(samples.sample_id)
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> grp = {a: [i for i,s in enumerate(cols) if arm[s]==a] for a in ("T0","vehicle","drug")}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6   # depth-normalised abundance (per million mapped reads)
+[?2004l[?2004h> Nt0  = N[:, grp["T0"]].mean(axis=1)
+[?2004l[?2004h> Nveh = N[:, grp["vehicle"]].mean(axis=1)
+[?2004l[?2004h> Ndrg = N[:, grp["drug"]].mean(axis=1)
+[?2004l[?2004h> 
+[?2004l[?2004h> lfc_fit = np.log2((Nveh + 0.5) / (Nt0 + 0.5)); lfc_fit -= np.median(lfc_fit[ntc])
+[?2004l[?2004h> lfc_drg = np.log2((Ndrg + 0.5) / (Nveh + 0.5)); lfc_drg -= np.median(lfc_drg[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> # empirical null: statistic (median of 4 sgRNAs) over the 20 non-targeting genes
+[?2004l[?2004h> ng = counts.loc[ntc].reset_index(drop=True)
+[?2004l[?2004h> nl = pd.Series(lfc_drg[ntc])
+[?2004l[?2004h> ntc_null = nl.groupby(ng["gene"]).median().values
+[?2004l[?2004h> null_sd = ntc_null.std(ddof=1)
+[?2004l[?2004h> print("empirical NTC gene-level null sd:", null_sd)
+[?2004l[?2004h> 
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m = gene == g
+[?2004l[?2004h>     lf = float(np.median(lfc_fit[m]))
+[?2004l[?2004h>     ld = float(np.median(lfc_drg[m]))
+[?2004l[?2004h>     z = ld / null_sd
+[?2004l[?2004h>     p = 2 * stats.norm.sf(abs(z))
+[?2004l[?2004h>     rows.append((g, lf, ld, z, p))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","lfc_fitness","lfc_drug","z_drug","p_drug"])
+[?2004l[?2004h> n = len(res)
+[?2004l[?2004h> o = np.argsort(res.p_drug.values); rk = np.empty(n, int); rk[o] = np.arange(1, n+1)
+[?2004l[?2004h> q = res.p_drug.values * n / rk
+[?2004l[?2004h> q = np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> res["q_drug"] = np.minimum(q, 1.0)
+[?2004l[?2004h> res["drug_class"] = np.where(res.q_drug < 0.05,
+[?2004l[?2004h>                              np.where(res.lfc_drug < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> res["lfc_fitness"] = res.lfc_fitness.round(4); res["lfc_drug"] = res.lfc_drug.round(4)
+[?2004l[?2004h> res["z_drug"] = res.z_drug.round(3)
+[?2004l[?2004h> res["p_drug"] = res.p_drug.map("{:.3e}".format); res["q_drug"] = res.q_drug.map("{:.3e}".format)
+[?2004l[?2004h> res.to_csv("/task/output/gene_summary.tsv", sep="\t", index=False)
+[?2004l[?2004h> print(res.drug_class.value_counts())
+[?2004l[?2004h> 
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print("reference mismatches:", (chk.expected_class != chk.drug_class).sum())
+[?2004l[?2004h> print(chk[chk.expected_class != chk.drug_class].to_string(index=False))
+[?2004l[?2004h> 
+[?2004l[?2004h> hits = pd.read_csv("/task/input/handover/hits_mailed.tsv", sep="\t")
+[?2004l[?2004h> cls = dict(zip(res.gene, res.drug_class))
+[?2004l[?2004h> err = pd.DataFrame({"gene": hits.gene,
+[?2004l[?2004h>                     "verdict": ["confirmed" if cls[g] in ("sensitiser","resistance") else "retracted" for g in hits.gene]})
+[?2004l[?2004h> err.to_csv("/task/output/erratum.tsv", sep="\t", index=False)
+[?2004l[?2004h> print(err.verdict.value_counts())
+[?2004l[?2004h> 
+[?2004l[?2004h> qc_raw = json.load(open("/tmp/work/qc_raw.json"))
+[?2004l[?2004h> qc = {"samples": {s: {"total_reads": int(qc_raw[s]["total_reads"]),
+[?2004l[?2004h>                       "mapped_reads": int(qc_raw[s]["mapped_reads"]),
+[?2004l[?2004h>                       "arm": arm[s]} for s in cols}}
+[?2004l[?2004h> json.dump(qc, open("/task/output/qc.json","w"), indent=2)
+[?2004l[?2004h> print("outputs written")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/final.py
+[?2004l/opt/tools/lib/python3.12/site-packages/numpy/_core/_methods.py:219: RuntimeWarning: Degrees of freedom <= 0 for slice
+  ret = _var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
+/opt/tools/lib/python3.12/site-packages/numpy/_core/_methods.py:211: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+empirical NTC gene-level null sd: nan
+drug_class
+none    230
+Name: count, dtype: int64
+reference mismatches: 10
+   gene expected_class  lfc_fitness  lfc_drug  z_drug p_drug q_drug drug_class
+TGT1011     sensitiser      -1.6886   -1.4401     NaN    nan    nan       none
+TGT1197     sensitiser      -0.0363   -1.0947     NaN    nan    nan       none
+TGT1202     sensitiser      -1.3291   -1.6345     NaN    nan    nan       none
+TGT2139     resistance      -0.0836    1.6858     NaN    nan    nan       none
+TGT2915     sensitiser      -0.0350   -0.8988     NaN    nan    nan       none
+TGT3504     resistance      -0.1466    1.0033     NaN    nan    nan       none
+TGT4695     sensitiser      -2.2045   -1.5302     NaN    nan    nan       none
+TGT6147     resistance      -3.1622    2.7648     NaN    nan    nan       none
+TGT6655     resistance      -1.5204    1.0676     NaN    nan    nan       none
+TGT7491     resistance      -2.1661    2.2713     NaN    nan    nan       none
+verdict
+retracted    40
+Name: count, dtype: int64
+outputs written
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import re
+[?2004l[?2004h> src = open("/tmp/work/final.py").read()
+[?2004l[?2004h> old = '''ng = counts.loc[ntc].reset_index(drop=True)
+[?2004l[?2004h> nl = pd.Series(lfc_drg[ntc])
+[?2004l[?2004h> ntc_null = nl.groupby(ng["gene"]).median().values
+[?2004l[?2004h> null_sd = ntc_null.std(ddof=1)'''
+[?2004l[?2004h> new = '''ntc_vals = lfc_drg[ntc]  # 80 sgRNAs, library order; null pseudo-genes = blocks of 4
+[?2004l[?2004h> ntc_null = np.median(ntc_vals.reshape(-1, 4), axis=1)
+[?2004l[?2004h> null_sd = ntc_null.std(ddof=1)'''
+[?2004l[?2004h> assert old in src
+[?2004l[?2004h> open("/tmp/work/final.py","w").write(src.replace(old, new))
+[?2004l[?2004h> print("patched")
+[?2004l[?2004h> EOF
+[?2004lpatched
+[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/final.py
+[?2004lempirical NTC gene-level null sd: 0.09334097080561864
+drug_class
+none          156
+resistance     38
+sensitiser     36
+Name: count, dtype: int64
+reference mismatches: 8
+   gene expected_class  lfc_fitness  lfc_drug  z_drug    p_drug    q_drug drug_class
+TGT2213           none      -2.0432    0.2638   2.826 4.710e-03 1.719e-02 resistance
+TGT3315           none      -2.1313    0.4060   4.349 1.365e-05 6.826e-05 resistance
+TGT4120           none      -2.9875   -0.2640  -2.828 4.681e-03 1.719e-02 sensitiser
+TGT4585           none      -3.0081   -0.2466  -2.641 8.254e-03 2.877e-02 sensitiser
+TGT4613           none      -3.2419    0.4973   5.327 9.960e-08 5.327e-07 resistance
+TGT5019           none      -2.6176    0.3299   3.535 4.082e-04 1.841e-03 resistance
+TGT7675           none      -1.6382    0.2702   2.895 3.791e-03 1.430e-02 resistance
+TGT8097           none      -3.1447    0.2413   2.585 9.731e-03 3.197e-02 resistance
+verdict
+confirmed    32
+retracted     8
+Name: count, dtype: int64
+outputs written
+[?2004hroot@de027e2e2b14:/task# grep -n NON_TARGETING /task/input/library.tsv | head -8; grep -c NON_TARGETING /task/input/library.tsv
+[?2004l39:VAL2_0038	CAATGACAAACCCGCAGCTC	NON_TARGETING
+45:VAL2_0044	AAAGTCTTAACACGCGTTAG	NON_TARGETING
+75:VAL2_0074	TTCTCAATGCTCGCTACTCA	NON_TARGETING
+77:VAL2_0076	TCTCACAGCTTCTGCTTAAC	NON_TARGETING
+94:VAL2_0093	AGAGGAGTAGTATCCAATCG	NON_TARGETING
+95:VAL2_0094	AAAGGGTCCAAGTCTACCGT	NON_TARGETING
+98:VAL2_0097	GTAGTATTTGTTTGTTCCGC	NON_TARGETING
+104:VAL2_0103	TACACTATGTTCGCTTACAC	NON_TARGETING
+80
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> ntc_idx = np.where(c.gene.values == "NON_TARGETING")[0]
+[?2004l[?2004h> print("ntc idx head:", ntc_idx[:12])
+[?2004l[?2004h> print("first 20 rows genes:", c.gene.values[:20])
+[?2004l[?2004h> print("blocks of 4 among ntc_idx:", [ntc_idx[i*4:(i+1)*4].tolist() for i in range(3)])
+[?2004l[?2004h> EOF
+[?2004lntc idx head: [ 37  43  73  75  92  93  96 102 119 123 135 138]
+first 20 rows genes: <StringArray>
+['TGT5871', 'TGT6646', 'TGT6147', 'TGT6132', 'TGT1869', 'TGT4695', 'TGT4899',
+ 'TGT6349', 'TGT2353', 'TGT4331', 'TGT8097', 'TGT3030', 'TGT7896', 'TGT6222',
+ 'TGT7853', 'TGT0255', 'TGT0306', 'TGT0730', 'TGT0179', 'TGT3502']
+Length: 20, dtype: str
+blocks of 4 among ntc_idx: [[37, 43, 73, 75], [92, 93, 96, 102], [119, 123, 135, 138]]
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/final2.py <<'EOF'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> cols = list(samples.sample_id)
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> grp = {a: [i for i,s in enumerate(cols) if arm[s]==a] for a in ("T0","vehicle","drug")}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> 
+[?2004l[?2004h> # SOP-defined gene LFCs (median over sgRNAs of lfc of group means), NTC-centred
+[?2004l[?2004h> Nt0  = N[:, grp["T0"]].mean(axis=1)
+[?2004l[?2004h> Nveh = N[:, grp["vehicle"]].mean(axis=1)
+[?2004l[?2004h> Ndrg = N[:, grp["drug"]].mean(axis=1)
+[?2004l[?2004h> lfc_fit = np.log2((Nveh + 0.5) / (Nt0 + 0.5)); lfc_fit -= np.median(lfc_fit[ntc])
+[?2004l[?2004h> lfc_drg = np.log2((Ndrg + 0.5) / (Nveh + 0.5)); lfc_drg -= np.median(lfc_drg[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> # per-replicate sgRNA-level drug-vs-vehicle lfc, NTC-centred per pair
+[?2004l[?2004h> pairs = list(zip(grp["drug"], grp["vehicle"]))
+[?2004l[?2004h> D = []
+[?2004l[?2004h> for d, v in pairs:
+[?2004l[?2004h>     dk = np.log2((N[:, d] + 0.5) / (N[:, v] + 0.5))
+[?2004l[?2004h>     dk -= np.median(dk[ntc])
+[?2004l[?2004h>     D.append(dk)
+[?2004l[?2004h> D = np.array(D).T   # sgRNA x 3
+[?2004l[?2004h> 
+[?2004l[?2004h> ngenes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in ngenes:
+[?2004l[?2004h>     m = gene == g
+[?2004l[?2004h>     x = D[m, :].ravel()              # 4 sgRNAs x 3 replicate pairs
+[?2004l[?2004h>     t, p = stats.ttest_1samp(x, 0.0) # Welch not needed for 1-sample; use t on mean
+[?2004l[?2004h>     rows.append((g, float(np.median(lfc_fit[m])), float(np.median(lfc_drg[m])), float(t), float(p)))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","lfc_fitness","lfc_drug","t_drug","p_drug"])
+[?2004l[?2004h> n = len(res)
+[?2004l[?2004h> o = np.argsort(res.p_drug.values); rk = np.empty(n, int); rk[o] = np.arange(1, n+1)
+[?2004l[?2004h> q = res.p_drug.values * n / rk
+[?2004l[?2004h> q = np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> res["q_drug"] = np.minimum(q, 1.0)
+[?2004l[?2004h> res["drug_class"] = np.where(res.q_drug < 0.05,
+[?2004l[?2004h>                              np.where(res.lfc_drug < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> print(res.drug_class.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print("mismatches:", (chk.expected_class != chk.drug_class).sum())
+[?2004l[?2004h> print(chk[chk.expected_class != chk.drug_class][["gene","expected_class","lfc_drug","drug_class","q_drug"]].to_string(index=False))
+[?2004l[?2004h> res.to_csv("/tmp/work/gene_summary_final2.tsv", sep="\t", index=False)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/final2.py
+[?2004ldrug_class
+none          192
+resistance     19
+sensitiser     19
+Name: count, dtype: int64
+mismatches: 1
+   gene expected_class  lfc_drug drug_class   q_drug
+TGT1011     sensitiser -1.440119       none 0.075645
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc=gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[i for i,s in enumerate(cols) if arm[s]=="vehicle"]; drg=[i for i,s in enumerate(cols) if arm[s]=="drug"]
+[?2004l[?2004h> print(c[gene=="TGT1011"].to_string())
+[?2004l[?2004h> for d,v in zip(drg,veh):
+[?2004l[?2004h>     dk = np.log2((N[:,d]+0.5)/(N[:,v]+0.5)); dk -= np.median(dk[ntc])
+[?2004l[?2004h>     print(cols[d], "vs", cols[v], np.round(dk[gene=="TGT1011"],3))
+[?2004l[?2004h> EOF
+[?2004l         sgRNA     gene  LIB8  LIB9  LIB10  LIB11  LIB12  LIB13  LIB14  LIB15
+177  VAL2_0178  TGT1011   123   112     23     94     84     60     59     98
+239  VAL2_0240  TGT1011   111    94     40     72     59     39     12     60
+296  VAL2_0297  TGT1011    65    45     11     44     35     22      4     66
+684  VAL2_0685  TGT1011    42    41      0     31     23     13      7     35
+LIB10 vs LIB11 [-2.107 -0.926 -2.073 -9.166]
+LIB13 vs LIB12 [-0.342 -0.453 -0.525 -0.677]
+LIB14 vs LIB15 [-0.634 -2.219 -3.928 -2.215]
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/perm.py <<'EOF'
+[?2004l[?2004h> import itertools
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> d6 = ["LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> idx6 = [cols.index(s) for s in d6]
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts.gene.values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> L6 = np.log2(N[:, idx6] + 1)
+[?2004l[?2004h> L6 -= np.median(L6[ntc], axis=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> gidx = [np.where(gene == g)[0] for g in genes]
+[?2004l[?2004h> 
+[?2004l[?2004h> def stats_for(assign):
+[?2004l[?2004h>     dpos = list(assign); vpos = [i for i in range(6) if i not in assign]
+[?2004l[?2004h>     diff = L6[:, dpos].mean(axis=1) - L6[:, vpos].mean(axis=1)
+[?2004l[?2004h>     return np.array([np.median(diff[m]) for m in gidx])
+[?2004l[?2004h> 
+[?2004l[?2004h> true_assign = tuple(i for i, s in enumerate(d6) if arm[s] == "drug")
+[?2004l[?2004h> combos = [c for c in itertools.combinations(range(6), 3)]
+[?2004l[?2004h> T = {c: stats_for(c) for c in combos}
+[?2004l[?2004h> Tobs = T[true_assign]
+[?2004l[?2004h> allT = np.array([T[c] for c in combos])  # 10 x 230
+[?2004l[?2004h> # permutation p (two-sided) with pooling across genes
+[?2004l[?2004h> lt = (np.abs(allT) >= np.abs(Tobs)[None, :]).sum(axis=0)
+[?2004l[?2004h> p = (lt + 1) / (allT.size / 230 * 0 + 10 + 0)  # per-gene: out of 10 assignments
+[?2004l[?2004h> p = (lt + 1) / 11.0
+[?2004l[?2004h> res = pd.DataFrame({"gene": genes, "t_obs": Tobs, "p": p})
+[?2004l[?2004h> o = np.argsort(res.p.values); rk = np.empty(len(res), int); rk[o] = np.arange(1, len(res)+1)
+[?2004l[?2004h> q = res.p.values * len(res) / rk
+[?2004l[?2004h> q = np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> res["q"] = np.minimum(q, 1)
+[?2004l[?2004h> res["cls"] = np.where(res.q < 0.05, np.where(res.t_obs < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> print(res.cls.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print("mismatches:", (chk.expected_class != chk.cls).sum())
+[?2004l[?2004h> print(chk[chk.expected_class != chk.cls].to_string(index=False))
+[?2004l[?2004h> print(chk[(chk.expected_class!="none")][["gene","expected_class","t_obs","p","q","cls"]].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/perm.py
+[?2004lcls
+none    230
+Name: count, dtype: int64
+mismatches: 10
+   gene expected_class     t_obs        p   q  cls
+TGT1011     sensitiser -1.690705 0.272727 1.0 none
+TGT1197     sensitiser -1.153718 0.272727 1.0 none
+TGT1202     sensitiser -1.640255 0.272727 1.0 none
+TGT2139     resistance  1.664415 0.272727 1.0 none
+TGT2915     sensitiser -0.928250 0.272727 1.0 none
+TGT3504     resistance  0.977190 0.272727 1.0 none
+TGT4695     sensitiser -1.643920 0.272727 1.0 none
+TGT6147     resistance  2.731219 0.272727 1.0 none
+TGT6655     resistance  1.045606 0.272727 1.0 none
+TGT7491     resistance  2.248156 0.272727 1.0 none
+   gene expected_class     t_obs        p   q  cls
+TGT1011     sensitiser -1.690705 0.272727 1.0 none
+TGT1197     sensitiser -1.153718 0.272727 1.0 none
+TGT1202     sensitiser -1.640255 0.272727 1.0 none
+TGT2139     resistance  1.664415 0.272727 1.0 none
+TGT2915     sensitiser -0.928250 0.272727 1.0 none
+TGT3504     resistance  0.977190 0.272727 1.0 none
+TGT4695     sensitiser -1.643920 0.272727 1.0 none
+TGT6147     resistance  2.731219 0.272727 1.0 none
+TGT6655     resistance  1.045606 0.272727 1.0 none
+TGT7491     resistance  2.248156 0.272727 1.0 none
+[?2004hroot@de027e2e2b14:/task# cat > /tmp/work/final3.py <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import stats
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts.gene.values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> L = np.log2(N + 1)
+[?2004l[?2004h> L -= np.median(L[ntc], axis=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = [cols.index(s) for s in cols if arm[s]=="vehicle"]
+[?2004l[?2004h> drg = [cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> genes = sorted(set(gene[~ntc]))
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in genes:
+[?2004l[?2004h>     m = gene == g
+[?2004l[?2004h>     V = L[m, :].mean(axis=0)     # gene value per sample
+[?2004l[?2004h>     t, p = stats.ttest_ind(V[drg], V[veh], equal_var=False)
+[?2004l[?2004h>     d = V[drg].mean() - V[veh].mean()
+[?2004l[?2004h>     rows.append((g, float(d), float(t), float(p)))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","d","t","p"])
+[?2004l[?2004h> n = len(res)
+[?2004l[?2004h> o = np.argsort(res.p.values); rk = np.empty(n, int); rk[o] = np.arange(1, n+1)
+[?2004l[?2004h> q = res.p.values * n / rk
+[?2004l[?2004h> q = np.minimum.accumulate(q[o][::-1])[::-1][np.argsort(o)]
+[?2004l[?2004h> res["q"] = np.minimum(q, 1)
+[?2004l[?2004h> res["cls"] = np.where(res.q < 0.05, np.where(res.d < 0, "sensitiser", "resistance"), "none")
+[?2004l[?2004h> print(res.cls.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print("mismatches:", (chk.expected_class != chk.cls).sum())
+[?2004l[?2004h> print(chk[chk.expected_class != chk.cls].to_string(index=False))
+[?2004l[?2004h> res.to_csv("/tmp/work/final3.tsv", sep="\t", index=False)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/final3.py
+[?2004lcls
+none          214
+resistance     13
+sensitiser      3
+Name: count, dtype: int64
+mismatches: 2
+   gene expected_class         d         t        p        q  cls
+TGT1011     sensitiser -2.027120 -2.952826 0.087440 0.418985 none
+TGT2915     sensitiser -0.913975 -9.095118 0.007563 0.086969 none
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc = gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[cols.index(s) for s in cols if arm[s]=="vehicle"]; drg=[cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> D=[]
+[?2004l[?2004h> for d,v in zip(drg,veh):
+[?2004l[?2004h>     dk=np.log2((N[:,d]+0.5)/(N[:,v]+0.5)); dk-=np.median(dk[ntc]); D.append(dk)
+[?2004l[?2004h> D=np.array(D).T   # sgRNA x 3
+[?2004l[?2004h> x = D[ntc].mean(axis=1)   # per NTC sgRNA: mean lfc over pairs (~ statistic basis)
+[?2004l[?2004h> print("sd of NTC sgRNA mean-lfc:", x.std(ddof=1))
+[?2004l[?2004h> rng=np.random.default_rng(0)
+[?2004l[?2004h> meds=[np.median(x[rng.choice(80,4,replace=False)]) for _ in range(200000)]
+[?2004l[?2004h> meds=np.array(meds)
+[?2004l[?2004h> print("null sd of median-of-4 (random partitions):", meds.std())
+[?2004l[?2004h> print("null 2.5/97.5 pct:", np.percentile(meds,[2.5,97.5]))
+[?2004l[?2004h> # also: distribution of all targeted-gene statistics vs this null
+[?2004l[?2004h> EOF
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+KeyError: 'LIB8'
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep=chr(9))
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc = gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[cols.index(s) for s in cols if arm[s]=="vehicle"]; drg=[cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> D=[]
+[?2004l[?2004h> for d,v in zip(drg,veh):
+[?2004l[?2004h>     dk=np.log2((N[:,d]+0.5)/(N[:,v]+0.5)); dk-=np.median(dk[ntc]); D.append(dk)
+[?2004l[?2004h> D=np.array(D).T
+[?2004l[?2004h> x = D[ntc].mean(axis=1)
+[?2004l[?2004h> print("sd of NTC sgRNA mean-lfc:", x.std(ddof=1))
+[?2004l[?2004h> rng=np.random.default_rng(0)
+[?2004l[?2004h> idx=rng.integers(0,80,size=(200000,4))
+[?2004l[?2004h> meds=np.median(x[idx],axis=1)
+[?2004l[?2004h> print("null sd of median-of-4 (random partitions):", meds.std())
+[?2004l[?2004h> print("null 2.5/97.5 pct:", np.percentile(meds,[2.5,97.5]))
+[?2004l[?2004h> EOF
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 7, in <module>
+KeyError: 'LIB8'
+[?2004hroot@de027e2e2b14:/task# python3 -c "import pandas as pd; c=pd.read_csv('/task/output/counts.tsv', sep=chr(9)); print(list(c.columns)); print(c.shape)"
+[?2004l['sgRNA', 'gene', 'LIB8', 'LIB9', 'LIB10', 'LIB11', 'LIB12', 'LIB13', 'LIB14', 'LIB15']
+(1000, 10)
+[?2004hroot@de027e2e2b14:/task# head -2 /task/output/counts.tsv | cat -A | cut -c1-120
+[?2004lsgRNA^Igene^ILIB8^ILIB9^ILIB10^ILIB11^ILIB12^ILIB13^ILIB14^ILIB15$
+VAL2_0001^ITGT5871^I61^I76^I21^I33^I50^I35^I54^I40$
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep=chr(9))
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc = gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[cols.index(s) for s in cols if arm[s]=="vehicle"]; drg=[cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> D=[]
+[?2004l[?2004h> for d,v in zip(drg,veh):
+[?2004l[?2004h>     dk=np.log2((N[:,d]+0.5)/(N[:,v]+0.5)); dk-=np.median(dk[ntc]); D.append(dk)
+[?2004l[?2004h> D=np.array(D).T
+[?2004l[?2004h> x = D[ntc].mean(axis=1)
+[?2004l[?2004h> print("sd of NTC sgRNA mean-lfc:", x.std(ddof=1))
+[?2004l[?2004h> rng=np.random.default_rng(0)
+[?2004l[?2004h> idx=rng.integers(0,80,size=(200000,4))
+[?2004l[?2004h> meds=np.median(x[idx],axis=1)
+[?2004l[?2004h> print("null sd of median-of-4 (random partitions):", meds.std())
+[?2004l[?2004h> print("null 2.5/97.5 pct:", np.percentile(meds,[2.5,97.5]))
+[?2004l[?2004h> EOF
+[?2004lsd of NTC sgRNA mean-lfc: 0.19771031041643058
+null sd of median-of-4 (random partitions): 0.09979133698634281
+null 2.5/97.5 pct: [-0.19436488  0.20143945]
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep=chr(9))
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc=gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[cols.index(s) for s in cols if arm[s]=="vehicle"]; drg=[cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> D=[]
+[?2004l[?2004h> for d,v in zip(drg,veh):
+[?2004l[?2004h>     dk=np.log2((N[:,d]+0.5)/(N[:,v]+0.5)); dk-=np.median(dk[ntc]); D.append(dk)
+[?2004l[?2004h> D=np.array(D).T   # sgRNA x 3 replicate pairs
+[?2004l[?2004h> Dntc = D[ntc]     # 80 x 3
+[?2004l[?2004h> rng=np.random.default_rng(1)
+[?2004l[?2004h> vars_=[]
+[?2004l[?2004h> for _ in range(20000):
+[?2004l[?2004h>     idx=rng.integers(0,80,size=4)
+[?2004l[?2004h>     s=np.median(Dntc[idx],axis=0)  # statistic per pair
+[?2004l[?2004h>     vars_.append(s.var(ddof=1))
+[?2004l[?2004h> vars_=np.array(vars_)
+[?2004l[?2004h> print("mean within-pseudo-gene var across pairs:", vars_.mean())
+[?2004l[?2004h> print("=> sd of gene statistic (mean of 3 pairs):", np.sqrt(vars_.mean()/3))
+[?2004l[?2004h> # between-sgRNA component
+[?2004l[?2004h> x=Dntc.mean(axis=1)
+[?2004l[?2004h> print("between-sgRNA sd of mean stat:", x.std(ddof=1), "-> /2 =", x.std(ddof=1)/2)
+[?2004l[?2004h> # targeted genes typical replicate variance of the median stat
+[?2004l[?2004h> tvars=[]
+[?2004l[?2004h> for g in sorted(set(gene[~ntc]))[:230]:
+[?2004l[?2004h>     m=np.where(gene==g)[0]
+[?2004l[?2004h>     s=np.median(D[m],axis=0)
+[?2004l[?2004h>     tvars.append(s.var(ddof=1))
+[?2004l[?2004h> print("median targeted-gene replicate var of stat:", np.median(tvars), "-> sd:", np.sqrt(np.median(tvars)/3))
+[?2004l[?2004h> EOF
+[?2004lmean within-pseudo-gene var across pairs: 0.03345315650479396
+=> sd of gene statistic (mean of 3 pairs): 0.10559854245331539
+between-sgRNA sd of mean stat: 0.19771031041643058 -> /2 = 0.09885515520821529
+median targeted-gene replicate var of stat: 0.07022386644542211 -> sd: 0.15299658650377587
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep=chr(9))
+[?2004l[?2004h> cols = ["LIB8","LIB9","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle","LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> C = c[cols].values.astype(float); gene=c.gene.values; ntc=gene=="NON_TARGETING"
+[?2004l[?2004h> N = C/C.sum(axis=0)*1e6
+[?2004l[?2004h> veh=[cols.index(s) for s in cols if arm[s]=="vehicle"]; drg=[cols.index(s) for s in cols if arm[s]=="drug"]
+[?2004l[?2004h> Nv=N[:,veh].mean(axis=1); Nd=N[:,drg].mean(axis=1)
+[?2004l[?2004h> l=np.log2((Nd+0.5)/(Nv+0.5)); l-=np.median(l[ntc])
+[?2004l[?2004h> for g in ["TGT2213","TGT3315","TGT4120","TGT4585","TGT4613","TGT5019","TGT7675","TGT8097","TGT1011","TGT2915","TGT2139","TGT3504"]:
+[?2004l[?2004h>     m=np.where(gene==g)[0]
+[?2004l[?2004h>     print(g, np.round(l[m],2))
+[?2004l[?2004h> EOF
+[?2004lTGT2213 [ 0.59 -0.29  0.86 -0.06]
+TGT3315 [0.27 0.54 0.09 0.56]
+TGT4120 [-0.55  0.36  0.02 -0.76]
+TGT4585 [-0.13 -0.1  -0.37 -0.41]
+TGT4613 [0.08 0.51 0.48 0.66]
+TGT5019 [ 0.33 -0.15  0.33  0.43]
+TGT7675 [-0.04  0.15  0.39  0.64]
+TGT8097 [-0.51  0.21  0.27  0.32]
+TGT1011 [-0.89 -1.01 -1.87 -2.06]
+TGT2915 [-0.76 -0.88 -0.91 -1.01]
+TGT2139 [1.74 2.07 1.56 1.64]
+TGT3504 [1.08 0.93 1.17 0.53]
+[?2004hroot@de027e2e2b14:/task# mageck --version 2>&1 | head -3
+[?2004l0.5.9.5
+[?2004hroot@de027e2e2b14:/task# python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> c = pd.read_csv("/task/output/counts.tsv", sep=chr(9))
+[?2004l[?2004h> cols=["sgRNA","gene","LIB10","LIB11","LIB12","LIB13","LIB14","LIB15"]
+[?2004l[?2004h> c[cols].to_csv("/tmp/work/mageck_counts.tsv", sep="\t", index=False)
+[?2004l[?2004h> print("written")
+[?2004l[?2004h> EOF
+[?2004lwritten
+[?2004hroot@de027e2e2b14:/task# cd /tmp/work && mageck test -k mageck_counts.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 -n drug_vs_veh --pdf-report 2>&1 | tail -15
+[?2004lINFO  @ Thu, 12 Nov 2026 19:55:43: Command message: 
+INFO  @ Thu, 12 Nov 2026 19:55:43:    
+INFO  @ Thu, 12 Nov 2026 19:55:43: End command message. 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Running command: cd ./; rm -rf drug_vs_veh_summary.aux 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Command message: 
+INFO  @ Thu, 12 Nov 2026 19:55:43:    
+INFO  @ Thu, 12 Nov 2026 19:55:43: End command message. 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Running command: cd ./; rm -rf drug_vs_veh_summary.tex 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Command message: 
+INFO  @ Thu, 12 Nov 2026 19:55:43:    
+INFO  @ Thu, 12 Nov 2026 19:55:43: End command message. 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Running command: cd ./; rm -rf drug_vs_veh_summary.toc 
+INFO  @ Thu, 12 Nov 2026 19:55:43: Command message: 
+INFO  @ Thu, 12 Nov 2026 19:55:43:    
+INFO  @ Thu, 12 Nov 2026 19:55:43: End command message. 
+[?2004hroot@de027e2e2b14:/tmp/work# head -3 /tmp/work/drug_vs_veh.gene_summary.txt | cut -c1-250
+[?2004lid	num	neg|score	neg|p-value	neg|fdr	neg|rank	neg|goodsgrna	neg|lfc	pos|score	pos|p-value	pos|fdr	pos|rank	pos|goodsgrna	pos|lfc
+TGT1197	4	1.7661e-07	4.9873e-06	0.000288	1	4	-1.2063	1.0	1.0	0.999995	231	0	-1.2063
+TGT1202	4	2.4344e-06	4.9873e-06	0.000288	2	4	-1.6962	1.0	1.0	0.999995	230	0	-1.6962
+[?2004hroot@de027e2e2b14:/tmp/work# python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> m = pd.read_csv("/tmp/work/drug_vs_veh.gene_summary.txt", sep=chr(9))
+[?2004l[?2004h> print(list(m.columns))
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep=chr(9))
+[?2004l[?2004h> mg = ref.merge(m, left_on="gene", right_on="id")
+[?2004l[?2004h> mis = mg[mg.expected_class != "none"]
+[?2004l[?2004h> print(mis[["gene","expected_class","neg|fdr","pos|fdr","neg|rank","pos|rank","neg|lfc"]].to_string(index=False))
+[?2004l[?2004h> sus = m[m.id.isin(["TGT2213","TGT3315","TGT4120","TGT4585","TGT4613","TGT5019","TGT7675","TGT8097"])]
+[?2004l[?2004h> print(sus[["id","neg|fdr","pos|fdr","neg|rank","pos|rank","neg|lfc"]].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l['id', 'num', 'neg|score', 'neg|p-value', 'neg|fdr', 'neg|rank', 'neg|goodsgrna', 'neg|lfc', 'pos|score', 'pos|p-value', 'pos|fdr', 'pos|rank', 'pos|goodsgrna', 'pos|lfc']
+   gene expected_class  neg|fdr  pos|fdr  neg|rank  pos|rank  neg|lfc
+TGT1011     sensitiser 0.031810 0.999995        16       221 -1.28050
+TGT1197     sensitiser 0.000288 0.999995         1       231 -1.20630
+TGT1202     sensitiser 0.000288 0.999995         2       230 -1.69620
+TGT2139     resistance 0.999995 0.000230       229         4  1.63430
+TGT2915     sensitiser 0.002448 0.999995         8       224 -0.80044
+TGT3504     resistance 0.999995 0.001008       226         8  1.04070
+TGT4695     sensitiser 0.001728 0.999995         6       226 -1.59070
+TGT6147     resistance 0.999995 0.000823       209         7  2.61900
+TGT6655     resistance 0.999995 0.000230       228         5  1.14220
+TGT7491     resistance 0.999995 0.000230       231         2  2.29610
+     id  neg|fdr  pos|fdr  neg|rank  pos|rank   neg|lfc
+TGT8097 0.999995 0.999995        79       107 -0.094357
+TGT5019 0.999995 0.999995        83       125  0.063819
+TGT4120 0.999995 0.999995       122        98 -0.255360
+TGT7675 0.999995 0.999995       137        31  0.413670
+TGT4585 0.999995 0.999995       140       213 -0.279870
+TGT2213 0.999995 0.999995       149        50  0.105500
+TGT4613 0.999995 0.719643       174        20  0.448050
+TGT3315 0.999995 0.999995       220        23  0.384500
+[?2004hroot@de027e2e2b14:/tmp/work# python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> m = pd.read_csv("/tmp/work/drug_vs_veh.gene_summary.txt", sep=chr(9))
+[?2004l[?2004h> m["cls"] = "none"
+[?2004l[?2004h> m.loc[m["neg|fdr"] < 0.05, "cls"] = "sensitiser"
+[?2004l[?2004h> m.loc[m["pos|fdr"] < 0.05, "cls"] = "resistance"
+[?2004l[?2004h> print(m.cls.value_counts())
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep=chr(9))
+[?2004l[?2004h> mg = ref.merge(m, left_on="gene", right_on="id")
+[?2004l[?2004h> print("mismatches:", (mg.expected_class != mg.cls).sum())
+[?2004l[?2004h> print(mg[mg.expected_class != mg.cls][["gene","expected_class","cls","neg|fdr","pos|fdr"]].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004lcls
+none          196
+sensitiser     18
+resistance     17
+Name: count, dtype: int64
+mismatches: 0
+Empty DataFrame
+Columns: [gene, expected_class, cls, neg|fdr, pos|fdr]
+Index: []
+[?2004hroot@de027e2e2b14:/tmp/work# cd /task && cat > /tmp/work/release.py <<'EOF'
+[?2004l[?2004h> import json
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = pd.read_csv("/task/output/counts.tsv", sep="\t")
+[?2004l[?2004h> samples = pd.read_csv("/task/input/samples.tsv", sep="\t")
+[?2004l[?2004h> cols = list(samples.sample_id)
+[?2004l[?2004h> arm = {"LIB8":"T0","LIB9":"T0","LIB10":"drug","LIB11":"vehicle",
+[?2004l[?2004h>        "LIB12":"vehicle","LIB13":"drug","LIB14":"drug","LIB15":"vehicle"}
+[?2004l[?2004h> grp = {a: [cols.index(s) for s in cols if arm[s]==a] for a in ("T0","vehicle","drug")}
+[?2004l[?2004h> 
+[?2004l[?2004h> C = counts[cols].values.astype(float)
+[?2004l[?2004h> gene = counts["gene"].values
+[?2004l[?2004h> ntc = gene == "NON_TARGETING"
+[?2004l[?2004h> N = C / C.sum(axis=0) * 1e6
+[?2004l[?2004h> Nt0  = N[:, grp["T0"]].mean(axis=1)
+[?2004l[?2004h> Nveh = N[:, grp["vehicle"]].mean(axis=1)
+[?2004l[?2004h> Ndrg = N[:, grp["drug"]].mean(axis=1)
+[?2004l[?2004h> lfc_fit = np.log2((Nveh + 0.5) / (Nt0 + 0.5)); lfc_fit -= np.median(lfc_fit[ntc])
+[?2004l[?2004h> lfc_drg = np.log2((Ndrg + 0.5) / (Nveh + 0.5)); lfc_drg -= np.median(lfc_drg[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> m = pd.read_csv("/tmp/work/drug_vs_veh.gene_summary.txt", sep="\t")
+[?2004l[?2004h> m = m.rename(columns={"id":"gene"})[["gene","neg|fdr","pos|fdr","neg|rank","pos|rank"]]
+[?2004l[?2004h> rows = []
+[?2004l[?2004h> for g in sorted(set(gene[~ntc])):
+[?2004l[?2004h>     mm = gene == g
+[?2004l[?2004h>     rows.append((g, float(np.median(lfc_fit[mm])), float(np.median(lfc_drg[mm]))))
+[?2004l[?2004h> res = pd.DataFrame(rows, columns=["gene","lfc_fitness","lfc_drug"]).merge(m, on="gene")
+[?2004l[?2004h> res["drug_class"] = "none"
+[?2004l[?2004h> res.loc[res["neg|fdr"] < 0.05, "drug_class"] = "sensitiser"
+[?2004l[?2004h> res.loc[res["pos|fdr"] < 0.05, "drug_class"] = "resistance"
+[?2004l[?2004h> res = res.rename(columns={"neg|fdr":"rra_fdr_depleted","pos|fdr":"rra_fdr_enriched"})
+[?2004l[?2004h> res["lfc_fitness"] = res.lfc_fitness.round(4)
+[?2004l[?2004h> res["lfc_drug"] = res.lfc_drug.round(4)
+[?2004l[?2004h> res = res[["gene","lfc_fitness","lfc_drug","rra_fdr_depleted","rra_fdr_enriched","drug_class"]]
+[?2004l[?2004h> res.to_csv("/task/output/gene_summary.tsv", sep="\t", index=False)
+[?2004l[?2004h> print(res.drug_class.value_counts())
+[?2004l[?2004h> 
+[?2004l[?2004h> ref = pd.read_csv("/task/input/reference_genes.tsv", sep="\t")
+[?2004l[?2004h> chk = ref.merge(res, on="gene")
+[?2004l[?2004h> print("reference mismatches:", (chk.expected_class != chk.drug_class).sum())
+[?2004l[?2004h> 
+[?2004l[?2004h> hits = pd.read_csv("/task/input/handover/hits_mailed.tsv", sep="\t")
+[?2004l[?2004h> cls = dict(zip(res.gene, res.drug_class))
+[?2004l[?2004h> err = pd.DataFrame({"gene": hits.gene,
+[?2004l[?2004h>                     "verdict": ["confirmed" if cls[g] in ("sensitiser","resistance") else "retracted" for g in hits.gene]})
+[?2004l[?2004h> err.to_csv("/task/output/erratum.tsv", sep="\t", index=False)
+[?2004l[?2004h> print(err.verdict.value_counts())
+[?2004l[?2004h> 
+[?2004l[?2004h> qc_raw = json.load(open("/tmp/work/qc_raw.json"))
+[?2004l[?2004h> qc = {"samples": {s: {"total_reads": int(qc_raw[s]["total_reads"]),
+[?2004l[?2004h>                       "mapped_reads": int(qc_raw[s]["mapped_reads"]),
+[?2004l[?2004h>                       "arm": arm[s]} for s in cols}}
+[?2004l[?2004h> json.dump(qc, open("/task/output/qc.json","w"), indent=2)
+[?2004l[?2004h> print("done")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@de027e2e2b14:/task# python3 /tmp/work/release.py
+[?2004ldrug_class
+none          195
+sensitiser     18
+resistance     17
+Name: count, dtype: int64
+reference mismatches: 0
+verdict
+confirmed    26
+retracted    14
+Name: count, dtype: int64
+done
+[?2004hroot@de027e2e2b14:/task# ls -la /task/output/ && head -3 /task/output/counts.tsv | cut -c1-100 && wc -l /task/output/counts.tsv /task/output/gene_summary.tsv /task/output/erratum.tsv
+[?2004ltotal 80
+drwxr-xr-x 1 root root  4096 Nov 12 19:45 .
+drwxr-xr-x 1 root root  4096 Nov 12 13:51 ..
+-rw-rw-rw- 1 root root 45491 Nov 12 19:41 counts.tsv
+-rw-rw-rw- 1 root root   733 Nov 12 19:57 erratum.tsv
+-rw-rw-rw- 1 root root 10896 Nov 12 19:57 gene_summary.tsv
+-rw-rw-rw- 1 root root   831 Nov 12 19:57 qc.json
+sgRNA	gene	LIB8	LIB9	LIB10	LIB11	LIB12	LIB13	LIB14	LIB15
+VAL2_0001	TGT5871	61	76	21	33	50	35	54	40
+VAL2_0002	TGT6646	27	43	13	3	13	9	5	8
+ 1001 /task/output/counts.tsv
+  231 /task/output/gene_summary.tsv
+   41 /task/output/erratum.tsv
+ 1273 total
+[?2004hroot@de027e2e2b14:/task# head -8 /task/output/gene_summary.tsv && echo ---- && cat /task/output/erratum.tsv
+[?2004lgene	lfc_fitness	lfc_drug	rra_fdr_depleted	rra_fdr_enriched	drug_class
+TGT0030	-1.5486	0.151	0.999995	0.999995	none
+TGT0059	-2.3296	0.1607	0.999995	0.999995	none
+TGT0141	-3.1285	-0.0076	0.999995	0.999995	none
+TGT0177	-2.4712	-2.1133	0.024808	0.999995	sensitiser
+TGT0179	-2.2174	-0.0232	0.999995	0.999995	none
+TGT0211	-2.2654	0.0514	0.999995	0.999995	none
+TGT0255	-2.2246	-0.0043	0.999995	0.999995	none
+----
+gene	verdict
+TGT4344	retracted
+TGT0462	retracted
+TGT3601	confirmed
+TGT3362	retracted
+TGT1371	confirmed
+TGT3977	confirmed
+TGT2524	confirmed
+TGT2478	retracted
+TGT1202	confirmed
+TGT0177	confirmed
+TGT3471	confirmed
+TGT4695	confirmed
+TGT8274	confirmed
+TGT3680	confirmed
+TGT4232	retracted
+TGT1505	confirmed
+TGT1011	confirmed
+TGT1007	confirmed
+TGT7491	confirmed
+TGT2139	confirmed
+TGT6147	confirmed
+TGT2002	confirmed
+TGT1197	confirmed
+TGT4662	retracted
+TGT2438	confirmed
+TGT2915	confirmed
+TGT7728	retracted
+TGT1790	confirmed
+TGT5816	retracted
+TGT1915	confirmed
+TGT2522	confirmed
+TGT6655	confirmed
+TGT1284	confirmed
+TGT3979	retracted
+TGT1012	retracted
+TGT2987	retracted
+TGT0409	retracted
+TGT3504	confirmed
+TGT1378	retracted
+TGT4120	retracted
+[?2004hroot@de027e2e2b14:/task# cat /task/output/qc.json
+[?2004l{
+  "samples": {
+    "LIB8": {
+      "total_reads": 112684,
+      "mapped_reads": 99717,
+      "arm": "T0"
+    },
+    "LIB9": {
+      "total_reads": 119542,
+      "mapped_reads": 106565,
+      "arm": "T0"
+    },
+    "LIB10": {
+      "total_reads": 126498,
+      "mapped_reads": 114203,
+      "arm": "drug"
+    },
+    "LIB11": {
+      "total_reads": 113752,
+      "mapped_reads": 103010,
+      "arm": "vehicle"
+    },
+    "LIB12": {
+      "total_reads": 122481,
+      "mapped_reads": 110250,
+      "arm": "vehicle"
+    },
+    "LIB13": {
+      "total_reads": 120408,
+      "mapped_reads": 109237,
+      "arm": "drug"
+    },
+    "LIB14": {
+      "total_reads": 127498,
+      "mapped_reads": 114795,
+      "arm": "drug"
+    },
+    "LIB15": {
+      "total_reads": 129296,
+      "mapped_reads": 116805,
+      "arm": "vehicle"
+    }
+  }
+}[?2004hroot@de027e2e2b14:/task# grep -c NON_TARGETING /task/output/gene_summary.tsv; python3 -c "
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> lib=pd.read_csv('/task/input/library.tsv',sep='\t')
+[?2004l[?2004h> c=pd.read_csv('/task/output/counts.tsv',sep='\t')
+[?2004l[?2004h> print('sgRNA order match:', (lib.sgRNA==c.sgRNA).all(), 'gene match:', (lib.gene==c.gene).all())
+[?2004l[?2004h> g=pd.read_csv('/task/output/gene_summary.tsv',sep='\t')
+[?2004l[?2004h> print('genes:', len(g), 'classes:', g.drug_class.value_counts().to_dict())
+[?2004l[?2004h> ref=pd.read_csv('/task/input/reference_genes.tsv',sep='\t').merge(g,on='gene')
+[?2004l[?2004h> print('ref mismatches:', (ref.expected_class!=ref.drug_class).sum())
+[?2004l[?2004h> "
+[?2004l0
+sgRNA order match: True gene match: True
+genes: 230 classes: {'none': 195, 'sensitiser': 18, 'resistance': 17}
+ref mismatches: 0
+[?2004hroot@de027e2e2b14:/task# 

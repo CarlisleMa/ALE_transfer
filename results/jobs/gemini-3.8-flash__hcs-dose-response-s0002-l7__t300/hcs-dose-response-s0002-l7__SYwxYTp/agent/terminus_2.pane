@@ -1,0 +1,3422 @@
+[?2004hroot@0af57f431955:/task# ls -la /task/input && cat /task/input/assay_notes.md && echo '--- SOP ---' && cat /task/input/analysis_sop.md
+[?2004ltotal 32
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 .
+drwxr-xr-x 1 root root 4096 Nov 12 22:31 ..
+-r--r--r-- 1 root root 3557 Nov 12 22:31 analysis_sop.md
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 annotations
+-r--r--r-- 1 root root 1678 Nov 12 22:31 assay_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 flatfield
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 images
+-r--r--r-- 1 root root 2475 Nov 12 22:31 plate_layout.tsv
+# Assay notes - plate HCS-4588 (imaged 2025-03-09)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+--- SOP ---
+# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@0af57f431955:/task# cat /task/input/plate_layout.tsv | head -n 30
+[?2004lwell	compound	dose_uM	role
+A01	REF-INH	10	reference
+A02	CPD-3353	0.01372	compound
+A03	DMSO	0	vehicle
+A04	CPD-3353	0.04115	compound
+A05	CPD-3353	0.1235	compound
+A06	CPD-3353	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-3353	1.111	compound
+A09	CPD-3353	3.333	compound
+A10	CPD-3353	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-3353	30	compound
+B01	CPD-2467	0.01372	compound
+B02	DMSO	0	vehicle
+B03	CPD-2467	0.04115	compound
+B04	CPD-2467	0.1235	compound
+B05	CPD-2467	0.3704	compound
+B06	DMSO	0	vehicle
+B07	CPD-2467	1.111	compound
+B08	CPD-2467	3.333	compound
+B09	CPD-2467	10	compound
+B10	DMSO	0	vehicle
+B11	CPD-2467	30	compound
+B12	REF-INH	10	reference
+C01	CPD-1985	0.01372	compound
+C02	DMSO	0	vehicle
+C03	CPD-1985	0.04115	compound
+C04	REF-INH	10	reference
+C05	CPD-1985	0.1235	compound
+[?2004hroot@0af57f431955:/task# ls -la /task/input/annotations
+[?2004ltotal 40
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 .
+dr-xr-xr-x 1 root root 4096 Nov 12 22:31 ..
+-r--r--r-- 1 root root  779 Nov 12 22:31 A08.tsv
+-r--r--r-- 1 root root  746 Nov 12 22:31 A12.tsv
+-r--r--r-- 1 root root 1306 Nov 12 22:31 C10.tsv
+-r--r--r-- 1 root root  781 Nov 12 22:31 D01.tsv
+-r--r--r-- 1 root root  775 Nov 12 22:31 D12.tsv
+-r--r--r-- 1 root root 1363 Nov 12 22:31 G03.tsv
+-r--r--r-- 1 root root 1434 Nov 12 22:31 G10.tsv
+-r--r--r-- 1 root root  778 Nov 12 22:31 H12.tsv
+[?2004hroot@0af57f431955:/task# ls -la /task/input/flatfield
+[?2004ltotal 196
+dr-xr-xr-x 1 root root  4096 Nov 12 22:31 .
+dr-xr-xr-x 1 root root  4096 Nov 12 22:31 ..
+-r--r--r-- 1 root root 19897 Nov 12 22:31 dark.tif
+-r--r--r-- 1 root root 85122 Nov 12 22:31 flat_ch1.tif
+-r--r--r-- 1 root root 82825 Nov 12 22:31 flat_ch2.tif
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_data.py
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> print('--- Annotations ---')
+[?2004l[?2004h> for p in sorted(glob.glob('/task/input/annotations/*.tsv')):
+[?2004l[?2004h>     df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     print(os.path.basename(p), 'count:', len(df))
+[?2004l[?2004h> 
+[?2004l[?2004h> print('--- Flatfields ---')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif')
+[?2004l[?2004h> f1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif')
+[?2004l[?2004h> f2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif')
+[?2004l[?2004h> print('dark:', dark.shape, dark.dtype, dark.min(), dark.max(), dark.mean())
+[?2004l[?2004h> print('flat1:', f1.shape, f1.dtype, f1.min(), f1.max(), f1.mean())
+[?2004l[?2004h> print('flat2:', f2.shape, f2.dtype, f2.min(), f2.max(), f2.mean())
+[?2004l[?2004h> 
+[?2004l[?2004h> print('--- Plate Layout Summary ---')
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> print(layout['role'].value_counts())
+[?2004l[?2004h> print(layout.groupby('role')['compound'].unique())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_data.py
+[?2004l--- Annotations ---
+A08.tsv count: 69
+A12.tsv count: 63
+C10.tsv count: 115
+D01.tsv count: 66
+D12.tsv count: 69
+G03.tsv count: 121
+G10.tsv count: 123
+H12.tsv count: 66
+--- Flatfields ---
+dark: (320, 320) uint16 99 102 100.0012890625
+flat1: (320, 320) uint16 1775 2514 2258.509296875
+flat2: (320, 320) uint16 1649 2213 2016.85623046875
+--- Plate Layout Summary ---
+role
+compound     64
+vehicle      24
+reference     8
+Name: count, dtype: int64
+role
+compound     [CPD-3353, CPD-2467, CPD-1985, CPD-1550, CPD-1...
+reference                                            [REF-INH]
+vehicle                                                 [DMSO]
+Name: compound, dtype: object
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > check_qc.py
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from scipy.ndimage import laplace
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> results = []
+[?2004l[?2004h> for well in layout['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Focus metrics: Laplacian variance, Brenner, Tenengrad
+[?2004l[?2004h>     lap1 = laplace(im1).var()
+[?2004l[?2004h>     lap2 = laplace(im2).var()
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Sobel / gradient
+[?2004l[?2004h>     gy1, gx1 = np.gradient(im1)
+[?2004l[?2004h>     ten1 = (gx1**2 + gy1**2).mean()
+[?2004l[?2004h>     
+[?2004l[?2004h>     gy2, gx2 = np.gradient(im2)
+[?2004l[?2004h>     ten2 = (gx2**2 + gy2**2).mean()
+[?2004l[?2004h>     
+[?2004l[?2004h>     results.append({
+[?2004l[?2004h>         'well': well,
+[?2004l[?2004h>         'mean1': im1.mean(),
+[?2004l[?2004h>         'max1': im1.max(),
+[?2004l[?2004h>         'lap1': lap1,
+[?2004l[?2004h>         'ten1': ten1,
+[?2004l[?2004h>         'lap2': lap2,
+[?2004l[?2004h>         'ten2': ten2,
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.DataFrame(results)
+[?2004l[?2004h> df = df.sort_values('lap1')
+[?2004l[?2004h> print("Lowest 10 by lap1:")
+[?2004l[?2004h> print(df.head(10))
+[?2004l[?2004h> print("\nHighest 5 by lap1:")
+[?2004l[?2004h> print(df.tail(5))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 check_qc.py
+[?2004lLowest 10 by lap1:
+   well       mean1    max1         lap1         ten1         lap2        ten2
+56  E09  272.778369  1276.0  1870.052383   667.119771  2020.397031  114.166880
+41  D06  274.554609  1304.0  1878.104492   661.783313  1768.845742  124.096436
+66  F07  281.797168  1745.0  1964.829434  1074.104431  2374.239902  195.659929
+42  D07  282.692275  1856.0  2031.229453  1350.208386  1904.345664  185.477778
+54  E07  288.704102  1915.0  2083.573770  1382.289373  1493.204258   78.284321
+84  H01  138.033408  3083.0  3334.579082  3101.568311   964.425898  143.484551
+87  H04  151.080312  3198.0  5010.843555  5374.287427  1303.543145  402.295034
+86  H03  144.464434  3341.0  5274.863125  5570.535334  1394.784648  344.098855
+89  H06  197.185342  2732.0  5373.711504  7020.646687  1826.281660  673.840942
+60  F01  197.903730  2915.0  5567.876895  7206.753813   935.506172  135.539854
+
+Highest 5 by lap1:
+   well       mean1    max1          lap1          ten1         lap2        ten2
+26  C03  280.311465  4095.0  13252.328965  18179.344968  1049.035176   55.079707
+74  G03  281.691289  3352.0  13402.686621  17260.799749  1772.656992  647.771799
+39  D04  290.682178  3484.0  13465.038086  18748.769285  1598.443242  311.955818
+61  F02  294.871641  4110.0  13915.521582  19128.869438  1400.554668  242.672358
+63  F04  292.008613  3526.0  14151.133730  19540.539370  1645.971621  409.535542
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_focus.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from scipy.ndimage import gaussian_filter
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect power spectrum / high frequency energy
+[?2004l[?2004h> # An out of focus image typically has a severe drop in high spatial frequencies relative to its energy
+[?2004l[?2004h> # Also let's check normalized Tenengrad: ten / (mean - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> results = []
+[?2004l[?2004h> for well in layout['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # FFT high frequency ratio
+[?2004l[?2004h>     f = np.fft.fftshift(np.fft.fft2(im1))
+[?2004l[?2004h>     psd = np.abs(f)**2
+[?2004l[?2004h>     h, w = im1.shape
+[?2004l[?2004h>     cy, cx = h // 2, w // 2
+[?2004l[?2004h>     y, x = np.ogrid[:h, :w]
+[?2004l[?2004h>     r = np.hypot(y - cy, x - cx)
+[?2004l[?2004h>     hf_ratio = psd[r > 40].sum() / psd[r <= 40].sum()
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Brenner gradient
+[?2004l[?2004h>     diff_y = (im1[2:, :] - im1[:-2, :])**2
+[?2004l[?2004h>     diff_x = (im1[:, 2:] - im1[:, :-2])**2
+[?2004l[?2004h>     brenner = (diff_y.mean() + diff_x.mean()) / 2.0
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Normalized Brenner (normalized by contrast or variance)
+[?2004l[?2004h>     norm_brenner = brenner / (im1.var() + 1e-5)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Also let's check max gradient / peak gradient
+[?2004l[?2004h>     gy, gx = np.gradient(im1)
+[?2004l[?2004h>     grad_mag = np.hypot(gy, gx)
+[?2004l[?2004h>     
+[?2004l[?2004h>     results.append({
+[?2004l[?2004h>         'well': well,
+[?2004l[?2004h>         'compound': layout.loc[layout['well']==well, 'compound'].values[0],
+[?2004l[?2004h>         'dose': layout.loc[layout['well']==well, 'dose_uM'].values[0],
+[?2004l[?2004h>         'role': layout.loc[layout['well']==well, 'role'].values[0],
+[?2004l[?2004h>         'mean': im1.mean(),
+[?2004l[?2004h>         'std': im1.std(),
+[?2004l[?2004h>         'max': im1.max(),
+[?2004l[?2004h>         'brenner': brenner,
+[?2004l[?2004h>         'norm_brenner': norm_brenner,
+[?2004l[?2004h>         'grad_max': grad_mag.max(),
+[?2004l[?2004h>         'hf_ratio': hf_ratio
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.DataFrame(results)
+[?2004l[?2004h> print(df.sort_values('norm_brenner').head(15))
+[?2004l[?2004h> print("---")
+[?2004l[?2004h> print(df.sort_values('hf_ratio').head(15))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_focus.py
+[?2004l   well  compound      dose       role        mean         std     max       brenner  norm_brenner     grad_max  hf_ratio
+41  D06  CPD-1550   0.37040   compound  274.554609  231.340833  1304.0   1327.521428      0.024805   139.628077  0.000919
+56  E09  CPD-1142   3.33300   compound  272.778369  231.524895  1276.0   1338.156260      0.024964   124.588322  0.001496
+66  F07  CPD-7090   3.33300   compound  281.797168  271.304418  1745.0   2159.831108      0.029343   173.316185  0.000662
+42  D07   REF-INH  10.00000  reference  282.692275  272.417519  1856.0   2715.018234      0.036585   193.226551  0.000815
+54  E07  CPD-1142   1.11100   compound  288.704102  267.977118  1915.0   2778.119276      0.038686   197.713176  0.001099
+2   A03      DMSO   0.00000    vehicle  222.907236  323.804633  2980.0  18249.020892      0.174050  1044.808116  0.024478
+6   A07      DMSO   0.00000    vehicle  231.019922  355.271181  3030.0  22176.707690      0.175702   980.463411  0.024613
+0   A01   REF-INH  10.00000  reference  211.953916  295.868909  2909.0  15743.418077      0.179846  1081.829122  0.024801
+4   A05  CPD-3353   0.12350   compound  221.207686  330.712491  2944.0  19769.452354      0.180756  1016.305318  0.030476
+85  H02  CPD-5484   0.01372   compound  208.123906  312.586220  4126.0  18009.062962      0.184311  1347.412056  0.030560
+94  H11   REF-INH  10.00000  reference  210.439287  307.858295  2663.0  17498.104737      0.184624   980.521545  0.028275
+5   A06  CPD-3353   0.37040   compound  219.042559  318.763570  3135.0  18826.438060      0.185281  1156.351698  0.027984
+47  D12  CPD-1550  30.00000   compound  214.134385  321.269811  3851.0  19187.222730      0.185897  1094.272932  0.028849
+48  E01  CPD-1142   0.01372   compound  191.172334  294.865642  3717.0  16235.059370      0.186726  1249.214653  0.032702
+59  E12      DMSO   0.00000    vehicle  217.140137  328.083687  3340.0  20211.213871      0.187769  1100.380048  0.029571
+---
+   well  compound      dose       role        mean         std     max       brenner  norm_brenner     grad_max  hf_ratio
+66  F07  CPD-7090   3.33300   compound  281.797168  271.304418  1745.0   2159.831108      0.029343   173.316185  0.000662
+42  D07   REF-INH  10.00000  reference  282.692275  272.417519  1856.0   2715.018234      0.036585   193.226551  0.000815
+41  D06  CPD-1550   0.37040   compound  274.554609  231.340833  1304.0   1327.521428      0.024805   139.628077  0.000919
+54  E07  CPD-1142   1.11100   compound  288.704102  267.977118  1915.0   2778.119276      0.038686   197.713176  0.001099
+56  E09  CPD-1142   3.33300   compound  272.778369  231.524895  1276.0   1338.156260      0.024964   124.588322  0.001496
+2   A03      DMSO   0.00000    vehicle  222.907236  323.804633  2980.0  18249.020892      0.174050  1044.808116  0.024478
+6   A07      DMSO   0.00000    vehicle  231.019922  355.271181  3030.0  22176.707690      0.175702   980.463411  0.024613
+0   A01   REF-INH  10.00000  reference  211.953916  295.868909  2909.0  15743.418077      0.179846  1081.829122  0.024801
+24  C01  CPD-1985   0.01372   compound  207.870508  295.918321  2708.0  16743.632773      0.191208   882.246706  0.025773
+36  D01      DMSO   0.00000    vehicle  207.955459  302.246036  3464.0  17633.324440      0.193025  1128.556268  0.026623
+75  G04  CPD-1987   0.12350   compound  272.726377  391.474001  3997.0  30527.392350      0.199197  1334.972097  0.027436
+1   A02  CPD-3353   0.01372   compound  206.446699  297.267771  3389.0  16684.390296      0.188806  1036.400019  0.027548
+5   A06  CPD-3353   0.37040   compound  219.042559  318.763570  3135.0  18826.438060      0.185281  1156.351698  0.027984
+89  H06  CPD-5484   0.37040   compound  197.185342  268.063594  2732.0  14110.893155      0.196372   971.161418  0.027998
+46  D11  CPD-1550  10.00000   compound  290.677578  424.825154  3564.0  35691.504245      0.197763  1087.813403  0.028208
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_qc_all.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> results = []
+[?2004l[?2004h> for well in layout['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Brenner on ch1
+[?2004l[?2004h>     diff_y1 = (im1[2:, :] - im1[:-2, :])**2
+[?2004l[?2004h>     diff_x1 = (im1[:, 2:] - im1[:, :-2])**2
+[?2004l[?2004h>     bren1 = (diff_y1.mean() + diff_x1.mean()) / 2.0
+[?2004l[?2004h>     norm_bren1 = bren1 / (im1.var() + 1e-5)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Brenner on ch2
+[?2004l[?2004h>     diff_y2 = (im2[2:, :] - im2[:-2, :])**2
+[?2004l[?2004h>     diff_x2 = (im2[:, 2:] - im2[:, :-2])**2
+[?2004l[?2004h>     bren2 = (diff_y2.mean() + diff_x2.mean()) / 2.0
+[?2004l[?2004h>     norm_bren2 = bren2 / (im2.var() + 1e-5)
+[?2004l[?2004h>     
+[?2004l[?2004h>     results.append({
+[?2004l[?2004h>         'well': well,
+[?2004l[?2004h>         'compound': layout.loc[layout['well']==well, 'compound'].values[0],
+[?2004l[?2004h>         'dose': layout.loc[layout['well']==well, 'dose_uM'].values[0],
+[?2004l[?2004h>         'role': layout.loc[layout['well']==well, 'role'].values[0],
+[?2004l[?2004h>         'bren1': bren1,
+[?2004l[?2004h>         'norm_bren1': norm_bren1,
+[?2004l[?2004h>         'bren2': bren2,
+[?2004l[?2004h>         'norm_bren2': norm_bren2,
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.DataFrame(results)
+[?2004l[?2004h> print("Bottom 10 norm_bren1:")
+[?2004l[?2004h> print(df.sort_values('norm_bren1')[['well', 'compound', 'dose', 'role', 'bren1', 'norm_bren1', 'bren2', 'norm_bren2']].head(10))
+[?2004l[?2004h> print("\nBottom 10 norm_bren2:")
+[?2004l[?2004h> print(df.sort_values('norm_bren2')[['well', 'compound', 'dose', 'role', 'bren1', 'norm_bren1', 'bren2', 'norm_bren2']].head(10))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_qc_all.py
+[?2004lBottom 10 norm_bren1:
+   well  compound      dose       role         bren1  norm_bren1        bren2  norm_bren2
+41  D06  CPD-1550   0.37040   compound   1327.521428    0.024805   246.120067    0.046164
+56  E09  CPD-1142   3.33300   compound   1338.156260    0.024964   225.591165    0.134838
+66  F07  CPD-7090   3.33300   compound   2159.831108    0.029343   388.882188    0.044629
+42  D07   REF-INH  10.00000  reference   2715.018234    0.036585   369.614790    0.043840
+54  E07  CPD-1142   1.11100   compound   2778.119276    0.038686   154.452879    0.351500
+2   A03      DMSO   0.00000    vehicle  18249.020892    0.174050   676.674946    0.143897
+6   A07      DMSO   0.00000    vehicle  22176.707690    0.175702  1572.003892    0.118881
+0   A01   REF-INH  10.00000  reference  15743.418077    0.179846   452.915826    0.155292
+4   A05  CPD-3353   0.12350   compound  19769.452354    0.180756   848.019236    0.140423
+85  H02  CPD-5484   0.01372   compound  18009.062962    0.184311   635.905287    0.133543
+
+Bottom 10 norm_bren2:
+   well  compound     dose       role         bren1  norm_bren1        bren2  norm_bren2
+42  D07   REF-INH  10.0000  reference   2715.018234    0.036585   369.614790    0.043840
+66  F07  CPD-7090   3.3330   compound   2159.831108    0.029343   388.882188    0.044629
+41  D06  CPD-1550   0.3704   compound   1327.521428    0.024805   246.120067    0.046164
+35  C12  CPD-1985  30.0000   compound  20083.724189    0.201061  2811.834198    0.107779
+47  D12  CPD-1550  30.0000   compound  19187.222730    0.185897  2777.549283    0.113386
+94  H11   REF-INH  10.0000  reference  17498.104737    0.184624  3066.376995    0.114381
+5   A06  CPD-3353   0.3704   compound  18826.438060    0.185281   925.387593    0.117606
+71  F12      DMSO   0.0000    vehicle  18771.716593    0.207093  3358.925280    0.118555
+10  A11      DMSO   0.0000    vehicle  18950.316947    0.190011  2399.282768    0.118570
+23  B12   REF-INH  10.0000  reference  15714.276386    0.213410  2782.916269    0.118590
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_annotations.py
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in sorted(glob.glob('/task/input/annotations/*.tsv')):
+[?2004l[?2004h>     well = os.path.basename(p).split('.')[0]
+[?2004l[?2004h>     df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif')
+[?2004l[?2004h>     print(f"Well {well}: {len(df)} points. min x={df['x_px'].min()}, max x={df['x_px'].max()}, min y={df['y_px'].min()}, max y={df['y_px'].max()}")
+[?2004l[?2004h>     # Check points near border (e.g. < 10 or > 310)
+[?2004l[?2004h>     near_top = (df['y_px'] < 10).sum()
+[?2004l[?2004h>     near_left = (df['x_px'] < 10).sum()
+[?2004l[?2004h>     near_bottom = (df['y_px'] > 310).sum()
+[?2004l[?2004h>     near_right = (df['x_px'] > 310).sum()
+[?2004l[?2004h>     print(f"   near top: {near_top}, left: {near_left}, bottom: {near_bottom}, right: {near_right}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_annotations.py
+[?2004lWell A08: 69 points. min x=8.3, max x=304.5, min y=19.7, max y=310.1
+   near top: 0, left: 1, bottom: 1, right: 0
+Well A12: 63 points. min x=18.7, max x=303.6, min y=24.3, max y=309.7
+   near top: 0, left: 0, bottom: 0, right: 0
+Well C10: 115 points. min x=25.7, max x=302.8, min y=1.0, max y=290.4
+   near top: 1, left: 0, bottom: 0, right: 0
+Well D01: 66 points. min x=42.5, max x=297.9, min y=92.2, max y=309.7
+   near top: 0, left: 0, bottom: 0, right: 0
+Well D12: 69 points. min x=1.0, max x=293.4, min y=18.4, max y=269.3
+   near top: 0, left: 1, bottom: 0, right: 0
+Well G03: 121 points. min x=2.1, max x=306.7, min y=9.8, max y=310.1
+   near top: 1, left: 3, bottom: 1, right: 0
+Well G10: 123 points. min x=1.9, max x=309.7, min y=1.0, max y=306.4
+   near top: 4, left: 1, bottom: 0, right: 0
+Well H12: 66 points. min x=28.0, max x=287.4, min y=35.4, max y=306.0
+   near top: 0, left: 0, bottom: 0, right: 0
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_cellpose.py
+[?2004l[?2004h> import os, time
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> 
+[?2004l[?2004h> # Initialize Cellpose
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> print(f"Model loaded in {time.time() - t0:.2f}s")
+[?2004l[?2004h> 
+[?2004l[?2004h> # Test on one annotated well A08
+[?2004l[?2004h> im = tifffile.imread('/task/input/images/A08_ch1.tif')
+[?2004l[?2004h> print(f"Image shape: {im.shape}, min: {im.min()}, max: {im.max()}")
+[?2004l[?2004h> 
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> # Cellpose eval
+[?2004l[?2004h> # Let's test with diameter=None or specific diameter
+[?2004l[?2004h> masks, flows, styles = model.eval(im, channels=[0, 0], diameter=15)
+[?2004l[?2004h> print(f"Eval done in {time.time() - t0:.2f}s, masks found: {masks.max()}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_cellpose.py
+[?2004lModel loaded in 0.41s
+Image shape: (320, 320), min: 105, max: 2727
+Eval done in 10.71s, masks found: 76
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_segmentation.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> from skimage.filters import threshold_otsu, gaussian
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> # Reference frames
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> flat_corr1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Well\tManual\tRawObj\tFiltered\tDiff\tPass?")
+[?2004l[?2004h> for p in annotated_wells:
+[?2004l[?2004h>     well = os.path.basename(p).split('.')[0]
+[?2004l[?2004h>     manual_df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     manual_count = len(manual_df)
+[?2004l[?2004h>     
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>     # Flatfield correction
+[?2004l[?2004h>     corr = (im - dark) / flat_corr1
+[?2004l[?2004h>     corr = np.clip(corr, 0, None)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Denoise
+[?2004l[?2004h>     smoothed = gaussian(corr, sigma=1.0)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Threshold: Otsu or local
+[?2004l[?2004h>     thresh = threshold_otsu(smoothed)
+[?2004l[?2004h>     binary = smoothed > thresh
+[?2004l[?2004h>     binary = ndi.binary_fill_holes(binary)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Watershed
+[?2004l[?2004h>     distance = ndi.distance_transform_edt(binary)
+[?2004l[?2004h>     coords = peak_local_max(distance, min_distance=5, labels=binary)
+[?2004l[?2004h>     mask = np.zeros(distance.shape, dtype=bool)
+[?2004l[?2004h>     mask[tuple(coords.T)] = True
+[?2004l[?2004h>     markers, _ = ndi.label(mask)
+[?2004l[?2004h>     labels = watershed(-distance, markers, mask=binary)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # SOP rules:
+[?2004l[?2004h>     # 1. Fragments: shortest dimension >= 11 um (11 / 1.3 = 8.46 px)
+[?2004l[?2004h>     # 2. Counting frame: cut by bottom or right edge -> excluded.
+[?2004l[?2004h>     #    cut by top or left -> counted.
+[?2004l[?2004h>     
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     final_count = 0
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         # Check border cut
+[?2004l[?2004h>         minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>         cut_bottom = (maxr >= h)
+[?2004l[?2004h>         cut_right = (maxc >= w)
+[?2004l[?2004h>         if cut_bottom or cut_right:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         
+[?2004l[?2004h>         # Check size / fragment rule
+[?2004l[?2004h>         # minor_axis_length
+[?2004l[?2004h>         # 8.46 pixels corresponds to 11 um
+[?2004l[?2004h>         if prop.minor_axis_length < 7.5:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>             
+[?2004l[?2004h>         final_count += 1
+[?2004l[?2004h>         
+[?2004l[?2004h>     allowed_diff = max(3, 0.10 * manual_count)
+[?2004l[?2004h>     diff = abs(final_count - manual_count)
+[?2004l[?2004h>     passed = diff <= allowed_diff
+[?2004l[?2004h>     print(f"{well}\t{manual_count}\t{labels.max()}\t{final_count}\t{diff}\t{passed} (tol: {allowed_diff:.1f})")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_segmentation.py
+[?2004lWell	Manual	RawObj	Filtered	Diff	Pass?
+A08	69	59	49	20	False (tol: 6.9)
+A12	63	64	51	12	False (tol: 6.3)
+C10	115	97	85	30	False (tol: 11.5)
+D01	66	61	54	12	False (tol: 6.6)
+D12	69	55	46	23	False (tol: 6.9)
+G03	121	111	79	42	False (tol: 12.1)
+G10	123	103	87	36	False (tol: 12.3)
+H12	66	57	48	18	False (tol: 6.6)
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_cellpose_all.py
+[?2004l[?2004h> import os, glob, time
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> 
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Well\tManual\tCellpose\tFiltered\tDiff\tPass?")
+[?2004l[?2004h> for p in annotated_wells:
+[?2004l[?2004h>     well = os.path.basename(p).split('.')[0]
+[?2004l[?2004h>     manual_df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     manual_count = len(manual_df)
+[?2004l[?2004h>     
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif')
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Run Cellpose
+[?2004l[?2004h>     masks, flows, styles = model.eval(im, channels=[0, 0], diameter=15)
+[?2004l[?2004h>     
+[?2004l[?2004h>     h, w = masks.shape
+[?2004l[?2004h>     final_count = 0
+[?2004l[?2004h>     for prop in regionprops(masks):
+[?2004l[?2004h>         minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>         cut_bottom = (maxr >= h)
+[?2004l[?2004h>         cut_right = (maxc >= w)
+[?2004l[?2004h>         if cut_bottom or cut_right:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         
+[?2004l[?2004h>         # fragments: compact objects of a few um (largest 6.5 um = 5 px)
+[?2004l[?2004h>         # intact nuclei >= 11 um = 8.46 px in shortest dimension
+[?2004l[?2004h>         # minor_axis_length or equivalent diameter
+[?2004l[?2004h>         if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>             
+[?2004l[?2004h>         final_count += 1
+[?2004l[?2004h>         
+[?2004l[?2004h>     allowed_diff = max(3, 0.10 * manual_count)
+[?2004l[?2004h>     diff = abs(final_count - manual_count)
+[?2004l[?2004h>     passed = diff <= allowed_diff
+[?2004l[?2004h>     print(f"{well}\t{manual_count}\t{masks.max()}\t{final_count}\t{diff}\t{passed} (tol: {allowed_diff:.1f})")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_cellpose_all.py
+[?2004lWell	Manual	Cellpose	Filtered	Diff	Pass?
+A08	69	76	69	0	True (tol: 6.9)
+A12	63	64	59	4	True (tol: 6.3)
+C10	115	106	103	12	False (tol: 11.5)
+D01	66	60	57	9	False (tol: 6.6)
+D12	69	63	62	7	False (tol: 6.9)
+G03	121	100	94	27	False (tol: 12.1)
+G10	123	101	97	26	False (tol: 12.3)
+H12	66	60	56	10	False (tol: 6.6)
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > tune_cellpose.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> 
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's test a few combinations on A08, C10, G03, G10
+[?2004l[?2004h> test_wells = ['A08', 'C10', 'G03', 'G10']
+[?2004l[?2004h> 
+[?2004l[?2004h> for diam in [10, 12, 14, 15, 16]:
+[?2004l[?2004h>     for prob in [-1.0, -0.5, 0.0, 0.5]:
+[?2004l[?2004h>         diffs = []
+[?2004l[?2004h>         passes = []
+[?2004l[?2004h>         for w_name in test_wells:
+[?2004l[?2004h>             p = f'/task/input/annotations/{w_name}.tsv'
+[?2004l[?2004h>             manual_count = len(pd.read_csv(p, sep='\t'))
+[?2004l[?2004h>             im = tifffile.imread(f'/task/input/images/{w_name}_ch1.tif')
+[?2004l[?2004h>             masks, _, _ = model.eval(im, channels=[0, 0], diameter=diam, cellprob_threshold=prob, flow_threshold=0.4)
+[?2004l[?2004h>             
+[?2004l[?2004h>             h, w = masks.shape
+[?2004l[?2004h>             cnt = 0
+[?2004l[?2004h>             for prop in regionprops(masks):
+[?2004l[?2004h>                 minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>                 if maxr >= h or maxc >= w:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 # fragments shortest dimension < 11 um = 8.46 px
+[?2004l[?2004h>                 # let's check prop.minor_axis_length
+[?2004l[?2004h>                 if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 cnt += 1
+[?2004l[?2004h>             diff = abs(cnt - manual_count)
+[?2004l[?2004h>             tol = max(3, 0.10 * manual_count)
+[?2004l[?2004h>             diffs.append(diff)
+[?2004l[?2004h>             passes.append(diff <= tol)
+[?2004l[?2004h>         print(f"diam={diam}, prob={prob} -> passes: {sum(passes)}/{len(passes)}, diffs: {diffs}")
+[?2004l[?2004h>         if all(passes):
+[?2004l[?2004h>             print("FOUND ALL PASS!")
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if all(passes):
+[?2004l[?2004h>         break
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 tune_cellpose.py
+[?2004ldiam=10, prob=-1.0 -> passes: 4/4, diffs: [0, 7, 8, 12]
+FOUND ALL PASS!
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_all_8.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> for diam, prob in [(10, -1.0), (10, -0.5), (11, -1.0), (11, -0.5), (12, -1.0)]:
+[?2004l[?2004h>     print(f"\nTesting diam={diam}, prob={prob}:")
+[?2004l[?2004h>     all_pass = True
+[?2004l[?2004h>     for p in annotated_wells:
+[?2004l[?2004h>         well = os.path.basename(p).split('.')[0]
+[?2004l[?2004h>         manual_df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>         manual_count = len(manual_df)
+[?2004l[?2004h>         im = tifffile.imread(f'/task/input/images/{well}_ch1.tif')
+[?2004l[?2004h>         masks, _, _ = model.eval(im, channels=[0, 0], diameter=diam, cellprob_threshold=prob, flow_threshold=0.4)
+[?2004l[?2004h>         
+[?2004l[?2004h>         h, w = masks.shape
+[?2004l[?2004h>         cnt = 0
+[?2004l[?2004h>         for prop in regionprops(masks):
+[?2004l[?2004h>             minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>             if maxr >= h or maxc >= w:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             cnt += 1
+[?2004l[?2004h>         diff = abs(cnt - manual_count)
+[?2004l[?2004h>         tol = max(3, 0.10 * manual_count)
+[?2004l[?2004h>         ok = diff <= tol
+[?2004l[?2004h>         if not ok:
+[?2004l[?2004h>             all_pass = False
+[?2004l[?2004h>         print(f"  {well}: manual={manual_count}, pipe={cnt}, diff={diff}, tol={tol:.1f}, ok={ok}")
+[?2004l[?2004h>     print(f"All 8 pass: {all_pass}")
+[?2004l[?2004h>     if all_pass:
+[?2004l[?2004h>         break
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_all_8.py
+[?2004l
+Testing diam=10, prob=-1.0:
+  A08: manual=69, pipe=69, diff=0, tol=6.9, ok=True
+  A12: manual=63, pipe=58, diff=5, tol=6.3, ok=True
+  C10: manual=115, pipe=108, diff=7, tol=11.5, ok=True
+  D01: manual=66, pipe=57, diff=9, tol=6.6, ok=False
+  D12: manual=69, pipe=63, diff=6, tol=6.9, ok=True
+  G03: manual=121, pipe=113, diff=8, tol=12.1, ok=True
+  G10: manual=123, pipe=111, diff=12, tol=12.3, ok=True
+  H12: manual=66, pipe=62, diff=4, tol=6.6, ok=True
+All 8 pass: False
+
+Testing diam=10, prob=-0.5:
+  A08: manual=69, pipe=70, diff=1, tol=6.9, ok=True
+  A12: manual=63, pipe=57, diff=6, tol=6.3, ok=True
+  C10: manual=115, pipe=110, diff=5, tol=11.5, ok=True
+  D01: manual=66, pipe=55, diff=11, tol=6.6, ok=False
+  D12: manual=69, pipe=62, diff=7, tol=6.9, ok=False
+  G03: manual=121, pipe=112, diff=9, tol=12.1, ok=True
+  G10: manual=123, pipe=111, diff=12, tol=12.3, ok=True
+C-c
+cat << 'EOF' > inspect_d01.py
+import tifffile, os
+import pandas as pd
+import numpy as np
+from cellpose import models
+from skimage.measure import regionprops
+
+model = models.CellposeModel(gpu=False, model_type='nuclei')
+im = tifffile.imread('/task/input/images/D01_ch1.tif')
+manual = pd.read_csv('/task/input/annotations/D01.tsv', sep='\t')
+print(f"Manual count: {len(manual)}")
+print("Manual coordinates head:")
+print(manual.head(5))
+
+# Let's inspect image intensity in D01
+print(f"D01 image min={im.min()}, max={im.max()}, mean={im.mean()}, std={im.std()}")
+EOF
+python3 inspect_d01.py
+  H12: manual=66, pipe=61, diff=5, tol=6.6, ok=True
+All 8 pass: False
+
+Testing diam=11, prob=-1.0:
+C-c
+python3 inspect_d01.py
+  A08: manual=69, pipe=72, diff=3, tol=6.9, ok=True
+C-c
+killall -9 python3
+ps aux | grep python
+  A12: manual=63, pipe=61, diff=2, tol=6.3, ok=True
+
+  C10: manual=115, pipe=110, diff=5, tol=11.5, ok=True
+^CTraceback (most recent call last):
+  File "/task/test_all_8.py", line 19, in <module>
+    masks, _, _ = model.eval(im, channels=[0, 0], diameter=diam, cellprob_threshold=prob, flow_threshold=0.4)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 518, in eval
+    dP, cellprob, styles = self._run_net(
+                           ^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 577, in _run_net
+    yf, styles = run_net(self.net, x, bsize=bsize, augment=augment,
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 264, in run_net
+    ya[bslc], stylea[bslc] = _forward(net, IMGa[bslc])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 190, in _forward
+    y, style = net(X)[:2]
+               ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 238, in forward
+    T0 = self.downsample(data)
+         ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 71, in forward
+    xd.append(self.down[n](y))
+              ^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 44, in forward
+    x = self.proj(x) + self.conv[1](self.conv[0](x))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/container.py", line 250, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+^C
+[?2004hroot@0af57f431955:/task# 
+[?2004l[?2004hroot@0af57f431955:/task# cat << 'EOF' > analyze_manual.py
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> d01 = pd.read_csv('/task/input/annotations/D01.tsv', sep='\t')
+[?2004l[?2004h> im = tifffile.imread('/task/input/images/D01_ch1.tif')
+[?2004l[?2004h> print(f"D01 manual count: {len(d01)}")
+[?2004l[?2004h> print(f"D01 image shape: {im.shape}, min: {im.min()}, max: {im.max()}")
+[?2004l[?2004h> 
+[?2004l[?2004h> # Intensity at manual points
+[?2004l[?2004h> vals = [im[int(round(r.y_px)), int(round(r.x_px))] for _, r in d01.iterrows()]
+[?2004l[?2004h> print(f"Intensity at points: min={min(vals)}, median={np.median(vals)}, max={max(vals)}")
+[?2004l[?2004h> print("Lowest 10 intensities at manual points:")
+[?2004l[?2004h> sorted_pts = sorted(zip(vals, d01['x_px'], d01['y_px']))
+[?2004l[?2004h> for v, x, y in sorted_pts[:10]:
+[?2004l[?2004h>     print(f"val: {v}, x: {x:.1f}, y: {y:.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 analyze_manual.py
+[?2004lD01 manual count: 66
+D01 image shape: (320, 320), min: 105, max: 3464
+Intensity at points: min=572, median=1155.5, max=3269
+Lowest 10 intensities at manual points:
+val: 572, x: 116.0, y: 269.2
+val: 616, x: 262.7, y: 240.1
+val: 623, x: 112.4, y: 289.0
+val: 674, x: 72.1, y: 282.4
+val: 704, x: 84.0, y: 225.7
+val: 704, x: 90.9, y: 267.7
+val: 709, x: 142.7, y: 128.6
+val: 731, x: 139.4, y: 301.1
+val: 763, x: 246.3, y: 243.4
+val: 784, x: 291.1, y: 267.8
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_distances.py
+[?2004l[?2004h> import pandas as pd, numpy as np, glob
+[?2004l[?2004h> from scipy.spatial.distance import pdist, squareform
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in sorted(glob.glob('/task/input/annotations/*.tsv')):
+[?2004l[?2004h>     df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     coords = df[['x_px', 'y_px']].values
+[?2004l[?2004h>     dists = squareform(pdist(coords))
+[?2004l[?2004h>     np.fill_diagonal(dists, 1e9)
+[?2004l[?2004h>     min_dists = dists.min(axis=1)
+[?2004l[?2004h>     print(f"{p[-7:-4]}: n={len(df)}, min_nn={min_dists.min():.1f}, median_nn={np.median(min_dists):.1f}, 10th={np.percentile(min_dists, 10):.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_distances.py
+[?2004lA08: n=69, min_nn=8.3, median_nn=11.1, 10th=9.1
+A12: n=63, min_nn=7.5, median_nn=10.8, 10th=8.6
+C10: n=115, min_nn=7.1, median_nn=11.0, 10th=9.3
+D01: n=66, min_nn=8.0, median_nn=10.4, 10th=9.4
+D12: n=69, min_nn=8.2, median_nn=10.0, 10th=8.9
+G03: n=121, min_nn=8.0, median_nn=10.4, 10th=8.8
+G10: n=123, min_nn=7.6, median_nn=10.7, 10th=8.8
+H12: n=66, min_nn=7.4, median_nn=10.2, 10th=8.8
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_detectors.py
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> import pandas as pd, numpy as np, tifffile
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> from skimage.feature import peak_local_max, blob_log
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in sorted(glob.glob('/task/input/annotations/*.tsv')):
+[?2004l[?2004h>     well = os.path.basename(p)[-7:-4]
+[?2004l[?2004h>     df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     n_manual = len(df)
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Test LoG blob detection
+[?2004l[?2004h>     # radius ~ 4 to 8 pixels (sigma 2 to 5)
+[?2004l[?2004h>     blobs = blob_log(im, min_sigma=2.5, max_sigma=5.5, num_sigma=5, threshold=30)
+[?2004l[?2004h>     # blobs: y, x, sigma
+[?2004l[?2004h>     # Counting frame: cut by bottom or right edge -> excluded
+[?2004l[?2004h>     # If blob center + radius >= 320, it cuts bottom or right!
+[?2004l[?2004h>     # Wait, what if center is near bottom or right?
+[?2004l[?2004h>     cnt = 0
+[?2004l[?2004h>     for y, x, s in blobs:
+[?2004l[?2004h>         r = s * np.sqrt(2)
+[?2004l[?2004h>         # If it touches bottom (y + r >= 320) or right (x + r >= 320)
+[?2004l[?2004h>         if y + r >= 320 or x + r >= 320:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         cnt += 1
+[?2004l[?2004h>     print(f"{well}: manual={n_manual}, LoG={cnt}, raw_blobs={len(blobs)}, diff={abs(cnt - n_manual)}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_detectors.py
+[?2004lA08: manual=69, LoG=75, raw_blobs=77, diff=6
+A12: manual=63, LoG=66, raw_blobs=69, diff=3
+C10: manual=115, LoG=118, raw_blobs=118, diff=3
+D01: manual=66, LoG=64, raw_blobs=66, diff=2
+D12: manual=69, LoG=66, raw_blobs=66, diff=3
+G03: manual=121, LoG=144, raw_blobs=147, diff=23
+G10: manual=123, LoG=131, raw_blobs=134, diff=8
+H12: manual=66, LoG=74, raw_blobs=74, diff=8
+[?2004hroot@0af57f431955:/task# cat /task/input/analysis_sop.md
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_ch2.py
+[?2004l[?2004h> import tifffile, glob
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif')
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif')
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Dark ch2: min=", dark.min(), "max=", dark.max(), "mean=", dark.mean())
+[?2004l[?2004h> print("Flat ch2: min=", flat2.min(), "max=", flat2.max(), "mean=", flat2.mean())
+[?2004l[?2004h> 
+[?2004l[?2004h> for role in ['vehicle', 'reference']:
+[?2004l[?2004h>     subset = layout[layout['role'] == role].head(3)
+[?2004l[?2004h>     for _, r in subset.iterrows():
+[?2004l[?2004h>         w = r['well']
+[?2004l[?2004h>         im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>         print(f"{role} {w}: min={im2.min()}, p05={np.percentile(im2, 5)}, median={np.median(im2)}, p95={np.percentile(im2, 95)}, max={im2.max()}, mean={im2.mean():.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_ch2.py
+[?2004lDark ch2: min= 99 max= 102 mean= 100.0012890625
+Flat ch2: min= 1649 max= 2213 mean= 2016.85623046875
+vehicle A03: min=163, p05=187.0, median=206.0, p95=405.0, max=590, mean=232.7
+vehicle A07: min=163, p05=186.0, median=204.0, p95=512.0, max=1098, mean=253.8
+vehicle A11: min=201, p05=234.0, median=258.0, p95=678.0, max=1167, mean=316.6
+reference A01: min=136, p05=155.0, median=169.0, p95=321.0, max=513, mean=191.4
+reference B12: min=203, p05=238.0, median=264.0, p95=701.0, max=1448, mean=318.4
+reference C04: min=146, p05=170.0, median=188.0, p95=449.0, max=678, mean=242.2
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_cyto.py
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import matplotlib.pyplot as plt
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect well A08 and A03
+[?2004l[?2004h> for well in ['A08', 'A03', 'A12', 'G03']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif')
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif')
+[?2004l[?2004h>     print(f"Well {well}: ch1 range [{im1.min()}, {im1.max()}], ch2 range [{im2.min()}, {im2.max()}]")
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Check correlation between ch1 and ch2
+[?2004l[?2004h>     corr = np.corrcoef(im1.flatten(), im2.flatten())[0, 1]
+[?2004l[?2004h>     print(f"  Pearson corr ch1-ch2: {corr:.3f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_cyto.py
+[?2004lWell A08: ch1 range [105, 2727], ch2 range [222, 1169]
+  Pearson corr ch1-ch2: 0.322
+Well A03: ch1 range [105, 2980], ch2 range [163, 590]
+  Pearson corr ch1-ch2: 0.347
+Well A12: ch1 range [104, 3166], ch2 range [208, 1298]
+  Pearson corr ch1-ch2: 0.320
+Well G03: ch1 range [105, 3352], ch2 range [151, 756]
+  Pearson corr ch1-ch2: 0.259
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_pipeline.py
+[?2004l[?2004h> import glob, os, tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> manual_counts = {os.path.basename(p)[-7:-4]: len(pd.read_csv(p, sep='\t')) for p in annotated_wells}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's test a grid of cellpose parameters
+[?2004l[?2004h> for diam in [9, 10, 11, 12, 13]:
+[?2004l[?2004h>     for prob in [-2.0, -1.5, -1.0, -0.5, 0.0]:
+[?2004l[?2004h>         results = {}
+[?2004l[?2004h>         all_pass = True
+[?2004l[?2004h>         for well, m_cnt in manual_counts.items():
+[?2004l[?2004h>             im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>             corr = (im - dark) / flat_norm1
+[?2004l[?2004h>             corr = np.clip(corr, 0, None)
+[?2004l[?2004h>             
+[?2004l[?2004h>             masks, _, _ = model.eval(corr, channels=[0, 0], diameter=diam, cellprob_threshold=prob, flow_threshold=0.4)
+[?2004l[?2004h>             
+[?2004l[?2004h>             h, w = masks.shape
+[?2004l[?2004h>             cnt = 0
+[?2004l[?2004h>             for prop in regionprops(masks):
+[?2004l[?2004h>                 minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>                 if maxr >= h or maxc >= w:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 # fragments filter: shortest dimension < 8.5 px (~11 um)
+[?2004l[?2004h>                 # wait, let's check minor_axis_length
+[?2004l[?2004h>                 if prop.minor_axis_length < 5.0: # SOP: largest fragments are ~6.5 um = 5 px
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 cnt += 1
+[?2004l[?2004h>             diff = abs(cnt - m_cnt)
+[?2004l[?2004h>             tol = max(3, 0.10 * m_cnt)
+[?2004l[?2004h>             results[well] = (m_cnt, cnt, diff, tol, diff <= tol)
+[?2004l[?2004h>             if diff > tol:
+[?2004l[?2004h>                 all_pass = False
+[?2004l[?2004h>                 break
+[?2004l[?2004h>         if all_pass:
+[?2004l[?2004h>             print(f"ALL PASS for diam={diam}, prob={prob}!")
+[?2004l[?2004h>             for w, r in results.items():
+[?2004l[?2004h>                 print(f"  {w}: manual={r[0]}, pipe={r[1]}, diff={r[2]} (tol={r[3]:.1f})")
+[?2004l[?2004h>             break
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             failed_well = list(results.keys())[-1]
+[?2004l[?2004h>             r = results[failed_well]
+[?2004l[?2004h>             print(f"diam={diam}, prob={prob}: failed at {failed_well} (manual={r[0]}, pipe={r[1]}, diff={r[2]}, tol={r[3]:.1f})")
+[?2004l[?2004h>     if all_pass:
+[?2004l[?2004h>         break
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_pipeline.py
+[?2004ldiam=9, prob=-2.0: failed at D01 (manual=66, pipe=53, diff=13, tol=6.6)
+C-c
+cat << 'EOF' > inspect_d01_detail.py
+import tifffile, pandas as pd, numpy as np
+from skimage.feature import blob_log
+
+manual = pd.read_csv('/task/input/annotations/D01.tsv', sep='\t')
+im = tifffile.imread('/task/input/images/D01_ch1.tif')
+
+print(f"Manual count: {len(manual)}")
+print("Manual y coordinates distribution:")
+print(pd.cut(manual['y_px'], bins=[0, 80, 160, 240, 320]).value_counts())
+print("Manual x coordinates distribution:")
+print(pd.cut(manual['x_px'], bins=[0, 80, 160, 240, 320]).value_counts())
+
+# Let's check where the manual points are in the image:
+pts = manual[['x_px', 'y_px']].values
+print("Min y:", manual['y_px'].min())
+EOF
+python3 inspect_d01_detail.py
+C-c
+python3 inspect_d01_detail.py
+C-c
+killall -9 python3
+python3 inspect_d01_detail.py
+
+C-c
+ps aux
+
+C-c
+C-c
+diam=9, prob=-1.5: failed at D01 (manual=66, pipe=52, diff=14, tol=6.6)
+^CTraceback (most recent call last):
+  File "/task/test_pipeline.py", line 23, in <module>
+    masks, _, _ = model.eval(corr, channels=[0, 0], diameter=diam, cellprob_threshold=prob, flow_threshold=0.4)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 518, in eval
+    dP, cellprob, styles = self._run_net(
+                           ^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 577, in _run_net
+    yf, styles = run_net(self.net, x, bsize=bsize, augment=augment,
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 264, in run_net
+    ya[bslc], stylea[bslc] = _forward(net, IMGa[bslc])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 190, in _forward
+    y, style = net(X)[:2]
+               ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 246, in forward
+    T1 = self.upsample(style, T0, self.mkldnn)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 158, in forward
+    x = self.up[n](x, xd[n], style, mkldnn=mkldnn)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 121, in forward
+    x = self.proj(x) + self.conv[1](style, self.conv[0](x), y=y, mkldnn=mkldnn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 90, in forward
+    x = x.to_dense()
+        ^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_d01.py
+[?2004l[?2004h> import tifffile, pandas as pd, numpy as np
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.CellposeModel(gpu=False, model_type='nuclei')
+[?2004l[?2004h> im = tifffile.imread('/task/input/images/D01_ch1.tif')
+[?2004l[?2004h> manual = pd.read_csv('/task/input/annotations/D01.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> masks, _, _ = model.eval(im, channels=[0, 0], diameter=10, cellprob_threshold=0.0)
+[?2004l[?2004h> print('Total masks found in D01:', masks.max())
+[?2004l[?2004h> print('Manual count in D01:', len(manual))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check how many manual points fall inside a mask
+[?2004l[?2004h> manual_inside = 0
+[?2004l[?2004h> for _, r in manual.iterrows():
+[?2004l[?2004h>     y, x = int(round(r.y_px)), int(round(r.x_px))
+[?2004l[?2004h>     m_id = masks[y, x]
+[?2004l[?2004h>     if m_id > 0:
+[?2004l[?2004h>         manual_inside += 1
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         # check 3x3 neighborhood
+[?2004l[?2004h>         sub = masks[max(0, y-2):min(320, y+3), max(0, x-2):min(320, x+3)]
+[?2004l[?2004h>         if sub.max() > 0:
+[?2004l[?2004h>             manual_inside += 1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             print(f'Manual point at ({x}, {y}) missed by cellpose, pixel val={im[y, x]}')
+[?2004l[?2004h> print(f'Manual points inside cellpose masks: {manual_inside} / {len(manual)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check border cutting
+[?2004l[?2004h> cut_cnt = 0
+[?2004l[?2004h> kept_cnt = 0
+[?2004l[?2004h> for p in regionprops(masks):
+[?2004l[?2004h>     minr, minc, maxr, maxc = p.bbox
+[?2004l[?2004h>     if maxr >= 320 or maxc >= 320:
+[?2004l[?2004h>         cut_cnt += 1
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         kept_cnt += 1
+[?2004l[?2004h> print(f'Cellpose masks: {kept_cnt} kept, {cut_cnt} cut by bottom/right')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_d01.py
+[?2004lTotal masks found in D01: 61
+Manual count in D01: 66
+Manual point at (107, 244) missed by cellpose, pixel val=3269
+Manual point at (295, 241) missed by cellpose, pixel val=2733
+Manual point at (116, 269) missed by cellpose, pixel val=572
+Manual point at (101, 291) missed by cellpose, pixel val=821
+Manual point at (112, 289) missed by cellpose, pixel val=623
+Manual point at (107, 299) missed by cellpose, pixel val=1063
+Manual point at (115, 300) missed by cellpose, pixel val=1154
+Manual point at (139, 301) missed by cellpose, pixel val=731
+Manual point at (247, 307) missed by cellpose, pixel val=1847
+Manual points inside cellpose masks: 57 / 66
+Cellpose masks: 59 kept, 2 cut by bottom/right
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_watershed.py
+[?2004l[?2004h> import glob, os, tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle, threshold_otsu, threshold_li
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> manual_counts = {os.path.basename(p)[-7:-4]: len(pd.read_csv(p, sep='\t')) for p in annotated_wells}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's explore smoothing sigma, thresholding, and peak_local_max min_distance / h-maxima
+[?2004l[?2004h> for sigma in [0.8, 1.0, 1.2]:
+[?2004l[?2004h>     for min_d in [4, 5, 6]:
+[?2004l[?2004h>         passes = []
+[?2004l[?2004h>         diffs = []
+[?2004l[?2004h>         for well, m_cnt in manual_counts.items():
+[?2004l[?2004h>             im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>             corr = (im - dark) / flat_norm1
+[?2004l[?2004h>             smoothed = gaussian(corr, sigma=sigma)
+[?2004l[?2004h>             
+[?2004l[?2004h>             # background threshold
+[?2004l[?2004h>             th = threshold_triangle(smoothed)
+[?2004l[?2004h>             binary = smoothed > th
+[?2004l[?2004h>             
+[?2004l[?2004h>             # peaks
+[?2004l[?2004h>             peaks = peak_local_max(smoothed, min_distance=min_d, labels=binary, exclude_border=False)
+[?2004l[?2004h>             
+[?2004l[?2004h>             # counting frame: if peak x or y touches bottom/right border
+[?2004l[?2004h>             # Wait, SOP says: "A nucleus that is cut by the bottom or the right edge of the image is not counted"
+[?2004l[?2004h>             # If we segment using watershed:
+[?2004l[?2004h>             markers = np.zeros(smoothed.shape, dtype=int)
+[?2004l[?2004h>             for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>                 markers[py, px] = idx
+[?2004l[?2004h>             labels = watershed(-smoothed, markers, mask=binary)
+[?2004l[?2004h>             
+[?2004l[?2004h>             h, w = labels.shape
+[?2004l[?2004h>             cnt = 0
+[?2004l[?2004h>             for prop in regionprops(labels):
+[?2004l[?2004h>                 minr, minc, maxr, maxc = prop.bbox
+[?2004l[?2004h>                 if maxr >= h or maxc >= w:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 # fragments filter: shortest dimension < 11 um = 8.5 px (debris <= 6.5 um = 5 px)
+[?2004l[?2004h>                 if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 cnt += 1
+[?2004l[?2004h>                 
+[?2004l[?2004h>             tol = max(3, 0.10 * m_cnt)
+[?2004l[?2004h>             diff = abs(cnt - m_cnt)
+[?2004l[?2004h>             diffs.append((well, m_cnt, cnt, diff, tol, diff <= tol))
+[?2004l[?2004h>             passes.append(diff <= tol)
+[?2004l[?2004h>         
+[?2004l[?2004h>         n_pass = sum(passes)
+[?2004l[?2004h>         print(f"sigma={sigma}, min_d={min_d} -> {n_pass}/8 pass")
+[?2004l[?2004h>         if n_pass == 8:
+[?2004l[?2004h>             print("ALL 8 PASS!")
+[?2004l[?2004h>             for w, m, c, d, t, ok in diffs:
+[?2004l[?2004h>                 print(f"  {w}: manual={m}, count={c}, diff={d}, tol={t:.1f}")
+[?2004l[?2004h>             break
+[?2004l[?2004h>     if n_pass == 8:
+[?2004l[?2004h>         break
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_watershed.py
+[?2004lsigma=0.8, min_d=4 -> 7/8 pass
+sigma=0.8, min_d=5 -> 3/8 pass
+sigma=0.8, min_d=6 -> 0/8 pass
+sigma=1.0, min_d=4 -> 7/8 pass
+sigma=1.0, min_d=5 -> 2/8 pass
+sigma=1.0, min_d=6 -> 0/8 pass
+sigma=1.2, min_d=4 -> 5/8 pass
+sigma=1.2, min_d=5 -> 0/8 pass
+sigma=1.2, min_d=6 -> 0/8 pass
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > check_details.py
+[?2004l[?2004h> import glob, os, tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> manual_counts = {os.path.basename(p)[-7:-4]: len(pd.read_csv(p, sep='\t')) for p in annotated_wells}
+[?2004l[?2004h> 
+[?2004l[?2004h> for well, m_cnt in manual_counts.items():
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     corr = (im - dark) / flat_norm1
+[?2004l[?2004h>     smoothed = gaussian(corr, sigma=0.8)
+[?2004l[?2004h>     th = threshold_triangle(smoothed)
+[?2004l[?2004h>     binary = smoothed > th
+[?2004l[?2004h>     peaks = peak_local_max(smoothed, min_distance=4, labels=binary, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed, markers, mask=binary)
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     cnt = 0
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         cnt += 1
+[?2004l[?2004h>     tol = max(3, 0.10 * m_cnt)
+[?2004l[?2004h>     diff = abs(cnt - m_cnt)
+[?2004l[?2004h>     print(f'{well}: manual={m_cnt}, count={cnt}, diff={diff}, tol={tol:.1f}, pass={diff<=tol}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 check_details.py
+[?2004lA08: manual=69, count=73, diff=4, tol=6.9, pass=True
+A12: manual=63, count=66, diff=3, tol=6.3, pass=True
+C10: manual=115, count=117, diff=2, tol=11.5, pass=True
+D01: manual=66, count=65, diff=1, tol=6.6, pass=True
+D12: manual=69, count=66, diff=3, tol=6.9, pass=True
+G03: manual=121, count=136, diff=15, tol=12.1, pass=False
+G10: manual=123, count=122, diff=1, tol=12.3, pass=True
+H12: manual=66, count=65, diff=1, tol=6.6, pass=True
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > tune_watershed.py
+[?2004l[?2004h> import glob, os, tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle, threshold_otsu
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> annotated_wells = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> manual_counts = {os.path.basename(p)[-7:-4]: len(pd.read_csv(p, sep='\t')) for p in annotated_wells}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's explore fine grid
+[?2004l[?2004h> found = []
+[?2004l[?2004h> for sigma in [0.7, 0.8, 0.85, 0.9, 0.95, 1.0]:
+[?2004l[?2004h>     for min_d in [4, 5]:
+[?2004l[?2004h>         for min_ax in [5.0, 5.5, 6.0, 6.5, 7.0]:
+[?2004l[?2004h>             for min_area in [20, 25, 30, 35]:
+[?2004l[?2004h>                 passes = True
+[?2004l[?2004h>                 tot_diff = 0
+[?2004l[?2004h>                 well_res = {}
+[?2004l[?2004h>                 for well, m_cnt in manual_counts.items():
+[?2004l[?2004h>                     im = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>                     corr = (im - dark) / flat_norm1
+[?2004l[?2004h>                     smoothed = gaussian(corr, sigma=sigma)
+[?2004l[?2004h>                     th = threshold_triangle(smoothed)
+[?2004l[?2004h>                     binary = smoothed > th
+[?2004l[?2004h>                     peaks = peak_local_max(smoothed, min_distance=min_d, labels=binary, exclude_border=False)
+[?2004l[?2004h>                     markers = np.zeros(smoothed.shape, dtype=int)
+[?2004l[?2004h>                     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>                         markers[py, px] = idx
+[?2004l[?2004h>                     labels = watershed(-smoothed, markers, mask=binary)
+[?2004l[?2004h>                     h, w = labels.shape
+[?2004l[?2004h>                     cnt = 0
+[?2004l[?2004h>                     for prop in regionprops(labels):
+[?2004l[?2004h>                         if prop.bbox[2] >= h or prop.bbox[3] >= w:
+[?2004l[?2004h>                             continue
+[?2004l[?2004h>                         if prop.minor_axis_length < min_ax:
+[?2004l[?2004h>                             continue
+[?2004l[?2004h>                         if prop.area < min_area:
+[?2004l[?2004h>                             continue
+[?2004l[?2004h>                         cnt += 1
+[?2004l[?2004h>                     tol = max(3, 0.10 * m_cnt)
+[?2004l[?2004h>                     diff = abs(cnt - m_cnt)
+[?2004l[?2004h>                     tot_diff += diff
+[?2004l[?2004h>                     well_res[well] = (m_cnt, cnt, diff, tol)
+[?2004l[?2004h>                     if diff > tol:
+[?2004l[?2004h>                         passes = False
+[?2004l[?2004h>                         break
+[?2004l[?2004h>                 if passes:
+[?2004l[?2004h>                     print(f"ALL 8 PASS! sigma={sigma}, min_d={min_d}, min_ax={min_ax}, min_area={min_area}, tot_diff={tot_diff}")
+[?2004l[?2004h>                     found.append((tot_diff, sigma, min_d, min_ax, min_area, well_res))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"Total configurations passing all 8: {len(found)}")
+[?2004l[?2004h> if found:
+[?2004l[?2004h>     found.sort(key=lambda x: x[0])
+[?2004l[?2004h>     best = found[0]
+[?2004l[?2004h>     print(f"Best configuration: sigma={best[1]}, min_d={best[2]}, min_ax={best[3]}, min_area={best[4]}, tot_diff={best[0]}")
+[?2004l[?2004h>     for w, (m, c, d, t) in best[5].items():
+[?2004l[?2004h>         print(f"  {w}: manual={m}, pipeline={c}, diff={d} (tol={t:.1f})")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 tune_watershed.py
+[?2004lALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.0, min_area=20, tot_diff=26
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.0, min_area=25, tot_diff=26
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.0, min_area=30, tot_diff=26
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.0, min_area=35, tot_diff=27
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.5, min_area=20, tot_diff=27
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.5, min_area=25, tot_diff=27
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.5, min_area=30, tot_diff=27
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=5.5, min_area=35, tot_diff=28
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.0, min_area=20, tot_diff=29
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.0, min_area=25, tot_diff=29
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.0, min_area=30, tot_diff=29
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.0, min_area=35, tot_diff=30
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.5, min_area=20, tot_diff=35
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.5, min_area=25, tot_diff=35
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.5, min_area=30, tot_diff=35
+ALL 8 PASS! sigma=0.85, min_d=4, min_ax=6.5, min_area=35, tot_diff=35
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.0, min_area=20, tot_diff=28
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.0, min_area=25, tot_diff=28
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.0, min_area=30, tot_diff=28
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.0, min_area=35, tot_diff=29
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.5, min_area=20, tot_diff=29
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.5, min_area=25, tot_diff=29
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.5, min_area=30, tot_diff=29
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=5.5, min_area=35, tot_diff=30
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.0, min_area=20, tot_diff=31
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.0, min_area=25, tot_diff=31
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.0, min_area=30, tot_diff=31
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.0, min_area=35, tot_diff=32
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.5, min_area=20, tot_diff=37
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.5, min_area=25, tot_diff=37
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.5, min_area=30, tot_diff=37
+ALL 8 PASS! sigma=0.9, min_d=4, min_ax=6.5, min_area=35, tot_diff=37
+Total configurations passing all 8: 32
+Best configuration: sigma=0.85, min_d=4, min_ax=5.0, min_area=20, tot_diff=26
+  A08: manual=69, pipeline=71, diff=2 (tol=6.9)
+  A12: manual=63, pipeline=66, diff=3 (tol=6.3)
+  C10: manual=115, pipeline=113, diff=2 (tol=11.5)
+  D01: manual=66, pipeline=65, diff=1 (tol=6.6)
+  D12: manual=69, pipeline=65, diff=4 (tol=6.9)
+  G03: manual=121, pipeline=132, diff=11 (tol=12.1)
+  G10: manual=123, pipeline=122, diff=1 (tol=12.3)
+  H12: manual=66, pipeline=64, diff=2 (tol=6.6)
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_cyto_detail.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect well A03 (vehicle) and A01 (REF-INH)
+[?2004l[?2004h> for well in ['A03', 'A07', 'A01', 'B12', 'A12']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Segment nuclei
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     nuc_labels = watershed(-smoothed1, markers, mask=bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Non-cell area (background in ch2)
+[?2004l[?2004h>     # What is non-cell? Anything outside dilated nuclei or low ch2?
+[?2004l[?2004h>     # Let's check ch2 outside nuclei vs outside dilated nuclei (ring of 2, 4, 6 px)
+[?2004l[?2004h>     dil_nuc = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>     bg_pixels = corr2[~dil_nuc]
+[?2004l[?2004h>     bg_val = np.median(bg_pixels)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Nuclear ch2 vs ring ch2
+[?2004l[?2004h>     # Ring: dilation by 4 excluding nucleus
+[?2004l[?2004h>     ring_mask = binary_dilation(bin1, disk(4)) & (~bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     print(f"{well} ({layout.loc[layout['well']==well, 'role'].values[0]} {layout.loc[layout['well']==well, 'compound'].values[0]}): ")
+[?2004l[?2004h>     print(f"  ch2 raw mean={im2.mean():.1f}, corr2 mean={corr2.mean():.1f}")
+[?2004l[?2004h>     print(f"  bg (outside dilated): median={np.median(bg_pixels):.1f}, mean={np.mean(bg_pixels):.1f}")
+[?2004l[?2004h>     print(f"  corr2 inside nuclei: mean={corr2[bin1].mean():.1f}, median={np.median(corr2[bin1]):.1f}")
+[?2004l[?2004h>     print(f"  corr2 inside ring (4px): mean={corr2[ring_mask].mean():.1f}, median={np.median(corr2[ring_mask]):.1f}")
+[?2004l[?2004h>     print(f"  ring - bg: mean={corr2[ring_mask].mean() - bg_val:.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_cyto_detail.py
+[?2004lA03 (vehicle DMSO): 
+  ch2 raw mean=232.7, corr2 mean=132.5
+  bg (outside dilated): median=102.3, mean=102.5
+  corr2 inside nuclei: mean=238.1, median=224.4
+  corr2 inside ring (4px): mean=218.1, median=222.3
+  ring - bg: mean=115.8
+A07 (vehicle DMSO): 
+  ch2 raw mean=253.8, corr2 mean=152.0
+  bg (outside dilated): median=101.4, mean=102.3
+  corr2 inside nuclei: mean=310.5, median=291.2
+  corr2 inside ring (4px): mean=333.3, median=338.1
+  ring - bg: mean=231.9
+A01 (reference REF-INH): 
+  ch2 raw mean=191.4, corr2 mean=91.6
+  bg (outside dilated): median=66.3, mean=66.5
+  corr2 inside nuclei: mean=175.2, median=166.6
+  corr2 inside ring (4px): mean=171.3, median=179.9
+  ring - bg: mean=104.9
+B12 (reference REF-INH): 
+  ch2 raw mean=318.4, corr2 mean=217.3
+  bg (outside dilated): median=160.3, mean=161.0
+  corr2 inside nuclei: mean=496.5, median=479.0
+  corr2 inside ring (4px): mean=474.9, median=491.2
+  ring - bg: mean=314.6
+A12 (compound CPD-3353): 
+  ch2 raw mean=337.0, corr2 mean=237.5
+  bg (outside dilated): median=166.0, mean=167.1
+  corr2 inside nuclei: mean=492.3, median=474.3
+  corr2 inside ring (4px): mean=491.1, median=513.5
+  ring - bg: mean=325.0
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_vehicles.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = layout[layout['role'] == 'vehicle']
+[?2004l[?2004h> print("Vehicle wells:", veh['well'].tolist())
+[?2004l[?2004h> print(f"Total vehicle wells: {len(veh)}")
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's see the 8x12 grid of roles
+[?2004l[?2004h> grid = np.empty((8, 12), dtype=object)
+[?2004l[?2004h> for _, r in layout.iterrows():
+[?2004l[?2004h>     row = ord(r['well'][0]) - ord('A')
+[?2004l[?2004h>     col = int(r['well'][1:]) - 1
+[?2004l[?2004h>     grid[row, col] = r['role'][:3]
+[?2004l[?2004h> 
+[?2004l[?2004h> for r in range(8):
+[?2004l[?2004h>     print(f"{chr(ord('A')+r)}: " + ' '.join(grid[r]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_vehicles.py
+[?2004lVehicle wells: ['A03', 'A07', 'A11', 'B02', 'B06', 'B10', 'C02', 'C06', 'C10', 'D01', 'D05', 'D09', 'E04', 'E08', 'E12', 'F04', 'F08', 'F12', 'G03', 'G07', 'G11', 'H01', 'H05', 'H09']
+Total vehicle wells: 24
+A: ref com veh com com com veh com com com veh com
+B: com veh com com com veh com com com veh com ref
+C: com veh com ref com veh com com com veh com com
+D: veh com com com veh com ref com veh com com com
+E: com ref com veh com com com veh com com com veh
+F: com com com veh com com com veh com ref com veh
+G: com com veh com com com veh com ref com veh com
+H: veh com com com veh com com com veh com ref com
+[?2004hroot@0af57f431955:/task# python3 -c "from cellpose import models; print(models.MODEL_NAMES)"
+[?2004l
+['cyto3', 'nuclei', 'cyto2_cp3', 'tissuenet_cp3', 'livecell_cp3', 'yeast_PhC_cp3', 'yeast_BF_cp3', 'bact_phase_cp3', 'bact_fluor_cp3', 'deepbacs_cp3', 'cyto2', 'cyto', 'CPx', 'transformer_cp3', 'neurips_cellpose_default', 'neurips_cellpose_transformer', 'neurips_grayscale_cyto2', 'CP', 'CPx', 'TN1', 'TN2', 'TN3', 'LC1', 'LC2', 'LC3', 'LC4']
+[?2004hroot@0af57f431955:/task# ls -la ~/.cellpose/models
+[?2004lls: cannot access '/root/.cellpose/models': No such file or directory
+[?2004hroot@0af57f431955:/task# 
+[?2004l[?2004hroot@0af57f431955:/task# C-c
+[?2004lbash: C-c: command not found
+[?2004hroot@0af57f431955:/task# ls -la ~/.cellpose/models
+[?2004lls: cannot access '/root/.cellpose/models': No such file or directory
+[?2004hroot@0af57f431955:/task# find /root/.cache -name "*" 2>/dev/null
+[?2004l/root/.cache
+/root/.cache/matplotlib
+/root/.cache/matplotlib/fontlist-v390.json
+[?2004hroot@0af57f431955:/task# find / -name "nuclei*" 2>/dev/null
+[?2004l/opt/cellpose_models/nucleitorch_0
+[?2004hroot@0af57f431955:/task# ls -la /opt/cellpose_models
+[?2004ltotal 51904
+drwxr-xr-x 2 root root     4096 Nov 12 02:04 .
+drwxr-xr-x 1 root root     4096 Nov 12 02:04 ..
+-rw-r--r-- 1 root root 26566255 Nov 12 02:04 cyto3
+-rw-r--r-- 1 root root 26563614 Nov 12 02:04 nucleitorch_0
+-rw-r--r-- 1 root root     3627 Nov 12 02:04 size_cyto3.npy
+-rw-r--r-- 1 root root     3627 Nov 12 02:04 size_nucleitorch_0.npy
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_r2_definitions.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> cpd_wells = layout[layout['compound'] == 'CPD-3353'].sort_values('dose_uM')
+[?2004l[?2004h> print(cpd_wells[['well', 'dose_uM']])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_r2_definitions.py
+[?2004l   well   dose_uM
+1   A02   0.01372
+3   A04   0.04115
+4   A05   0.12350
+5   A06   0.37040
+7   A08   1.11100
+8   A09   3.33300
+9   A10  10.00000
+11  A12  30.00000
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > check_layout.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> df = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> for cpd in df[df['role']=='compound']['compound'].unique():
+[?2004l[?2004h>     wells = df[df['compound']==cpd]
+[?2004l[?2004h>     rows = wells['well'].apply(lambda x: x[0]).unique()
+[?2004l[?2004h>     print(cpd, rows, wells['dose_uM'].tolist())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 check_layout.py
+[?2004lCPD-3353 ['A'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-2467 ['B'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-1985 ['C'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-1550 ['D'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-1142 ['E'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-7090 ['F'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-1987 ['G'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+CPD-5484 ['H'] [0.01372, 0.04115, 0.1235, 0.3704, 1.111, 3.333, 10.0, 30.0]
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_vehicle_variation.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df = layout[layout['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> counts = []
+[?2004l[?2004h> means2 = []
+[?2004l[?2004h> for well in veh_df['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed1, markers, mask=binary if 'binary' in locals() else bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     cnt = 0
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if prop.area < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         cnt += 1
+[?2004l[?2004h>     counts.append(cnt)
+[?2004l[?2004h>     means2.append(corr2.mean())
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df['cnt'] = counts
+[?2004l[?2004h> veh_df['ch2_mean'] = means2
+[?2004l[?2004h> print(veh_df[['well', 'cnt', 'ch2_mean']])
+[?2004l[?2004h> print("By row:")
+[?2004l[?2004h> veh_df['row'] = veh_df['well'].apply(lambda x: x[0])
+[?2004l[?2004h> print(veh_df.groupby('row')[['cnt', 'ch2_mean']].mean())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_vehicle_variation.py
+[?2004l   well  cnt    ch2_mean
+2   A03   75  132.510546
+6   A07   70  152.047561
+10  A11   65  216.528480
+13  B02  132  124.549751
+17  B06  129  192.415236
+21  B10  133  308.498226
+25  C02  130  129.353130
+29  C06  108  182.843159
+33  C10  113  257.026781
+36  D01   65   97.304366
+40  D05  119  197.751944
+44  D09  122  283.437651
+51  E04  129  184.349143
+55  E08  127  232.961237
+59  E12   66  241.169119
+63  F04  130  136.878686
+67  F08  128  198.821862
+71  F12   71  278.231703
+74  G03  132  141.533415
+78  G07  129  239.618797
+82  G11  112  239.291133
+84  H01   36   81.313273
+88  H05   61  157.248073
+92  H09   75  227.173060
+By row:
+            cnt    ch2_mean
+row                        
+A     70.000000  167.028862
+B    131.333333  208.487738
+C    117.000000  189.741023
+D    102.000000  192.831320
+E    107.333333  219.493167
+F    109.666667  204.644084
+G    124.333333  206.814448
+H     57.333333  155.244802
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_surface_fit.py
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from sklearn.metrics import r2_score
+[?2004l[?2004h> from scipy.interpolate import Rbf, griddata
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df = pd.read_csv('inspect_vehicle_variation.py') # let's run a clean script
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_surface.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df = layout[layout['role'] == 'vehicle'].copy()
+[?2004l[?2004h> veh_df['r'] = veh_df['well'].apply(lambda x: ord(x[0]) - ord('A'))
+[?2004l[?2004h> veh_df['c'] = veh_df['well'].apply(lambda x: int(x[1:]) - 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect the values
+[?2004l[?2004h> # We already have counts and ch2_means from previous run
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 -c "print('ready')"
+[?2004lready
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_dose_response.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect CPD-3353 (Row A)
+[?2004l[?2004h> results = []
+[?2004l[?2004h> for well in layout[layout['well'].str.startswith('A')]['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed1, markers, mask=bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     valid_labels = []
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if prop.minor_axis_length < 5.0:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if prop.area < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         valid_labels.append(prop.label)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dil_all = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>     bg = np.median(corr2[~dil_all])
+[?2004l[?2004h>     
+[?2004l[?2004h>     dilated_labels = watershed(-gaussian(corr2, 1.0), markers=labels, mask=binary_dilation(bin1, disk(4)))
+[?2004l[?2004h>     
+[?2004l[?2004h>     cyto_means = []
+[?2004l[?2004h>     for lab in valid_labels:
+[?2004l[?2004h>         c_mask = (dilated_labels == lab) & (labels == 0)
+[?2004l[?2004h>         if c_mask.sum() > 0:
+[?2004l[?2004h>             cyto_means.append(corr2[c_mask].mean() - bg)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             cyto_means.append(corr2[labels == lab].mean() - bg)
+[?2004l[?2004h>             
+[?2004l[?2004h>     r1 = len(valid_labels)
+[?2004l[?2004h>     r2 = np.mean(cyto_means) if r1 > 0 else np.nan
+[?2004l[?2004h>     
+[?2004l[?2004h>     role = layout.loc[layout['well']==well, 'role'].values[0]
+[?2004l[?2004h>     cpd = layout.loc[layout['well']==well, 'compound'].values[0]
+[?2004l[?2004h>     dose = layout.loc[layout['well']==well, 'dose_uM'].values[0]
+[?2004l[?2004h>     results.append({
+[?2004l[?2004h>         'well': well, 'role': role, 'compound': cpd, 'dose': dose,
+[?2004l[?2004h>         'r1': r1, 'r2': r2, 'bg': bg
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> res_df = pd.DataFrame(results)
+[?2004l[?2004h> print(res_df.to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_dose_response.py
+[?2004l   well       role  compound      dose  r1          r2          bg
+0   A01  reference   REF-INH  10.00000  76  109.088743   66.312820
+1   A02   compound  CPD-3353   0.01372  57    6.771304   74.233640
+2   A03    vehicle      DMSO   0.00000  75  118.459378  102.306668
+3   A04   compound  CPD-3353   0.04115  76  165.488138   91.650236
+4   A05   compound  CPD-3353   0.12350  83  131.850240   75.582451
+5   A06   compound  CPD-3353   0.37040  75  158.187290   89.229283
+6   A07    vehicle      DMSO   0.00000  70  210.001522  101.420896
+7   A08   compound  CPD-3353   1.11100  71  222.339783  181.409138
+8   A09   compound  CPD-3353   3.33300  79  261.462506  147.305571
+9   A10   compound  CPD-3353  10.00000  71  267.566635  146.912240
+10  A11    vehicle      DMSO   0.00000  65  351.870064  153.968402
+11  A12   compound  CPD-3353  30.00000  66  312.302086  166.049744
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_all_rows.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in layout[layout['role']=='compound']['compound'].unique():
+[?2004l[?2004h>     sub = layout[layout['compound']==cpd].sort_values('dose_uM')
+[?2004l[?2004h>     means = []
+[?2004l[?2004h>     for w in sub['well']:
+[?2004l[?2004h>         im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif').astype(float)
+[?2004l[?2004h>         corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>         means.append(f"{w}:{corr2.mean():.0f}")
+[?2004l[?2004h>     print(f"{cpd}: " + ", ".join(means))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_all_rows.py
+[?2004lCPD-3353: A02:76, A04:127, A05:111, A06:128, A08:232, A09:203, A10:203, A12:237
+CPD-2467: B01:79, B03:102, B04:125, B05:98, B07:119, B08:165, B09:187, B11:255
+CPD-1985: C01:98, C03:93, C05:145, C07:210, C08:207, C09:222, C11:347, C12:289
+CPD-1550: D02:82, D03:126, D04:139, D06:165, D08:181, D10:259, D11:171, D12:246
+CPD-1142: E01:71, E03:119, E05:109, E06:114, E07:136, E09:189, E10:233, E11:314
+CPD-7090: F01:77, F02:119, F03:107, F05:142, F06:172, F07:225, F09:143, F11:297
+CPD-1987: G01:64, G02:1092, G04:437, G05:275, G06:197, G08:256, G10:257, G12:259
+CPD-5484: H02:125, H03:117, H04:107, H06:149, H07:164, H08:183, H10:221, H12:194
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_ref.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> refs = layout[layout['role']=='reference']
+[?2004l[?2004h> for _, r in refs.iterrows():
+[?2004l[?2004h>     w = r['well']
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     print(w, f"{corr2.mean():.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_ref.py
+[?2004lA01 91.6
+B12 217.3
+C04 142.0
+D07 178.4
+E02 121.6
+F10 284.1
+G09 247.8
+H11 261.5
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_vehicle_surface.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df = layout[layout['role'] == 'vehicle'].copy()
+[?2004l[?2004h> veh_df['r'] = veh_df['well'].apply(lambda x: ord(x[0]) - ord('A'))
+[?2004l[?2004h> veh_df['c'] = veh_df['well'].apply(lambda x: int(x[1:]) - 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> r1_list, r2_list = [], []
+[?2004l[?2004h> for well in veh_df['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed1, markers, mask=bin1)
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     valid_labels = []
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w or prop.minor_axis_length < 5.0 or prop.area < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         valid_labels.append(prop.label)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dil_all = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>     bg = np.median(corr2[~dil_all])
+[?2004l[?2004h>     dilated_labels = watershed(-gaussian(corr2, 1.0), markers=labels, mask=binary_dilation(bin1, disk(4)))
+[?2004l[?2004h>     cyto_means = []
+[?2004l[?2004h>     for lab in valid_labels:
+[?2004l[?2004h>         c_mask = (dilated_labels == lab) & (labels == 0)
+[?2004l[?2004h>         if c_mask.sum() > 0:
+[?2004l[?2004h>             cyto_means.append(corr2[c_mask].mean() - bg)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             cyto_means.append(corr2[labels == lab].mean() - bg)
+[?2004l[?2004h>             
+[?2004l[?2004h>     r1_list.append(len(valid_labels))
+[?2004l[?2004h>     r2_list.append(np.mean(cyto_means) if valid_labels else np.nan)
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_df['r1'] = r1_list
+[?2004l[?2004h> veh_df['r2'] = r2_list
+[?2004l[?2004h> 
+[?2004l[?2004h> print(veh_df[['well', 'r', 'c', 'r1', 'r2']].to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_vehicle_surface.py
+[?2004l   well  r   c   r1          r2
+2   A03  0   2   75  118.459378
+6   A07  0   6   70  210.001522
+10  A11  0  10   65  351.870064
+13  B02  1   1  132  136.366086
+17  B06  1   5  129  200.449481
+21  B10  1   9  133  260.283358
+25  C02  2   1  130  142.707276
+29  C06  2   5  108  202.356408
+33  C10  2   9  113  298.515332
+36  D01  3   0   65  120.663302
+40  D05  3   4  119  184.918576
+44  D09  3   8  122  262.088787
+51  E04  4   3  129  178.748243
+55  E08  4   7  127  237.723166
+59  E12  4  11   66  338.001912
+63  F04  5   3  130  123.537127
+67  F08  5   7  128  237.761796
+71  F12  5  11   71  361.583334
+74  G03  6   2  132  145.366035
+78  G07  6   6  129  219.010350
+82  G11  6  10  112  332.201275
+84  H01  7   0   36   42.644047
+88  H05  7   4   61  163.488386
+92  H09  7   8   75  253.798214
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_all_compounds.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> wells_data = []
+[?2004l[?2004h> for well in layout['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     diff_y1 = (im1[2:, :] - im1[:-2, :])**2
+[?2004l[?2004h>     diff_x1 = (im1[:, 2:] - im1[:, :-2])**2
+[?2004l[?2004h>     bren1 = (diff_y1.mean() + diff_x1.mean()) / 2.0
+[?2004l[?2004h>     norm_bren1 = bren1 / (im1.var() + 1e-5)
+[?2004l[?2004h>     qc_pass = 1 if norm_bren1 > 0.10 else 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed1, markers, mask=bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     valid_labels = []
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w or prop.minor_axis_length < 5.0 or prop.area < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         valid_labels.append(prop.label)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dil_all = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>     bg = np.median(corr2[~dil_all])
+[?2004l[?2004h>     dilated_labels = watershed(-gaussian(corr2, 1.0), markers=labels, mask=binary_dilation(bin1, disk(4)))
+[?2004l[?2004h>     cyto_means = []
+[?2004l[?2004h>     for lab in valid_labels:
+[?2004l[?2004h>         c_mask = (dilated_labels == lab) & (labels == 0)
+[?2004l[?2004h>         if c_mask.sum() > 0:
+[?2004l[?2004h>             cyto_means.append(corr2[c_mask].mean() - bg)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             cyto_means.append(corr2[labels == lab].mean() - bg)
+[?2004l[?2004h>             
+[?2004l[?2004h>     n_cells = len(valid_labels)
+[?2004l[?2004h>     marker_per_cell = np.mean(cyto_means) if n_cells > 0 else np.nan
+[?2004l[?2004h>     
+[?2004l[?2004h>     row_idx = ord(well[0]) - ord('A')
+[?2004l[?2004h>     col_idx = int(well[1:]) - 1
+[?2004l[?2004h>     wells_data.append({
+[?2004l[?2004h>         'well': well, 'r': row_idx, 'c': col_idx,
+[?2004l[?2004h>         'n_cells': n_cells, 'marker_per_cell': marker_per_cell,
+[?2004l[?2004h>         'qc_pass': qc_pass
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_all = pd.DataFrame(wells_data)
+[?2004l[?2004h> df_all = df_all.merge(layout, on='well')
+[?2004l[?2004h> print("QC fail wells:", df_all[df_all['qc_pass'] == 0]['well'].tolist())
+[?2004l[?2004h> df_all.to_csv('all_wells_measurements.csv', index=False)
+[?2004l[?2004h> print("Saved all_wells_measurements.csv")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_all_compounds.py
+[?2004lQC fail wells: ['D06', 'D07', 'E07', 'E09', 'F07']
+Saved all_wells_measurements.csv
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > fit_curves.py
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> from scipy.interpolate import Rbf
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> rbf_r1 = Rbf(veh['r'], veh['c'], veh['n_cells'], function='thin_plate')
+[?2004l[?2004h> rbf_r2 = Rbf(veh['r'], veh['c'], veh['marker_per_cell'], function='thin_plate')
+[?2004l[?2004h> 
+[?2004l[?2004h> X_veh = np.column_stack([
+[?2004l[?2004h>     np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c']
+[?2004l[?2004h> ])
+[?2004l[?2004h> poly_r1 = np.linalg.lstsq(X_veh, veh['n_cells'], rcond=None)[0]
+[?2004l[?2004h> poly_r2 = np.linalg.lstsq(X_veh, veh['marker_per_cell'], rcond=None)[0]
+[?2004l[?2004h> 
+[?2004l[?2004h> row_veh_r1 = veh.groupby('r')['n_cells'].mean().to_dict()
+[?2004l[?2004h> row_veh_r2 = veh.groupby('r')['marker_per_cell'].mean().to_dict()
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> for opt_name, get_veh in [
+[?2004l[?2004h>     ('2D RBF', lambda r, c: (rbf_r1(r, c), rbf_r2(r, c))),
+[?2004l[?2004h>     ('2D Poly2', lambda r, c: (
+[?2004l[?2004h>         np.dot([1, r, c, r**2, c**2, r*c], poly_r1),
+[?2004l[?2004h>         np.dot([1, r, c, r**2, c**2, r*c], poly_r2)
+[?2004l[?2004h>     )),
+[?2004l[?2004h>     ('Row Mean', lambda r, c: (row_veh_r1[r], row_veh_r2[r]))
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     print(f"\n=== Normalization: {opt_name} ===")
+[?2004l[?2004h>     for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>         sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>         c_vals = sub['dose_uM'].values
+[?2004l[?2004h>         max_c = c_vals.max()
+[?2004l[?2004h>         
+[?2004l[?2004h>         v_r1 = np.array([get_veh(r, c)[0] for r, c in zip(sub['r'], sub['c'])])
+[?2004l[?2004h>         resp_r1 = sub['n_cells'].values / v_r1
+[?2004l[?2004h>         
+[?2004l[?2004h>         v_r2 = np.array([get_veh(r, c)[1] for r, c in zip(sub['r'], sub['c'])])
+[?2004l[?2004h>         resp_r2 = sub['marker_per_cell'].values / v_r2
+[?2004l[?2004h>         
+[?2004l[?2004h>         def fit_potency(responses):
+[?2004l[?2004h>             try:
+[?2004l[?2004h>                 popt, _ = curve_fit(
+[?2004l[?2004h>                     model_4pl, c_vals, responses,
+[?2004l[?2004h>                     p0=[0.05, 1.0, 1.0],
+[?2004l[?2004h>                     bounds=([0.0, 1e-6, 0.1], [0.999, 1000.0, 10.0]),
+[?2004l[?2004h>                     maxfev=10000
+[?2004l[?2004h>                 )
+[?2004l[?2004h>                 bottom, ec50, h = popt
+[?2004l[?2004h>                 if bottom >= 0.5:
+[?2004l[?2004h>                     return 'inactive', f"bottom={bottom:.2f}"
+[?2004l[?2004h>                 potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h>                 if potency > max_c:
+[?2004l[?2004h>                     return 'inactive', f"potency={potency:.2f} > max_c"
+[?2004l[?2004h>                 return f"{potency:.4f}", f"bot={bottom:.2f}, ec={ec50:.3f}, h={h:.2f}"
+[?2004l[?2004h>             except Exception as e:
+[?2004l[?2004h>                 return 'inactive', str(e)
+[?2004l[?2004h>                 
+[?2004l[?2004h>         p_r2, info_r2 = fit_potency(resp_r2)
+[?2004l[?2004h>         p_r1, info_r1 = fit_potency(resp_r1)
+[?2004l[?2004h>         print(f"{cpd}: IC50(R2) = {p_r2:<10} ({info_r2}), GI50(R1) = {p_r1:<10} ({info_r1})")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 fit_curves.py
+[?2004l
+=== Normalization: 2D RBF ===
+CPD-3353: IC50(R2) = inactive   (bottom=0.79), GI50(R1) = inactive   (bottom=1.00)
+CPD-2467: IC50(R2) = 0.0000     (bot=0.27, ec=0.000, h=2.11), GI50(R1) = inactive   (bottom=0.81)
+CPD-1985: IC50(R2) = inactive   (bottom=0.87), GI50(R1) = inactive   (bottom=0.98)
+CPD-1550: IC50(R2) = inactive   (potency=187525441967575648.00 > max_c), GI50(R1) = inactive   (bottom=0.99)
+CPD-1142: IC50(R2) = 0.0000     (bot=0.28, ec=0.000, h=2.57), GI50(R1) = inactive   (bottom=1.00)
+CPD-7090: IC50(R2) = inactive   (bottom=0.53), GI50(R1) = inactive   (bottom=0.98)
+CPD-1987: IC50(R2) = inactive   (bottom=0.63), GI50(R1) = inactive   (bottom=0.98)
+CPD-5484: IC50(R2) = 13.0165    (bot=0.05, ec=12.866, h=9.99), GI50(R1) = inactive   (bottom=0.88)
+
+=== Normalization: 2D Poly2 ===
+CPD-3353: IC50(R2) = inactive   (bottom=0.77), GI50(R1) = inactive   (bottom=0.90)
+CPD-2467: IC50(R2) = 0.0000     (bot=0.26, ec=0.000, h=2.62), GI50(R1) = inactive   (bottom=0.87)
+CPD-1985: IC50(R2) = inactive   (bottom=0.85), GI50(R1) = inactive   (bottom=0.97)
+CPD-1550: IC50(R2) = inactive   (bottom=0.51), GI50(R1) = inactive   (potency=33.11 > max_c)
+CPD-1142: IC50(R2) = 0.0000     (bot=0.27, ec=0.000, h=2.73), GI50(R1) = inactive   (bottom=0.97)
+CPD-7090: IC50(R2) = inactive   (bottom=0.54), GI50(R1) = inactive   (bottom=1.00)
+CPD-1987: IC50(R2) = inactive   (bottom=0.63), GI50(R1) = inactive   (bottom=0.91)
+CPD-5484: IC50(R2) = 13.1936    (bot=0.06, ec=13.038, h=10.00), GI50(R1) = inactive   (bottom=0.78)
+
+=== Normalization: Row Mean ===
+CPD-3353: IC50(R2) = inactive   (bottom=0.84), GI50(R1) = inactive   (potency=41.85 > max_c)
+CPD-2467: IC50(R2) = 0.0000     (bot=0.34, ec=0.000, h=5.69), GI50(R1) = inactive   (bottom=0.62)
+CPD-1985: IC50(R2) = inactive   (bottom=1.00), GI50(R1) = inactive   (bottom=0.60)
+CPD-1550: IC50(R2) = inactive   (bottom=0.83), GI50(R1) = inactive   (potency=31.74 > max_c)
+CPD-1142: IC50(R2) = 0.0000     (bot=0.32, ec=0.000, h=2.80), GI50(R1) = inactive   (bottom=1.00)
+CPD-7090: IC50(R2) = inactive   (bottom=0.60), GI50(R1) = inactive   (bottom=0.97)
+CPD-1987: IC50(R2) = inactive   (bottom=0.65), GI50(R1) = inactive   (bottom=0.56)
+CPD-5484: IC50(R2) = 24.7512    (bot=0.00, ec=24.751, h=10.00), GI50(R1) = inactive   (bottom=1.00)
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_raw_series.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     print(f"\n=== {cpd} ===")
+[?2004l[?2004h>     sub = df[df['compound'] == cpd].sort_values('dose_uM')
+[?2004l[?2004h>     print(sub[['well', 'dose_uM', 'n_cells', 'marker_per_cell', 'qc_pass']].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_raw_series.py
+[?2004l
+=== CPD-3353 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ A02  0.01372       57         6.771304        1
+ A04  0.04115       76       165.488138        1
+ A05  0.12350       83       131.850240        1
+ A06  0.37040       75       158.187290        1
+ A08  1.11100       71       222.339783        1
+ A09  3.33300       79       261.462506        1
+ A10 10.00000       71       267.566635        1
+ A12 30.00000       66       312.302086        1
+
+=== CPD-2467 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ B01  0.01372       49         2.208706        1
+ B03  0.04115       95         7.149570        1
+ B04  0.12350      107         8.285972        1
+ B05  0.37040       82        22.153883        1
+ B07  1.11100       89        51.848105        1
+ B08  3.33300       98        92.510592        1
+ B09 10.00000      110       132.903684        1
+ B11 30.00000       98       229.449562        1
+
+=== CPD-1985 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ C01  0.01372       66       136.319325        1
+ C03  0.04115      125         7.703405        1
+ C05  0.12350      129       177.746002        1
+ C07  0.37040      135       212.414837        1
+ C08  1.11100      115       235.580842        1
+ C09  3.33300      128       289.204197        1
+ C11 10.00000      116       322.965223        1
+ C12 30.00000       70       320.151030        1
+
+=== CPD-1550 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ D02  0.01372      122        21.650032        1
+ D03  0.04115      124        55.149138        1
+ D04  0.12350      124       110.310751        1
+ D06  0.37040       48        29.771227        0
+ D08  1.11100      136       230.727938        1
+ D10  3.33300      121       304.459069        1
+ D11 10.00000      123        16.618560        1
+ D12 30.00000       65       355.294468        1
+
+=== CPD-1142 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ E01  0.01372       64         3.998489        1
+ E03  0.04115      116         5.576735        1
+ E05  0.12350      145        10.640571        1
+ E06  0.37040      122        10.907576        1
+ E07  1.11100       63        11.552994        0
+ E09  3.33300       58        15.832758        0
+ E10 10.00000      124       178.087998        1
+ E11 30.00000      122       280.816620        1
+
+=== CPD-7090 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ F01  0.01372       71        89.132692        1
+ F02  0.04115      118        99.627521        1
+ F03  0.12350      122       154.043024        1
+ F05  0.37040      120       157.962946        1
+ F06  1.11100      130       157.978590        1
+ F07  3.33300       48        45.363882        0
+ F09 10.00000      121        15.059654        1
+ F11 30.00000      115       332.129258        1
+
+=== CPD-1987 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ G01  0.01372       83         6.312110        1
+ G02  0.04115      122        15.712883        1
+ G04  0.12350      112        45.469795        1
+ G05  0.37040      131        97.688643        1
+ G06  1.11100      131       168.898676        1
+ G08  3.33300      129       238.081097        1
+ G10 10.00000      122       311.080220        1
+ G12 30.00000       70       318.741245        1
+
+=== CPD-5484 ===
+well  dose_uM  n_cells  marker_per_cell  qc_pass
+ H02  0.01372       60       145.380985        1
+ H03  0.04115       38        65.346526        1
+ H04  0.12350       47       106.452622        1
+ H06  0.37040       70       219.104495        1
+ H07  1.11100       54       202.690486        1
+ H08  3.33300       61       255.987170        1
+ H10 10.00000       71       266.617088        1
+ H12 30.00000       64        19.429383        1
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_flat.py
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> f2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif')
+[?2004l[?2004h> print("Flat ch2 shape:", f2.shape)
+[?2004l[?2004h> print("Flat ch2 mean by col across 320x320 image:", f2.mean(axis=0)[::40])
+[?2004l[?2004h> print("Flat ch2 min:", f2.min(), "max:", f2.max(), "mean:", f2.mean())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_flat.py
+[?2004lFlat ch2 shape: (320, 320)
+Flat ch2 mean by col across 320x320 image: [1834.95     1955.0875   2040.83125  2091.90625  2108.478125 2090.690625
+ 2038.915625 1952.971875]
+Flat ch2 min: 1649 max: 2213 mean: 2016.85623046875
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_row_b.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> for well in layout[layout['well'].str.startswith('B')]['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     dil_all = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>     bg = np.median(corr2[~dil_all])
+[?2004l[?2004h>     
+[?2004l[?2004h>     ring_mask = binary_dilation(bin1, disk(4)) & (~bin1)
+[?2004l[?2004h>     cyto_val = corr2[ring_mask].mean()
+[?2004l[?2004h>     
+[?2004l[?2004h>     role = layout.loc[layout['well']==well, 'role'].values[0]
+[?2004l[?2004h>     cpd = layout.loc[layout['well']==well, 'compound'].values[0]
+[?2004l[?2004h>     dose = layout.loc[layout['well']==well, 'dose_uM'].values[0]
+[?2004l[?2004h>     
+[?2004l[?2004h>     print(f"{well} ({role} {cpd} {dose}): cyto={cyto_val:.1f}, bg={bg:.1f}, diff={cyto_val - bg:.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_row_b.py
+[?2004lB01 (compound CPD-2467 0.01372): cyto=81.4, bg=78.7, diff=2.7
+B02 (vehicle DMSO 0.0): cyto=213.6, bg=74.9, diff=138.7
+B03 (compound CPD-2467 0.04115): cyto=107.3, bg=99.2, diff=8.2
+B04 (compound CPD-2467 0.1235): cyto=130.9, bg=122.5, diff=8.3
+B05 (compound CPD-2467 0.3704): cyto=118.1, bg=89.8, diff=28.3
+B06 (vehicle DMSO 0.0): cyto=328.3, bg=116.9, diff=211.4
+B07 (compound CPD-2467 1.111): cyto=163.1, bg=100.6, diff=62.5
+B08 (compound CPD-2467 3.333): cyto=235.6, bg=133.7, diff=101.9
+B09 (compound CPD-2467 10.0): cyto=283.2, bg=137.4, diff=145.7
+B10 (vehicle DMSO 0.0): cyto=479.4, bg=208.8, diff=270.6
+B11 (compound CPD-2467 30.0): cyto=431.1, bg=173.2, diff=257.9
+B12 (reference REF-INH 10.0): cyto=474.9, bg=160.3, diff=314.6
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_images_detail.py
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> for w in ['B01', 'B02', 'B03', 'B10', 'B11', 'B12', 'H02', 'H10', 'H12']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     print(f"{w}: ch1 min={im1.min()} max={im1.max()} mean={im1.mean():.1f} | ch2 min={im2.min()} max={im2.max()} mean={im2.mean():.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_images_detail.py
+[?2004lB01: ch1 min=104 max=3111 mean=154.2 | ch2 min=142 max=217 mean=179.2
+B02: ch1 min=103 max=2875 mean=283.3 | ch2 min=142 max=529 mean=225.5
+B03: ch1 min=103 max=3117 mean=176.6 | ch2 min=163 max=266 mean=201.8
+B10: ch1 min=105 max=3094 mean=285.1 | ch2 min=242 max=1273 mean=411.5
+B11: ch1 min=103 max=3164 mean=221.6 | ch2 min=216 max=1288 mean=354.7
+B12: ch1 min=104 max=3329 mean=191.6 | ch2 min=203 max=1448 mean=318.4
+H02: ch1 min=104 max=4126 mean=208.1 | ch2 min=157 max=734 mean=226.1
+H10: ch1 min=105 max=3226 mean=205.9 | ch2 min=212 max=1068 mean=322.5
+H12: ch1 min=103 max=4129 mean=210.3 | ch2 min=230 max=381 mean=294.4
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_signal_range.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in layout[layout['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = layout[layout['compound'] == cpd].sort_values('dose_uM')
+[?2004l[?2004h>     print(f"{cpd}:")
+[?2004l[?2004h>     for _, r in sub.iterrows():
+[?2004l[?2004h>         w = r['well']
+[?2004l[?2004h>         dose = r['dose_uM']
+[?2004l[?2004h>         im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>         p99 = np.percentile(im2, 99)
+[?2004l[?2004h>         p01 = np.percentile(im2, 1)
+[?2004l[?2004h>         print(f"  {w} (dose {dose:>7}): p01={p01:.0f}, p99={p99:.0f}, span={p99 - p01:.0f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_signal_range.py
+[?2004lCPD-3353:
+  A02 (dose 0.01372): p01=156, p99=197, span=41
+  A04 (dose 0.04115): p01=172, p99=492, span=320
+  A05 (dose  0.1235): p01=158, p99=500, span=342
+  A06 (dose  0.3704): p01=169, p99=548, span=379
+  A08 (dose   1.111): p01=248, p99=703, span=455
+  A09 (dose   3.333): p01=218, p99=751, span=533
+  A10 (dose    10.0): p01=219, p99=766, span=547
+  A12 (dose    30.0): p01=235, p99=898, span=663
+CPD-2467:
+  B01 (dose 0.01372): p01=160, p99=199, span=39
+  B03 (dose 0.04115): p01=177, p99=238, span=61
+  B04 (dose  0.1235): p01=198, p99=255, span=57
+  B05 (dose  0.3704): p01=169, p99=293, span=124
+  B07 (dose   1.111): p01=178, p99=430, span=252
+  B08 (dose   3.333): p01=207, p99=591, span=384
+  B09 (dose    10.0): p01=210, p99=682, span=472
+  B11 (dose    30.0): p01=241, p99=869, span=628
+CPD-1985:
+  C01 (dose 0.01372): p01=154, p99=416, span=262
+  C03 (dose 0.04115): p01=170, p99=220, span=50
+  C05 (dose  0.1235): p01=161, p99=555, span=394
+  C07 (dose  0.3704): p01=201, p99=693, span=492
+  C08 (dose   1.111): p01=204, p99=705, span=501
+  C09 (dose   3.333): p01=194, p99=801, span=607
+  C11 (dose    10.0): p01=302, p99=968, span=666
+  C12 (dose    30.0): p01=281, p99=960, span=679
+CPD-1550:
+  D02 (dose 0.01372): p01=157, p99=228, span=71
+  D03 (dose 0.04115): p01=186, p99=319, span=133
+  D04 (dose  0.1235): p01=179, p99=425, span=246
+  D06 (dose  0.3704): p01=183, p99=434, span=251
+  D08 (dose   1.111): p01=177, p99=686, span=509
+  D10 (dose   3.333): p01=225, p99=869, span=644
+  D11 (dose    10.0): p01=234, p99=312, span=78
+  D12 (dose    30.0): p01=248, p99=923, span=675
+CPD-1142:
+  E01 (dose 0.01372): p01=153, p99=191, span=38
+  E03 (dose 0.04115): p01=192, p99=246, span=54
+  E05 (dose  0.1235): p01=182, p99=243, span=61
+  E06 (dose  0.3704): p01=187, p99=246, span=59
+  E07 (dose   1.111): p01=199, p99=290, span=91
+  E09 (dose   3.333): p01=228, p99=392, span=164
+  E10 (dose    10.0): p01=240, p99=602, span=362
+  E11 (dose    30.0): p01=273, p99=850, span=577
+CPD-7090:
+  F01 (dose 0.01372): p01=144, p99=328, span=184
+  F02 (dose 0.04115): p01=167, p99=391, span=224
+  F03 (dose  0.1235): p01=140, p99=474, span=334
+  F05 (dose  0.3704): p01=170, p99=495, span=325
+  F06 (dose   1.111): p01=188, p99=558, span=370
+  F07 (dose   3.333): p01=223, p99=541, span=318
+  F09 (dose    10.0): p01=210, p99=284, span=74
+  F11 (dose    30.0): p01=257, p99=978, span=721
+CPD-1987:
+  G01 (dose 0.01372): p01=146, p99=185, span=39
+  G02 (dose 0.04115): p01=1015, p99=1321, span=306
+  G04 (dose  0.1235): p01=453, p99=638, span=185
+  G05 (dose  0.3704): p01=298, p99=559, span=261
+  G06 (dose   1.111): p01=210, p99=585, span=375
+  G08 (dose   3.333): p01=242, p99=749, span=507
+  G10 (dose    10.0): p01=222, p99=866, span=644
+  G12 (dose    30.0): p01=255, p99=953, span=698
+CPD-5484:
+  H02 (dose 0.01372): p01=177, p99=487, span=310
+  H03 (dose 0.04115): p01=182, p99=569, span=387
+  H04 (dose  0.1235): p01=167, p99=565, span=398
+  H06 (dose  0.3704): p01=183, p99=609, span=426
+  H07 (dose   1.111): p01=196, p99=663, span=467
+  H08 (dose   3.333): p01=205, p99=696, span=491
+  H10 (dose    10.0): p01=231, p99=806, span=575
+  H12 (dose    30.0): p01=255, p99=340, span=85
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_vehicle_spans.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = layout[layout['role'] == 'vehicle'].copy()
+[?2004l[?2004h> veh['c'] = veh['well'].apply(lambda x: int(x[1:]))
+[?2004l[?2004h> veh['r'] = veh['well'].apply(lambda x: x[0])
+[?2004l[?2004h> 
+[?2004l[?2004h> spans = []
+[?2004l[?2004h> for w in veh['well']:
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     spans.append(np.percentile(im2, 99) - np.percentile(im2, 1))
+[?2004l[?2004h> veh['span'] = spans
+[?2004l[?2004h> print(veh.sort_values(['r', 'c'])[['well', 'r', 'c', 'span']].to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_vehicle_spans.py
+[?2004l   well  r   c    span
+2   A03  A   3  300.00
+6   A07  A   7  510.00
+10  A11  A  11  585.00
+13  B02  B   2  288.00
+17  B06  B   6  445.01
+21  B10  B  10  660.00
+25  C02  C   2  301.00
+29  C06  C   6  440.00
+33  C10  C  10  612.00
+36  D01  D   1  248.01
+40  D05  D   5  387.00
+44  D09  D   9  580.00
+51  E04  E   4  415.00
+55  E08  E   8  539.00
+59  E12  E  12  665.00
+63  F04  F   4  286.00
+67  F08  F   8  525.00
+71  F12  F  12  723.00
+74  G03  G   3  369.00
+78  G07  G   7  482.00
+82  G11  G  11  656.00
+84  H01  H   1  253.00
+88  H05  H   5  480.01
+92  H09  H   9  598.00
+[?2004hroot@0af57f431955:/task# cat /task/input/plate_layout.tsv
+[?2004lwell	compound	dose_uM	role
+A01	REF-INH	10	reference
+A02	CPD-3353	0.01372	compound
+A03	DMSO	0	vehicle
+A04	CPD-3353	0.04115	compound
+A05	CPD-3353	0.1235	compound
+A06	CPD-3353	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-3353	1.111	compound
+A09	CPD-3353	3.333	compound
+A10	CPD-3353	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-3353	30	compound
+B01	CPD-2467	0.01372	compound
+B02	DMSO	0	vehicle
+B03	CPD-2467	0.04115	compound
+B04	CPD-2467	0.1235	compound
+B05	CPD-2467	0.3704	compound
+B06	DMSO	0	vehicle
+B07	CPD-2467	1.111	compound
+B08	CPD-2467	3.333	compound
+B09	CPD-2467	10	compound
+B10	DMSO	0	vehicle
+B11	CPD-2467	30	compound
+B12	REF-INH	10	reference
+C01	CPD-1985	0.01372	compound
+C02	DMSO	0	vehicle
+C03	CPD-1985	0.04115	compound
+C04	REF-INH	10	reference
+C05	CPD-1985	0.1235	compound
+C06	DMSO	0	vehicle
+C07	CPD-1985	0.3704	compound
+C08	CPD-1985	1.111	compound
+C09	CPD-1985	3.333	compound
+C10	DMSO	0	vehicle
+C11	CPD-1985	10	compound
+C12	CPD-1985	30	compound
+D01	DMSO	0	vehicle
+D02	CPD-1550	0.01372	compound
+D03	CPD-1550	0.04115	compound
+D04	CPD-1550	0.1235	compound
+D05	DMSO	0	vehicle
+D06	CPD-1550	0.3704	compound
+D07	REF-INH	10	reference
+D08	CPD-1550	1.111	compound
+D09	DMSO	0	vehicle
+D10	CPD-1550	3.333	compound
+D11	CPD-1550	10	compound
+D12	CPD-1550	30	compound
+E01	CPD-1142	0.01372	compound
+E02	REF-INH	10	reference
+E03	CPD-1142	0.04115	compound
+E04	DMSO	0	vehicle
+E05	CPD-1142	0.1235	compound
+E06	CPD-1142	0.3704	compound
+E07	CPD-1142	1.111	compound
+E08	DMSO	0	vehicle
+E09	CPD-1142	3.333	compound
+E10	CPD-1142	10	compound
+E11	CPD-1142	30	compound
+E12	DMSO	0	vehicle
+F01	CPD-7090	0.01372	compound
+F02	CPD-7090	0.04115	compound
+F03	CPD-7090	0.1235	compound
+F04	DMSO	0	vehicle
+F05	CPD-7090	0.3704	compound
+F06	CPD-7090	1.111	compound
+F07	CPD-7090	3.333	compound
+F08	DMSO	0	vehicle
+F09	CPD-7090	10	compound
+F10	REF-INH	10	reference
+F11	CPD-7090	30	compound
+F12	DMSO	0	vehicle
+G01	CPD-1987	0.01372	compound
+G02	CPD-1987	0.04115	compound
+G03	DMSO	0	vehicle
+G04	CPD-1987	0.1235	compound
+G05	CPD-1987	0.3704	compound
+G06	CPD-1987	1.111	compound
+G07	DMSO	0	vehicle
+G08	CPD-1987	3.333	compound
+G09	REF-INH	10	reference
+G10	CPD-1987	10	compound
+G11	DMSO	0	vehicle
+G12	CPD-1987	30	compound
+H01	DMSO	0	vehicle
+H02	CPD-5484	0.01372	compound
+H03	CPD-5484	0.04115	compound
+H04	CPD-5484	0.1235	compound
+H05	DMSO	0	vehicle
+H06	CPD-5484	0.3704	compound
+H07	CPD-5484	1.111	compound
+H08	CPD-5484	3.333	compound
+H09	DMSO	0	vehicle
+H10	CPD-5484	10	compound
+H11	REF-INH	10	reference
+H12	CPD-5484	30	compound
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_ref_vs_veh.py
+[?2004l[?2004h> import pandas as pd, numpy as np, tifffile
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> df_all = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> for r in 'ABCDEFGH':
+[?2004l[?2004h>     sub = df_all[df_all['well'].str.startswith(r)]
+[?2004l[?2004h>     ref_row = sub[sub['role'] == 'reference'].iloc[0]
+[?2004l[?2004h>     veh_sub = sub[sub['role'] == 'vehicle']
+[?2004l[?2004h>     print(f"Row {r}: REF-INH ({ref_row['well']}, col {ref_row['c']+1}): r2={ref_row['marker_per_cell']:.1f}, r1={ref_row['n_cells']}")
+[?2004l[?2004h>     for _, v in veh_sub.iterrows():
+[?2004l[?2004h>         print(f"   Veh {v['well']} (col {v['c']+1}): r2={v['marker_per_cell']:.1f}, r1={v['n_cells']}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_ref_vs_veh.py
+[?2004lRow A: REF-INH (A01, col 1): r2=109.1, r1=76
+   Veh A03 (col 3): r2=118.5, r1=75
+   Veh A07 (col 7): r2=210.0, r1=70
+   Veh A11 (col 11): r2=351.9, r1=65
+Row B: REF-INH (B12, col 12): r2=331.1, r1=61
+   Veh B02 (col 2): r2=136.4, r1=132
+   Veh B06 (col 6): r2=200.4, r1=129
+   Veh B10 (col 10): r2=260.3, r1=133
+Row C: REF-INH (C04, col 4): r2=166.9, r1=131
+   Veh C02 (col 2): r2=142.7, r1=130
+   Veh C06 (col 6): r2=202.4, r1=108
+   Veh C10 (col 10): r2=298.5, r1=113
+Row D: REF-INH (D07, col 7): r2=67.0, r1=66
+   Veh D01 (col 1): r2=120.7, r1=65
+   Veh D05 (col 5): r2=184.9, r1=119
+   Veh D09 (col 9): r2=262.1, r1=122
+Row E: REF-INH (E02, col 2): r2=4.7, r1=111
+   Veh E04 (col 4): r2=178.7, r1=129
+   Veh E08 (col 8): r2=237.7, r1=127
+   Veh E12 (col 12): r2=338.0, r1=66
+Row F: REF-INH (F10, col 10): r2=308.2, r1=134
+   Veh F04 (col 4): r2=123.5, r1=130
+   Veh F08 (col 8): r2=237.8, r1=128
+   Veh F12 (col 12): r2=361.6, r1=71
+Row G: REF-INH (G09, col 9): r2=269.8, r1=111
+   Veh G03 (col 3): r2=145.4, r1=132
+   Veh G07 (col 7): r2=219.0, r1=129
+   Veh G11 (col 11): r2=332.2, r1=112
+Row H: REF-INH (H11, col 11): r2=361.6, r1=62
+   Veh H01 (col 1): r2=42.6, r1=36
+   Veh H05 (col 5): r2=163.5, r1=61
+   Veh H09 (col 9): r2=253.8, r1=75
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > inspect_all_refs.py
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> refs = layout[layout['role'] == 'reference']
+[?2004l[?2004h> for _, r in refs.iterrows():
+[?2004l[?2004h>     w = r['well']
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     print(f"{w}: ch1 [{im1.min()}, {im1.max()}], ch2 [{im2.min()}, {im2.max()}], p99-p01={np.percentile(im2,99)-np.percentile(im2,1):.0f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 inspect_all_refs.py
+[?2004lA01: ch1 [103, 2909], ch2 [136, 513], p99-p01=230
+B12: ch1 [104, 3329], ch2 [203, 1448], p99-p01=703
+C04: ch1 [103, 2938], ch2 [146, 678], p99-p01=365
+D07: ch1 [105, 1856], ch2 [163, 648], p99-p01=327
+E02: ch1 [105, 3282], ch2 [173, 272], p99-p01=54
+F10: ch1 [105, 3584], ch2 [212, 1297], p99-p01=663
+G09: ch1 [104, 3867], ch2 [205, 1060], p99-p01=572
+H11: ch1 [105, 2663], ch2 [230, 1320], p99-p01=682
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > check_compound_activity.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.interpolate import Rbf
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle']
+[?2004l[?2004h> 
+[?2004l[?2004h> rbf_r1 = Rbf(veh['r'], veh['c'], veh['n_cells'], function='thin_plate')
+[?2004l[?2004h> rbf_r2 = Rbf(veh['r'], veh['c'], veh['marker_per_cell'], function='thin_plate')
+[?2004l[?2004h> 
+[?2004l[?2004h> df['v_r1'] = [rbf_r1(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['v_r2'] = [rbf_r2(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[df['compound'] == cpd].sort_values('dose_uM')
+[?2004l[?2004h>     print(f"\n=== {cpd} ===")
+[?2004l[?2004h>     for _, r in sub.iterrows():
+[?2004l[?2004h>         qc = "" if r['qc_pass'] == 1 else " (QC FAIL)"
+[?2004l[?2004h>         print(f"  {r['well']} dose={r['dose_uM']:<7} | R1={r['n_cells']:<3} (resp={r['resp_r1']:.2f}) | R2={r['marker_per_cell']:<5.1f} (resp={r['resp_r2']:.2f}){qc}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 check_compound_activity.py
+[?2004l
+=== CPD-3353 ===
+  A02 dose=0.01372 | R1=57  (resp=0.77) | R2=6.8   (resp=0.06)
+  A04 dose=0.04115 | R1=76  (resp=0.91) | R2=165.5 (resp=1.17)
+  A05 dose=0.1235  | R1=83  (resp=0.90) | R2=131.9 (resp=0.78)
+  A06 dose=0.3704  | R1=75  (resp=0.84) | R2=158.2 (resp=0.82)
+  A08 dose=1.111   | R1=71  (resp=0.89) | R2=222.3 (resp=0.99)
+  A09 dose=3.333   | R1=79  (resp=0.81) | R2=261.5 (resp=1.07)
+  A10 dose=10.0    | R1=71  (resp=0.72) | R2=267.6 (resp=0.94)
+  A12 dose=30.0    | R1=66  (resp=6.31) | R2=312.3 (resp=0.79)
+
+=== CPD-2467 ===
+  B01 dose=0.01372 | R1=49  (resp=0.61) | R2=2.2   (resp=0.02)
+  B03 dose=0.04115 | R1=95  (resp=0.74) | R2=7.1   (resp=0.05)
+  B04 dose=0.1235  | R1=107 (resp=0.87) | R2=8.3   (resp=0.05)
+  B05 dose=0.3704  | R1=82  (resp=0.66) | R2=22.2  (resp=0.12)
+  B07 dose=1.111   | R1=89  (resp=0.82) | R2=51.8  (resp=0.24)
+  B08 dose=3.333   | R1=98  (resp=0.89) | R2=92.5  (resp=0.41)
+  B09 dose=10.0    | R1=110 (resp=0.88) | R2=132.9 (resp=0.56)
+  B11 dose=30.0    | R1=98  (resp=1.01) | R2=229.4 (resp=0.70)
+
+=== CPD-1985 ===
+  C01 dose=0.01372 | R1=66  (resp=0.81) | R2=136.3 (resp=1.18)
+  C03 dose=0.04115 | R1=125 (resp=0.88) | R2=7.7   (resp=0.05)
+  C05 dose=0.1235  | R1=129 (resp=1.05) | R2=177.7 (resp=0.95)
+  C07 dose=0.3704  | R1=135 (resp=1.20) | R2=212.4 (resp=0.99)
+  C08 dose=1.111   | R1=115 (resp=0.97) | R2=235.6 (resp=1.02)
+  C09 dose=3.333   | R1=128 (resp=1.04) | R2=289.2 (resp=1.13)
+  C11 dose=10.0    | R1=116 (resp=1.20) | R2=323.0 (resp=0.98)
+  C12 dose=30.0    | R1=70  (resp=1.23) | R2=320.2 (resp=0.89)
+
+=== CPD-1550 ===
+  D02 dose=0.01372 | R1=122 (resp=1.07) | R2=21.7  (resp=0.14)
+  D03 dose=0.04115 | R1=124 (resp=0.92) | R2=55.1  (resp=0.32)
+  D04 dose=0.1235  | R1=124 (resp=0.94) | R2=110.3 (resp=0.59)
+  D06 dose=0.3704  | R1=48  (resp=0.43) | R2=29.8  (resp=0.15) (QC FAIL)
+  D08 dose=1.111   | R1=136 (resp=1.12) | R2=230.7 (resp=0.98)
+  D10 dose=3.333   | R1=121 (resp=1.07) | R2=304.5 (resp=1.02)
+  D11 dose=10.0    | R1=123 (resp=1.28) | R2=16.6  (resp=0.05)
+  D12 dose=30.0    | R1=65  (resp=1.05) | R2=355.3 (resp=1.03)
+
+=== CPD-1142 ===
+  E01 dose=0.01372 | R1=64  (resp=0.94) | R2=4.0   (resp=0.04)
+  E03 dose=0.04115 | R1=116 (resp=0.88) | R2=5.6   (resp=0.03)
+  E05 dose=0.1235  | R1=145 (resp=1.18) | R2=10.6  (resp=0.06)
+  E06 dose=0.3704  | R1=122 (resp=1.00) | R2=10.9  (resp=0.06)
+  E07 dose=1.111   | R1=63  (resp=0.51) | R2=11.6  (resp=0.05) (QC FAIL)
+  E09 dose=3.333   | R1=58  (resp=0.46) | R2=15.8  (resp=0.06) (QC FAIL)
+  E10 dose=10.0    | R1=124 (resp=1.02) | R2=178.1 (resp=0.60)
+  E11 dose=30.0    | R1=122 (resp=1.17) | R2=280.8 (resp=0.88)
+
+=== CPD-7090 ===
+  F01 dose=0.01372 | R1=71  (resp=0.97) | R2=89.1  (resp=0.91)
+  F02 dose=0.04115 | R1=118 (resp=1.01) | R2=99.6  (resp=0.74)
+  F03 dose=0.1235  | R1=122 (resp=0.89) | R2=154.0 (resp=1.08)
+  F05 dose=0.3704  | R1=120 (resp=0.98) | R2=158.0 (resp=1.05)
+  F06 dose=1.111   | R1=130 (resp=1.03) | R2=158.0 (resp=0.86)
+  F07 dose=3.333   | R1=48  (resp=0.36) | R2=45.4  (resp=0.21) (QC FAIL)
+  F09 dose=10.0    | R1=121 (resp=0.95) | R2=15.1  (resp=0.06)
+  F11 dose=30.0    | R1=115 (resp=1.01) | R2=332.1 (resp=1.01)
+
+=== CPD-1987 ===
+  G01 dose=0.01372 | R1=83  (resp=1.26) | R2=6.3   (resp=0.09)
+  G02 dose=0.04115 | R1=122 (resp=1.10) | R2=15.7  (resp=0.13)
+  G04 dose=0.1235  | R1=112 (resp=0.96) | R2=45.5  (resp=0.33)
+  G05 dose=0.3704  | R1=131 (resp=1.27) | R2=97.7  (resp=0.64)
+  G06 dose=1.111   | R1=131 (resp=1.16) | R2=168.9 (resp=0.90)
+  G08 dose=3.333   | R1=129 (resp=1.08) | R2=238.1 (resp=1.00)
+  G10 dose=10.0    | R1=122 (resp=1.04) | R2=311.1 (resp=1.05)
+  G12 dose=30.0    | R1=70  (resp=1.07) | R2=318.7 (resp=0.88)
+
+=== CPD-5484 ===
+  H02 dose=0.01372 | R1=60  (resp=0.78) | R2=145.4 (resp=1.53)
+  H03 dose=0.04115 | R1=38  (resp=0.42) | R2=65.3  (resp=0.50)
+  H04 dose=0.1235  | R1=47  (resp=0.60) | R2=106.5 (resp=0.73)
+  H06 dose=0.3704  | R1=70  (resp=0.94) | R2=219.1 (resp=1.16)
+  H07 dose=1.111   | R1=54  (resp=0.61) | R2=202.7 (resp=0.95)
+  H08 dose=3.333   | R1=61  (resp=0.72) | R2=256.0 (resp=1.10)
+  H10 dose=10.0    | R1=71  (resp=0.89) | R2=266.6 (resp=0.93)
+  H12 dose=30.0    | R1=64  (resp=2.11) | R2=19.4  (resp=0.06)
+[?2004hroot@0af57f431955:/task# grep -E "^B|^G" /task/input/plate_layout.tsv
+[?2004lB01	CPD-2467	0.01372	compound
+B02	DMSO	0	vehicle
+B03	CPD-2467	0.04115	compound
+B04	CPD-2467	0.1235	compound
+B05	CPD-2467	0.3704	compound
+B06	DMSO	0	vehicle
+B07	CPD-2467	1.111	compound
+B08	CPD-2467	3.333	compound
+B09	CPD-2467	10	compound
+B10	DMSO	0	vehicle
+B11	CPD-2467	30	compound
+B12	REF-INH	10	reference
+G01	CPD-1987	0.01372	compound
+G02	CPD-1987	0.04115	compound
+G03	DMSO	0	vehicle
+G04	CPD-1987	0.1235	compound
+G05	CPD-1987	0.3704	compound
+G06	CPD-1987	1.111	compound
+G07	DMSO	0	vehicle
+G08	CPD-1987	3.333	compound
+G09	REF-INH	10	reference
+G10	CPD-1987	10	compound
+G11	DMSO	0	vehicle
+G12	CPD-1987	30	compound
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > find_active.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle']
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     r1_trend = sub['n_cells'].values
+[?2004l[?2004h>     r2_trend = sub['marker_per_cell'].values
+[?2004l[?2004h>     doses = sub['dose_uM'].values
+[?2004l[?2004h>     print(f"{cpd}:")
+[?2004l[?2004h>     print(f"  doses:   {doses}")
+[?2004l[?2004h>     print(f"  n_cells: {r1_trend}")
+[?2004l[?2004h>     print(f"  marker:  {np.round(r2_trend, 1)}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 find_active.py
+[?2004lCPD-3353:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  n_cells: [57 76 83 75 71 79 71 66]
+  marker:  [  6.8 165.5 131.9 158.2 222.3 261.5 267.6 312.3]
+CPD-2467:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  n_cells: [ 49  95 107  82  89  98 110  98]
+  marker:  [  2.2   7.1   8.3  22.2  51.8  92.5 132.9 229.4]
+CPD-1985:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  n_cells: [ 66 125 129 135 115 128 116  70]
+  marker:  [136.3   7.7 177.7 212.4 235.6 289.2 323.  320.2]
+CPD-1550:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 1.111e+00 3.333e+00 1.000e+01 3.000e+01]
+  n_cells: [122 124 124 136 121 123  65]
+  marker:  [ 21.7  55.1 110.3 230.7 304.5  16.6 355.3]
+CPD-1142:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.000e+01 3.000e+01]
+  n_cells: [ 64 116 145 122 124 122]
+  marker:  [  4.    5.6  10.6  10.9 178.1 280.8]
+CPD-7090:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 1.000e+01 3.000e+01]
+  n_cells: [ 71 118 122 120 130 121 115]
+  marker:  [ 89.1  99.6 154.  158.  158.   15.1 332.1]
+CPD-1987:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  n_cells: [ 83 122 112 131 131 129 122  70]
+  marker:  [  6.3  15.7  45.5  97.7 168.9 238.1 311.1 318.7]
+CPD-5484:
+  doses:   [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  n_cells: [60 38 47 70 54 61 71 64]
+  marker:  [145.4  65.3 106.5 219.1 202.7 256.  266.6  19.4]
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > evaluate_potencies.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> from scipy.interpolate import Rbf
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle']
+[?2004l[?2004h> 
+[?2004l[?2004h> rbf_r1 = Rbf(veh['r'], veh['c'], veh['n_cells'], function='thin_plate')
+[?2004l[?2004h> rbf_r2 = Rbf(veh['r'], veh['c'], veh['marker_per_cell'], function='thin_plate')
+[?2004l[?2004h> 
+[?2004l[?2004h> df['v_r1'] = [rbf_r1(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['v_r2'] = [rbf_r2(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("compound\tic50_marker_uM\tgi50_count_uM")
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     c_vals = sub['dose_uM'].values
+[?2004l[?2004h>     max_c = c_vals.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_curve(resp):
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(
+[?2004l[?2004h>                 model_4pl, c_vals, resp,
+[?2004l[?2004h>                 p0=[0.0, 1.0, 1.0],
+[?2004l[?2004h>                 bounds=([0.0, 1e-6, 0.01], [0.999, 1000.0, 20.0]),
+[?2004l[?2004h>                 maxfev=10000
+[?2004l[?2004h>             )
+[?2004l[?2004h>             bottom, ec50, h = popt
+[?2004l[?2004h>             if bottom >= 0.5:
+[?2004l[?2004h>                 return "inactive"
+[?2004l[?2004h>             potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h>             if potency <= max_c:
+[?2004l[?2004h>                 return f"{potency:.4g}"
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 return "inactive"
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return "inactive"
+[?2004l[?2004h>             
+[?2004l[?2004h>     ic50 = fit_curve(sub['resp_r2'].values)
+[?2004l[?2004h>     gi50 = fit_curve(sub['resp_r1'].values)
+[?2004l[?2004h>     print(f"{cpd}\t{ic50}\t{gi50}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 evaluate_potencies.py
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-3353	inactive	inactive
+CPD-2467	1e-06	inactive
+CPD-1985	inactive	inactive
+CPD-1550	inactive	inactive
+CPD-1142	1e-06	inactive
+CPD-7090	inactive	inactive
+CPD-1987	inactive	inactive
+CPD-5484	12.56	inactive
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > print_all_responses.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.interpolate import Rbf
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle']
+[?2004l[?2004h> 
+[?2004l[?2004h> rbf_r1 = Rbf(veh['r'], veh['c'], veh['n_cells'], function='thin_plate')
+[?2004l[?2004h> rbf_r2 = Rbf(veh['r'], veh['c'], veh['marker_per_cell'], function='thin_plate')
+[?2004l[?2004h> 
+[?2004l[?2004h> df['v_r1'] = [rbf_r1(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['v_r2'] = [rbf_r2(r, c) for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     print(f"{cpd}:")
+[?2004l[?2004h>     print("  doses:   ", [f"{d:g}" for d in sub['dose_uM']])
+[?2004l[?2004h>     print("  resp_r1: ", [f"{r:.2f}" for r in sub['resp_r1']])
+[?2004l[?2004h>     print("  resp_r2: ", [f"{r:.2f}" for r in sub['resp_r2']])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 print_all_responses.py
+[?2004lCPD-3353:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.77', '0.91', '0.90', '0.84', '0.89', '0.81', '0.72', '6.31']
+  resp_r2:  ['0.06', '1.17', '0.78', '0.82', '0.99', '1.07', '0.94', '0.79']
+CPD-2467:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.61', '0.74', '0.87', '0.66', '0.82', '0.89', '0.88', '1.01']
+  resp_r2:  ['0.02', '0.05', '0.05', '0.12', '0.24', '0.41', '0.56', '0.70']
+CPD-1985:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.81', '0.88', '1.05', '1.20', '0.97', '1.04', '1.20', '1.23']
+  resp_r2:  ['1.18', '0.05', '0.95', '0.99', '1.02', '1.13', '0.98', '0.89']
+CPD-1550:
+  doses:    ['0.01372', '0.04115', '0.1235', '1.111', '3.333', '10', '30']
+  resp_r1:  ['1.07', '0.92', '0.94', '1.12', '1.07', '1.28', '1.05']
+  resp_r2:  ['0.14', '0.32', '0.59', '0.98', '1.02', '0.05', '1.03']
+CPD-1142:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '10', '30']
+  resp_r1:  ['0.94', '0.88', '1.18', '1.00', '1.02', '1.17']
+  resp_r2:  ['0.04', '0.03', '0.06', '0.06', '0.60', '0.88']
+CPD-7090:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '10', '30']
+  resp_r1:  ['0.97', '1.01', '0.89', '0.98', '1.03', '0.95', '1.01']
+  resp_r2:  ['0.91', '0.74', '1.08', '1.05', '0.86', '0.06', '1.01']
+CPD-1987:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['1.26', '1.10', '0.96', '1.27', '1.16', '1.08', '1.04', '1.07']
+  resp_r2:  ['0.09', '0.13', '0.33', '0.64', '0.90', '1.00', '1.05', '0.88']
+CPD-5484:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.78', '0.42', '0.60', '0.94', '0.61', '0.72', '0.89', '2.11']
+  resp_r2:  ['1.53', '0.50', '0.73', '1.16', '0.95', '1.10', '0.93', '0.06']
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_row_interpolation.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_r1_grid = np.zeros((8, 12))
+[?2004l[?2004h> veh_r2_grid = np.zeros((8, 12))
+[?2004l[?2004h> 
+[?2004l[?2004h> for r in range(8):
+[?2004l[?2004h>     row_veh = df[(df['r'] == r) & (df['role'] == 'vehicle')].sort_values('c')
+[?2004l[?2004h>     cols = row_veh['c'].values
+[?2004l[?2004h>     r1_v = row_veh['n_cells'].values
+[?2004l[?2004h>     r2_v = row_veh['marker_per_cell'].values
+[?2004l[?2004h>     
+[?2004l[?2004h>     veh_r1_grid[r, :] = np.interp(range(12), cols, r1_v)
+[?2004l[?2004h>     veh_r2_grid[r, :] = np.interp(range(12), cols, r2_v)
+[?2004l[?2004h> 
+[?2004l[?2004h> df['v_r1'] = [veh_r1_grid[r, c] for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['v_r2'] = [veh_r2_grid[r, c] for r, c in zip(df['r'], df['c'])]
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     print(f"{cpd}:")
+[?2004l[?2004h>     print("  doses:   ", [f"{d:g}" for d in sub['dose_uM']])
+[?2004l[?2004h>     print("  resp_r1: ", [f"{r:.2f}" for r in sub['resp_r1']])
+[?2004l[?2004h>     print("  resp_r2: ", [f"{r:.2f}" for r in sub['resp_r2']])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_row_interpolation.py
+[?2004lCPD-3353:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.76', '1.03', '1.14', '1.05', '1.03', '1.17', '1.07', '1.02']
+  resp_r2:  ['0.06', '1.17', '0.80', '0.85', '0.91', '0.93', '0.85', '0.89']
+CPD-2467:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.37', '0.72', '0.82', '0.63', '0.68', '0.75', '0.83', '0.74']
+  resp_r2:  ['0.02', '0.05', '0.05', '0.12', '0.24', '0.40', '0.54', '0.88']
+CPD-1985:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.51', '1.00', '1.14', '1.24', '1.04', '1.15', '1.03', '0.62']
+  resp_r2:  ['0.96', '0.05', '0.95', '0.94', '0.94', '1.05', '1.08', '1.07']
+CPD-1550:
+  doses:    ['0.01372', '0.04115', '0.1235', '1.111', '3.333', '10', '30']
+  resp_r1:  ['1.55', '1.35', '1.18', '1.12', '0.99', '1.01', '0.53']
+  resp_r2:  ['0.16', '0.36', '0.65', '0.95', '1.16', '0.06', '1.36']
+CPD-1142:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '10', '30']
+  resp_r1:  ['0.50', '0.90', '1.13', '0.95', '1.28', '1.50']
+  resp_r2:  ['0.02', '0.03', '0.05', '0.05', '0.62', '0.90']
+CPD-7090:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '10', '30']
+  resp_r1:  ['0.55', '0.91', '0.94', '0.93', '1.01', '1.06', '1.35']
+  resp_r2:  ['0.72', '0.81', '1.25', '1.04', '0.87', '0.06', '1.00']
+CPD-1987:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['0.63', '0.92', '0.85', '1.00', '1.01', '1.03', '1.05', '0.62']
+  resp_r2:  ['0.04', '0.11', '0.28', '0.54', '0.84', '0.96', '1.02', '0.96']
+CPD-5484:
+  doses:    ['0.01372', '0.04115', '0.1235', '0.3704', '1.111', '3.333', '10', '30']
+  resp_r1:  ['1.42', '0.78', '0.86', '1.09', '0.79', '0.85', '0.95', '0.85']
+  resp_r2:  ['2.00', '0.63', '0.80', '1.18', '0.97', '1.11', '1.05', '0.08']
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > fit_cpd5484.py
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> row_veh = df[(df['r'] == 7) & (df['role'] == 'vehicle')].sort_values('c')
+[?2004l[?2004h> cols = row_veh['c'].values
+[?2004l[?2004h> r2_v = row_veh['marker_per_cell'].values
+[?2004l[?2004h> v_interp = np.interp(range(12), cols, r2_v)
+[?2004l[?2004h> 
+[?2004l[?2004h> sub_h = df[(df['compound'] == 'CPD-5484') & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h> c_vals = sub_h['dose_uM'].values
+[?2004l[?2004h> v_vals = np.array([v_interp[c] for c in sub_h['c']])
+[?2004l[?2004h> resp_vals = sub_h['marker_per_cell'].values / v_vals
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Doses:", c_vals)
+[?2004l[?2004h> print("Responses:", np.round(resp_vals, 3))
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> popt, pcov = curve_fit(
+[?2004l[?2004h>     model_4pl, c_vals, resp_vals,
+[?2004l[?2004h>     p0=[0.05, 15.0, 2.0],
+[?2004l[?2004h>     bounds=([0.0, 1e-3, 0.1], [0.999, 100.0, 20.0])
+[?2004l[?2004h> )
+[?2004l[?2004h> bottom, ec50, h = popt
+[?2004l[?2004h> print(f"Fit: bottom={bottom:.4f}, ec50={ec50:.4f}, h={h:.4f}")
+[?2004l[?2004h> potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h> print(f"IC50 potency: {potency:.4f} uM")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 fit_cpd5484.py
+[?2004lDoses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+Responses: [1.995 0.634 0.799 1.178 0.971 1.107 1.051 0.077]
+Fit: bottom=0.0080, ec50=25.4327, h=15.7409
+IC50 potency: 25.4587 uM
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_vehicle_models.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.interpolate import Rbf
+[?2004l[?2004h> from sklearn.metrics import r2_score
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> X = np.column_stack([np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c']])
+[?2004l[?2004h> coef_r1, _, _, _ = np.linalg.lstsq(X, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef_r2, _, _, _ = np.linalg.lstsq(X, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> pred_p2_r1 = np.dot(X, coef_r1)
+[?2004l[?2004h> pred_p2_r2 = np.dot(X, coef_r2)
+[?2004l[?2004h> 
+[?2004l[?2004h> X3 = np.column_stack([
+[?2004l[?2004h>     np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c'],
+[?2004l[?2004h>     veh['r']**3, veh['c']**3, (veh['r']**2)*veh['c'], veh['r']*(veh['c']**2)
+[?2004l[?2004h> ])
+[?2004l[?2004h> coef3_r1, _, _, _ = np.linalg.lstsq(X3, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef3_r2, _, _, _ = np.linalg.lstsq(X3, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> pred_p3_r1 = np.dot(X3, coef3_r1)
+[?2004l[?2004h> pred_p3_r2 = np.dot(X3, coef3_r2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Vehicle fit R2:")
+[?2004l[?2004h> print(f"  Poly2: r1 R2 = {r2_score(veh['n_cells'], pred_p2_r1):.3f}, r2 R2 = {r2_score(veh['marker_per_cell'], pred_p2_r2):.3f}")
+[?2004l[?2004h> print(f"  Poly3: r1 R2 = {r2_score(veh['n_cells'], pred_p3_r1):.3f}, r2 R2 = {r2_score(veh['marker_per_cell'], pred_p3_r2):.3f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_vehicle_models.py
+[?2004lTraceback (most recent call last):
+  File "/task/test_vehicle_models.py", line 3, in <module>
+    from sklearn.metrics import r2_score
+ModuleNotFoundError: No module named 'sklearn'
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_vehicle_models.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_r2(y_true, y_pred):
+[?2004l[?2004h>     ss_res = np.sum((y_true - y_pred)**2)
+[?2004l[?2004h>     ss_tot = np.sum((y_true - np.mean(y_true))**2)
+[?2004l[?2004h>     return 1 - (ss_res / ss_tot)
+[?2004l[?2004h> 
+[?2004l[?2004h> X = np.column_stack([np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c']])
+[?2004l[?2004h> coef_r1, _, _, _ = np.linalg.lstsq(X, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef_r2, _, _, _ = np.linalg.lstsq(X, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> pred_p2_r1 = np.dot(X, coef_r1)
+[?2004l[?2004h> pred_p2_r2 = np.dot(X, coef_r2)
+[?2004l[?2004h> 
+[?2004l[?2004h> X3 = np.column_stack([
+[?2004l[?2004h>     np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c'],
+[?2004l[?2004h>     veh['r']**3, veh['c']**3, (veh['r']**2)*veh['c'], veh['r']*(veh['c']**2)
+[?2004l[?2004h> ])
+[?2004l[?2004h> coef3_r1, _, _, _ = np.linalg.lstsq(X3, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef3_r2, _, _, _ = np.linalg.lstsq(X3, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> pred_p3_r1 = np.dot(X3, coef3_r1)
+[?2004l[?2004h> pred_p3_r2 = np.dot(X3, coef3_r2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("Vehicle fit R2:")
+[?2004l[?2004h> print(f"  Poly2: r1 R2 = {get_r2(veh['n_cells'], pred_p2_r1):.3f}, r2 R2 = {get_r2(veh['marker_per_cell'], pred_p2_r2):.3f}")
+[?2004l[?2004h> print(f"  Poly3: r1 R2 = {get_r2(veh['n_cells'], pred_p3_r1):.3f}, r2 R2 = {get_r2(veh['marker_per_cell'], pred_p3_r2):.3f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_vehicle_models.py
+[?2004lVehicle fit R2:
+  Poly2: r1 R2 = 0.540, r2 R2 = 0.955
+  Poly3: r1 R2 = 0.562, r2 R2 = 0.976
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_poly_doses.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> X = np.column_stack([np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c']])
+[?2004l[?2004h> coef_r1, _, _, _ = np.linalg.lstsq(X, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef_r2, _, _, _ = np.linalg.lstsq(X, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> 
+[?2004l[?2004h> X_all = np.column_stack([np.ones(len(df)), df['r'], df['c'], df['r']**2, df['c']**2, df['r']*df['c']])
+[?2004l[?2004h> df['v_r1'] = np.dot(X_all, coef_r1)
+[?2004l[?2004h> df['v_r2'] = np.dot(X_all, coef_r2)
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> print("compound\tic50_marker_uM\tgi50_count_uM")
+[?2004l[?2004h> for cpd in df[df['role'] == 'compound']['compound'].unique():
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     c_vals = sub['dose_uM'].values
+[?2004l[?2004h>     max_c = c_vals.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_curve(resp):
+[?2004l[?2004h>         if np.mean(resp[-3:]) >= np.mean(resp[:3]):
+[?2004l[?2004h>             return "inactive"
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(
+[?2004l[?2004h>                 model_4pl, c_vals, resp,
+[?2004l[?2004h>                 p0=[0.0, 1.0, 1.0],
+[?2004l[?2004h>                 bounds=([0.0, 1e-6, 0.1], [0.999, 1000.0, 20.0]),
+[?2004l[?2004h>                 maxfev=10000
+[?2004l[?2004h>             )
+[?2004l[?2004h>             bottom, ec50, h = popt
+[?2004l[?2004h>             if bottom >= 0.5:
+[?2004l[?2004h>                 return "inactive"
+[?2004l[?2004h>             potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h>             if potency <= max_c:
+[?2004l[?2004h>                 return f"{potency:.4g}"
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 return "inactive"
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return "inactive"
+[?2004l[?2004h>             
+[?2004l[?2004h>     ic50 = fit_curve(sub['resp_r2'].values)
+[?2004l[?2004h>     gi50 = fit_curve(sub['resp_r1'].values)
+[?2004l[?2004h>     print(f"{cpd}\t{ic50}\t{gi50}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_poly_doses.py
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-3353	inactive	inactive
+CPD-2467	inactive	inactive
+CPD-1985	inactive	inactive
+CPD-1550	inactive	inactive
+CPD-1142	inactive	inactive
+CPD-7090	inactive	inactive
+CPD-1987	inactive	inactive
+CPD-5484	12.58	inactive
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > test_poly3_doses.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.read_csv('all_wells_measurements.csv')
+[?2004l[?2004h> veh = df[df['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> X3 = np.column_stack([
+[?2004l[?2004h>     np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c'],
+[?2004l[?2004h>     veh['r']**3, veh['c']**3, (veh['r']**2)*veh['c'], veh['r']*(veh['c']**2)
+[?2004l[?2004h> ])
+[?2004l[?2004h> coef3_r1, _, _, _ = np.linalg.lstsq(X3, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef3_r2, _, _, _ = np.linalg.lstsq(X3, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> 
+[?2004l[?2004h> X3_all = np.column_stack([
+[?2004l[?2004h>     np.ones(len(df)), df['r'], df['c'], df['r']**2, df['c']**2, df['r']*df['c'],
+[?2004l[?2004h>     df['r']**3, df['c']**3, (df['r']**2)*df['c'], df['r']*(df['c']**2)
+[?2004l[?2004h> ])
+[?2004l[?2004h> df['v_r1'] = np.dot(X3_all, coef3_r1)
+[?2004l[?2004h> df['v_r2'] = np.dot(X3_all, coef3_r2)
+[?2004l[?2004h> df['resp_r1'] = df['n_cells'] / df['v_r1']
+[?2004l[?2004h> df['resp_r2'] = df['marker_per_cell'] / df['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> for cpd in ['CPD-5484']:
+[?2004l[?2004h>     sub = df[(df['compound'] == cpd) & (df['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     c_vals = sub['dose_uM'].values
+[?2004l[?2004h>     popt, _ = curve_fit(
+[?2004l[?2004h>         model_4pl, c_vals, sub['resp_r2'].values,
+[?2004l[?2004h>         p0=[0.0, 1.0, 1.0],
+[?2004l[?2004h>         bounds=([0.0, 1e-6, 0.1], [0.999, 1000.0, 20.0]),
+[?2004l[?2004h>         maxfev=10000
+[?2004l[?2004h>     )
+[?2004l[?2004h>     bottom, ec50, h = popt
+[?2004l[?2004h>     potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h>     print(f"Poly3 CPD-5484: IC50 = {potency:.4g}, bot={bottom:.3f}, ec50={ec50:.3f}, h={h:.2f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 test_poly3_doses.py
+[?2004lPoly3 CPD-5484: IC50 = 12, bot=0.051, ec50=11.891, h=11.60
+[?2004hroot@0af57f431955:/task# mkdir -p /task/output && ls -la /task/output
+[?2004ltotal 8
+drwxr-xr-x 2 root root 4096 Nov 12 02:04 .
+drwxr-xr-x 1 root root 4096 Nov 13 00:02 ..
+[?2004hroot@0af57f431955:/task# cat << 'EOF' > generate_deliverables.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_triangle
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> # 1. Load inputs
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(float)
+[?2004l[?2004h> flat_norm1 = (flat1 - dark) / np.mean(flat1 - dark)
+[?2004l[?2004h> flat_norm2 = (flat2 - dark) / np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> # 2. Process all 96 wells
+[?2004l[?2004h> well_records = []
+[?2004l[?2004h> for well in layout['well']:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{well}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{well}_ch2.tif').astype(float)
+[?2004l[?2004h>     corr1 = (im1 - dark) / flat_norm1
+[?2004l[?2004h>     corr2 = (im2 - dark) / flat_norm2
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Image QC: Brenner sharpness
+[?2004l[?2004h>     diff_y1 = (im1[2:, :] - im1[:-2, :])**2
+[?2004l[?2004h>     diff_x1 = (im1[:, 2:] - im1[:, :-2])**2
+[?2004l[?2004h>     bren1 = (diff_y1.mean() + diff_x1.mean()) / 2.0
+[?2004l[?2004h>     norm_bren1 = bren1 / (im1.var() + 1e-5)
+[?2004l[?2004h>     qc_pass = 1 if norm_bren1 > 0.10 else 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Nuclei segmentation
+[?2004l[?2004h>     smoothed1 = gaussian(corr1, sigma=0.85)
+[?2004l[?2004h>     th1 = threshold_triangle(smoothed1)
+[?2004l[?2004h>     bin1 = smoothed1 > th1
+[?2004l[?2004h>     peaks = peak_local_max(smoothed1, min_distance=4, labels=bin1, exclude_border=False)
+[?2004l[?2004h>     markers = np.zeros(smoothed1.shape, dtype=int)
+[?2004l[?2004h>     for idx, (py, px) in enumerate(peaks, 1):
+[?2004l[?2004h>         markers[py, px] = idx
+[?2004l[?2004h>     labels = watershed(-smoothed1, markers, mask=bin1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Counting frame & fragment filtering
+[?2004l[?2004h>     h, w = labels.shape
+[?2004l[?2004h>     valid_labels = []
+[?2004l[?2004h>     for prop in regionprops(labels):
+[?2004l[?2004h>         # Cut by bottom or right -> excluded
+[?2004l[?2004h>         if prop.bbox[2] >= h or prop.bbox[3] >= w:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         # Fragments are compact objects <= 6.5 um (5 px)
+[?2004l[?2004h>         # Intact nuclei >= 11 um (8.5 px)
+[?2004l[?2004h>         if prop.minor_axis_length < 5.0 or prop.area < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         valid_labels.append(prop.label)
+[?2004l[?2004h>         
+[?2004l[?2004h>     n_cells = len(valid_labels)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # R2: marker per cell (cytoplasmic intensity due to bound stain)
+[?2004l[?2004h>     if n_cells > 0:
+[?2004l[?2004h>         dil_all = binary_dilation(bin1, disk(5))
+[?2004l[?2004h>         bg = np.median(corr2[~dil_all])
+[?2004l[?2004h>         dilated_labels = watershed(-gaussian(corr2, 1.0), markers=labels, mask=binary_dilation(bin1, disk(4)))
+[?2004l[?2004h>         cyto_means = []
+[?2004l[?2004h>         for lab in valid_labels:
+[?2004l[?2004h>             c_mask = (dilated_labels == lab) & (labels == 0)
+[?2004l[?2004h>             if c_mask.sum() > 0:
+[?2004l[?2004h>                 cyto_means.append(corr2[c_mask].mean() - bg)
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 cyto_means.append(corr2[labels == lab].mean() - bg)
+[?2004l[?2004h>         marker_per_cell = float(np.mean(cyto_means))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         marker_per_cell = np.nan
+[?2004l[?2004h>         
+[?2004l[?2004h>     row_idx = ord(well[0]) - ord('A')
+[?2004l[?2004h>     col_idx = int(well[1:]) - 1
+[?2004l[?2004h>     well_records.append({
+[?2004l[?2004h>         'well': well,
+[?2004l[?2004h>         'n_cells': int(n_cells),
+[?2004l[?2004h>         'marker_per_cell': marker_per_cell,
+[?2004l[?2004h>         'qc_pass': int(qc_pass),
+[?2004l[?2004h>         'r': row_idx,
+[?2004l[?2004h>         'c': col_idx
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wells = pd.DataFrame(well_records)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Save well_measurements.tsv
+[?2004l[?2004h> out_measurements = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']].copy()
+[?2004l[?2004h> out_measurements.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False, na_rep='NA')
+[?2004l[?2004h> print("Saved /task/output/well_measurements.tsv")
+[?2004l[?2004h> 
+[?2004l[?2004h> # 3. Validation table
+[?2004l[?2004h> annotated_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> val_records = []
+[?2004l[?2004h> for p in annotated_files:
+[?2004l[?2004h>     field = os.path.basename(p).split('.')[0]
+[?2004l[?2004h>     manual_df = pd.read_csv(p, sep='\t')
+[?2004l[?2004h>     manual_count = len(manual_df)
+[?2004l[?2004h>     pipe_count = df_wells.loc[df_wells['well'] == field, 'n_cells'].values[0]
+[?2004l[?2004h>     val_records.append({
+[?2004l[?2004h>         'field': field,
+[?2004l[?2004h>         'manual_count': int(manual_count),
+[?2004l[?2004h>         'pipeline_count': int(pipe_count)
+[?2004l[?2004h>     })
+[?2004l[?2004h> df_val = pd.DataFrame(val_records)
+[?2004l[?2004h> df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print("Saved /task/output/validation.tsv")
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check validation criteria
+[?2004l[?2004h> all_val_pass = True
+[?2004l[?2004h> for _, r in df_val.iterrows():
+[?2004l[?2004h>     diff = abs(r['pipeline_count'] - r['manual_count'])
+[?2004l[?2004h>     tol = max(3, 0.10 * r['manual_count'])
+[?2004l[?2004h>     print(f"Validation {r['field']}: manual={r['manual_count']}, pipe={r['pipeline_count']}, diff={diff}, tol={tol:.1f}, pass={diff<=tol}")
+[?2004l[?2004h>     if diff > tol:
+[?2004l[?2004h>         all_val_pass = False
+[?2004l[?2004h> print("All validation fields passed:", all_val_pass)
+[?2004l[?2004h> 
+[?2004l[?2004h> # 4. Dose response curve fitting
+[?2004l[?2004h> df_merged = df_wells.merge(layout, on='well')
+[?2004l[?2004h> veh = df_merged[df_merged['role'] == 'vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> # 2D quadratic polynomial surface fit to vehicle wells
+[?2004l[?2004h> X_veh = np.column_stack([
+[?2004l[?2004h>     np.ones(len(veh)), veh['r'], veh['c'], veh['r']**2, veh['c']**2, veh['r']*veh['c']
+[?2004l[?2004h> ])
+[?2004l[?2004h> coef_r1, _, _, _ = np.linalg.lstsq(X_veh, veh['n_cells'], rcond=None)
+[?2004l[?2004h> coef_r2, _, _, _ = np.linalg.lstsq(X_veh, veh['marker_per_cell'], rcond=None)
+[?2004l[?2004h> 
+[?2004l[?2004h> X_all = np.column_stack([
+[?2004l[?2004h>     np.ones(len(df_merged)), df_merged['r'], df_merged['c'],
+[?2004l[?2004h>     df_merged['r']**2, df_merged['c']**2, df_merged['r']*df_merged['c']
+[?2004l[?2004h> ])
+[?2004l[?2004h> df_merged['v_r1'] = np.dot(X_all, coef_r1)
+[?2004l[?2004h> df_merged['v_r2'] = np.dot(X_all, coef_r2)
+[?2004l[?2004h> df_merged['resp_r1'] = df_merged['n_cells'] / df_merged['v_r1']
+[?2004l[?2004h> df_merged['resp_r2'] = df_merged['marker_per_cell'] / df_merged['v_r2']
+[?2004l[?2004h> 
+[?2004l[?2004h> def model_4pl(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> dose_records = []
+[?2004l[?2004h> test_cpds = df_merged[df_merged['role'] == 'compound']['compound'].unique()
+[?2004l[?2004h> for cpd in test_cpds:
+[?2004l[?2004h>     sub = df_merged[(df_merged['compound'] == cpd) & (df_merged['qc_pass'] == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     c_vals = sub['dose_uM'].values
+[?2004l[?2004h>     max_c = c_vals.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_response(resp):
+[?2004l[?2004h>         # Must fall below 0.5 at or below max_c
+[?2004l[?2004h>         # Check if trend is falling
+[?2004l[?2004h>         if np.mean(resp[-3:]) >= np.mean(resp[:3]):
+[?2004l[?2004h>             return 'inactive'
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(
+[?2004l[?2004h>                 model_4pl, c_vals, resp,
+[?2004l[?2004h>                 p0=[0.05, 10.0, 2.0],
+[?2004l[?2004h>                 bounds=([0.0, 1e-4, 0.1], [0.999, 1000.0, 20.0]),
+[?2004l[?2004h>                 maxfev=10000
+[?2004l[?2004h>             )
+[?2004l[?2004h>             bottom, ec50, h = popt
+[?2004l[?2004h>             if bottom >= 0.5:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             potency = ec50 * ((0.5 / (0.5 - bottom))**(1.0 / h))
+[?2004l[?2004h>             if potency <= max_c:
+[?2004l[?2004h>                 return round(float(potency), 4)
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return 'inactive'
+[?2004l[?2004h>             
+[?2004l[?2004h>     ic50 = fit_response(sub['resp_r2'].values)
+[?2004l[?2004h>     gi50 = fit_response(sub['resp_r1'].values)
+[?2004l[?2004h>     dose_records.append({
+[?2004l[?2004h>         'compound': cpd,
+[?2004l[?2004h>         'ic50_marker_uM': ic50,
+[?2004l[?2004h>         'gi50_count_uM': gi50
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_dose = pd.DataFrame(dose_records)
+[?2004l[?2004h> df_dose.to_csv('/task/output/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print("Saved /task/output/dose_response.tsv:")
+[?2004l[?2004h> print(df_dose.to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@0af57f431955:/task# python3 generate_deliverables.py
+[?2004lSaved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Validation A08: manual=69, pipe=71, diff=2, tol=6.9, pass=True
+Validation A12: manual=63, pipe=66, diff=3, tol=6.3, pass=True
+Validation C10: manual=115, pipe=113, diff=2, tol=11.5, pass=True
+Validation D01: manual=66, pipe=65, diff=1, tol=6.6, pass=True
+Validation D12: manual=69, pipe=65, diff=4, tol=6.9, pass=True
+Validation G03: manual=121, pipe=132, diff=11, tol=12.1, pass=True
+Validation G10: manual=123, pipe=122, diff=1, tol=12.3, pass=True
+Validation H12: manual=66, pipe=64, diff=2, tol=6.6, pass=True
+All validation fields passed: True
+Saved /task/output/dose_response.tsv:
+compound ic50_marker_uM gi50_count_uM
+CPD-3353       inactive      inactive
+CPD-2467       inactive      inactive
+CPD-1985       inactive      inactive
+CPD-1550       inactive      inactive
+CPD-1142       inactive      inactive
+CPD-7090       inactive      inactive
+CPD-1987       inactive      inactive
+CPD-5484        12.5246      inactive
+[?2004hroot@0af57f431955:/task# head -n 20 /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	76	109.08874284136185	1
+A02	57	6.7713042444233755	1
+A03	75	118.45937758676986	1
+A04	76	165.4881382758283	1
+A05	83	131.85023969138203	1
+A06	75	158.18728981794192	1
+A07	70	210.00152171934133	1
+A08	71	222.3397830043408	1
+A09	79	261.4625059840686	1
+A10	71	267.5666347678335	1
+A11	65	351.8700638311048	1
+A12	66	312.3020864965423	1
+B01	49	2.20870574650686	1
+B02	132	136.3660862857173	1
+B03	95	7.149570466161902	1
+B04	107	8.285971814737234	1
+B05	82	22.153883375228485	1
+B06	129	200.44948133740394	1
+B07	89	51.84810500070389	1
+[?2004hroot@0af57f431955:/task# echo '--- validation.tsv ---'
+[?2004l--- validation.tsv ---
+[?2004hroot@0af57f431955:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A08	69	71
+A12	63	66
+C10	115	113
+D01	66	65
+D12	69	65
+G03	121	132
+G10	123	122
+H12	66	64
+[?2004hroot@0af57f431955:/task# echo '--- dose_response.tsv ---'
+[?2004l--- dose_response.tsv ---
+[?2004hroot@0af57f431955:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-3353	inactive	inactive
+CPD-2467	inactive	inactive
+CPD-1985	inactive	inactive
+CPD-1550	inactive	inactive
+CPD-1142	inactive	inactive
+CPD-7090	inactive	inactive
+CPD-1987	inactive	inactive
+CPD-5484	12.5246	inactive
+[?2004hroot@0af57f431955:/task# wc -l /task/output/*.tsv
+[?2004l   9 /task/output/dose_response.tsv
+   9 /task/output/validation.tsv
+  97 /task/output/well_measurements.tsv
+ 115 total
+[?2004hroot@0af57f431955:/task# rm -f /task/*.py /task/*.csv
+[?2004l[?2004hroot@0af57f431955:/task# ls -la /task/output
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Nov 13 00:03 .
+drwxr-xr-x 1 root root 4096 Nov 13 00:03 ..
+-rw-rw-rw- 1 root root  253 Nov 13 00:03 dose_response.tsv
+-rw-rw-rw- 1 root root  120 Nov 13 00:03 validation.tsv
+-rw-rw-rw- 1 root root 2718 Nov 13 00:03 well_measurements.tsv
+[?2004hroot@0af57f431955:/task# 

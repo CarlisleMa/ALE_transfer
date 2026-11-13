@@ -1,0 +1,2959 @@
+[?2004hroot@98b4ef95c30c:/task# find /task -maxdepth 3 -type f -printf '%p\t%k KB\n' | sort
+[?2004l/task/input/fastq/RS28.fastq.gz	1764 KB
+/task/input/fastq/RS39.fastq.gz	2020 KB
+/task/input/fastq/RS43.fastq.gz	1704 KB
+/task/input/fastq/RS45.fastq.gz	1668 KB
+/task/input/fastq/RS49.fastq.gz	1892 KB
+/task/input/fastq/RS50.fastq.gz	1580 KB
+/task/input/fastq/RS52.fastq.gz	1412 KB
+/task/input/fastq/RS56.fastq.gz	1792 KB
+/task/input/fastq/RS66.fastq.gz	1912 KB
+/task/input/fastq/RS69.fastq.gz	1856 KB
+/task/input/fastq/RS78.fastq.gz	1536 KB
+/task/input/fastq/RS86.fastq.gz	1684 KB
+/task/input/lab_notes.md	4 KB
+/task/input/previous_analysis/HANDOVER.md	4 KB
+/task/input/previous_analysis/de_draft.tsv	44 KB
+/task/input/previous_analysis/gene_counts_merged.tsv	60 KB
+/task/input/previous_analysis/mail_top_responders.tsv	4 KB
+/task/input/reference/transcripts.fa.gz	696 KB
+/task/input/reference/tx2gene.tsv	40 KB
+/task/input/samples.tsv	4 KB
+/task/software/README.txt	4 KB
+[?2004hroot@98b4ef95c30c:/task# printf '\n--- samples.tsv ---\n'; cat /task/input/samples.tsv; printf '\n--- lab_notes.md ---\n'; cat /task/input/lab_notes.md; printf '\n--- HANDOVER.md ---\n'; cat /task/input/previous_analysis/HANDOVER.md
+[?2004l
+--- samples.tsv ---
+sample_id	condition	donor_id	donor_sex	library_prep_batch	fastq_file
+RS28	treated	D909	F	2024-06-04	RS28.fastq.gz
+RS39	treated	D428	M	2024-05-14	RS39.fastq.gz
+RS43	treated	D672	M	2024-06-04	RS43.fastq.gz
+RS45	vehicle	D503	M	2024-05-14	RS45.fastq.gz
+RS49	vehicle	D489	F	2024-05-14	RS49.fastq.gz
+RS50	vehicle	D485	M	2024-06-04	RS50.fastq.gz
+RS52	vehicle	D268	M	2024-05-14	RS52.fastq.gz
+RS56	treated	D371	F	2024-06-04	RS56.fastq.gz
+RS66	treated	D834	F	2024-06-04	RS66.fastq.gz
+RS69	treated	D434	M	2024-06-04	RS69.fastq.gz
+RS78	vehicle	D300	F	2024-05-14	RS78.fastq.gz
+RS86	vehicle	D574	F	2024-05-14	RS86.fastq.gz
+
+--- lab_notes.md ---
+# Wet-lab notes: compound vs vehicle, primary cells
+
+- Cells: primary cells from 12 unrelated donors (one culture per donor), passage 2.
+- Treatment: compound at 1 uM or vehicle (0.1% DMSO) for 24 h; one condition per donor.
+- RNA: column purification with on-column DNase; RIN >= 8.9 for all samples.
+- Gene panel: the transcripts in `reference/` (targeted panel plus sex-chromosome control genes).
+- Library prep: poly-A selection, unstranded. Two prep sessions because the first kit lot ran out: 2024-05-14 (6 libraries, kit lot A, operator 1) and 2024-06-04 (6 libraries, kit lot B, operator 2, different PCR cycler). The session of each library is in the sample sheet.
+- Sequencing: all libraries pooled equimolar on one lane, 50-cycle single read. The core delivered adapter-trimmed reads; read names and base qualities were stripped to placeholders by their export tool.
+
+--- HANDOVER.md ---
+# Hand-over note: compound vs vehicle RNA-seq
+
+Written on my last day. Sorry for the state of things.
+
+## What is in this folder
+- `scripts/01_quantify.sh` - salmon index and quantification of the 12 FASTQ files
+- `scripts/02_merge_counts.py` - gene-level matrix from the salmon output
+- `scripts/03_de.py` - DESeq2 model (pydeseq2), compound vs vehicle
+- `gene_counts_merged.tsv` - gene-level matrix (output of 01 + 02)
+- `de_draft.tsv` - draft differential-expression table (output of 03)
+- `mail_top_responders.tsv` - the 40 genes I mailed to the wet lab on 2 July as "top responder genes"
+
+## Notes
+- The salmon output directories were on the scratch disk, which has been purged since. Only the
+  merged matrix is left.
+- The mailed list came from my first differential-expression run (smallest adjusted p-values first,
+  sex-chromosome control genes taken out). The table of that run was overwritten; `de_draft.tsv` is
+  from a later run.
+- Samples were used as listed in the sample sheet.
+- The wet lab has started to order qPCR primers for the mailed genes, so they need to know soon
+  which of them hold up.
+- All scripts take their paths as arguments, see the usage line at the top of each.
+[?2004hroot@98b4ef95c30c:/task# printf '\n--- scripts ---\n'; for f in /task/input/previous_analysis/scripts/*; do echo "### $f"; sed -n '1,240p' "$f"; done
+[?2004l
+--- scripts ---
+### /task/input/previous_analysis/scripts/01_quantify.sh
+#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+### /task/input/previous_analysis/scripts/02_merge_counts.py
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+### /task/input/previous_analysis/scripts/03_de.py
+#!/usr/bin/env python3
+"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+"""
+import os
+import sys
+
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+names = names.set_index("gene_id")["gene_name"]
+
+meta = pd.DataFrame({"condition": samples["condition"],
+                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+mat = counts[meta.index].T.round().astype(int)
+dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+dds.deseq2()
+st = DeseqStats(dds, contrast=["condition", "vehicle", "treated"], alpha=0.05, quiet=True, n_cpus=2)
+st.summary()
+res = st.results_df.reindex(counts.index)
+padj = res["padj"]
+table = pd.DataFrame({"gene_id": counts.index,
+                      "gene_name": names.reindex(counts.index).values,
+                      "base_mean": res["baseMean"].round(2).values,
+                      "log2fc": (res["log2FoldChange"]).round(4).values,
+                      "pvalue": res["pvalue"].values,
+                      "padj": padj.values})
+table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004hroot@98b4ef95c30c:/task# printf '\n--- tx2gene head/count ---\n'; head -20 /task/input/reference/tx2gene.tsv; wc -l /task/input/reference/tx2gene.tsv; printf '\n--- previous result heads ---\n'; head -5 /task/input/previous_analysis/gene_counts_merged.tsv; head -20 /task/input/previous_analysis/de_draft.tsv; head -30 /task/input/previous_analysis/mail_top_responders.tsv
+[?2004l
+--- tx2gene head/count ---
+transcript_id	gene_id	gene_name
+ENST00000654459	ENSG00000290147	GUCA1ANB-GUCA1A
+ENST00000593153	ENSG00000154265	ABCA5
+ENST00000285871	ENSG00000135205	CCDC146
+ENST00000228837	ENSG00000111241	FGF6
+ENST00000319725	ENSG00000107164	FUBP3
+ENST00000323940	ENSG00000137868	STRA6
+ENST00000439915	ENSG00000119778	ATAD2B
+ENST00000361847	ENSG00000080823	MOK
+ENST00000356728	ENSG00000143365	RORC
+ENST00000376142	ENSG00000136754	ABI1
+ENST00000376139	ENSG00000136754	ABI1
+ENST00000376140	ENSG00000136754	ABI1
+ENST00000334056	ENSG00000163806	SPDYA
+ENST00000379579	ENSG00000163806	SPDYA
+ENST00000343063	ENSG00000144488	ESPNL
+ENST00000393347	ENSG00000037280	FLT4
+ENST00000444448	ENSG00000163072	NOSTRIN
+ENST00000540839	ENSG00000039523	RIPOR1
+ENST00000428437	ENSG00000039523	RIPOR1
+961 /task/input/reference/tx2gene.tsv
+
+--- previous result heads ---
+gene_id	RS28	RS39	RS43	RS45	RS49	RS50	RS52	RS56	RS66	RS69	RS78	RS86
+ENSG00000290147	53.0	43.0	42.0	27.0	30.0	26.0	30.0	6.0	31.0	41.0	31.0	26.0
+ENSG00000154265	11.0	19.0	11.0	9.0	28.0	7.0	8.0	2.0	2.0	13.0	2.0	16.0
+ENSG00000135205	26.0	56.0	39.0	35.0	46.0	27.0	27.0	9.0	34.0	56.0	34.0	55.0
+ENSG00000111241	63.0	132.0	81.0	119.0	127.0	71.0	84.0	27.0	111.0	80.0	111.0	96.0
+gene_id	gene_name	base_mean	log2fc	pvalue	padj
+ENSG00000290147	GUCA1ANB-GUCA1A	29.96	-0.4158	0.0770316	0.994964
+ENSG00000154265	ABCA5	9.74	0.2143	0.701381	0.994964
+ENSG00000135205	CCDC146	34.23	-0.0494	0.843285	0.994964
+ENSG00000111241	FGF6	85.92	0.2196	0.253563	0.994964
+ENSG00000107164	FUBP3	25.6	0.255	0.327309	0.994964
+ENSG00000137868	STRA6	16.91	-0.023	0.931913	0.994964
+ENSG00000119778	ATAD2B	31.98	-0.4335	0.093953	0.994964
+ENSG00000080823	MOK	3.81	0.9981	0.206373	0.994964
+ENSG00000143365	RORC	13.93	-0.3991	0.241213	0.994964
+ENSG00000136754	ABI1	7.11	0.0395	0.938313	0.994964
+ENSG00000163806	SPDYA	33.92	-0.0879	0.864331	0.994964
+ENSG00000144488	ESPNL	51.21	0.1256	0.449949	0.994964
+ENSG00000037280	FLT4	16.45	0.882	0.0804519	0.994964
+ENSG00000163072	NOSTRIN	53.15	0.1949	0.670486	0.994964
+ENSG00000039523	RIPOR1	37.21	0.1028	0.625656	0.994964
+ENSG00000134265	NAPG	24.59	-0.0329	0.881782	0.994964
+ENSG00000066294	CD84	15.98	-0.0878	0.728021	0.994964
+ENSG00000134007	ADAM20	35.04	-0.0145	0.946581	0.994964
+ENSG00000182742	HOXB4	17.74	0.3086	0.547533	0.994964
+rank	gene_id	gene_name
+1	ENSG00000054282	SDCCAG8
+2	ENSG00000289604	CTAGE8
+3	ENSG00000080166	DCT
+4	ENSG00000110400	NECTIN1
+5	ENSG00000130818	ZNF426
+6	ENSG00000178537	SLC25A20
+7	ENSG00000136536	MARCHF7
+8	ENSG00000170515	PA2G4
+9	ENSG00000153140	CETN3
+10	ENSG00000216490	IFI30
+11	ENSG00000186442	KRT3
+12	ENSG00000237988	OR2I1P
+13	ENSG00000180917	CMTR2
+14	ENSG00000156206	CFAP161
+15	ENSG00000103226	NOMO3
+16	ENSG00000136840	ST6GALNAC4
+17	ENSG00000064989	CALCRL
+18	ENSG00000137142	IGFBPL1
+19	ENSG00000038945	MSR1
+20	ENSG00000111144	LTA4H
+21	ENSG00000196535	MYO18A
+22	ENSG00000198844	ARHGEF15
+23	ENSG00000283632	EXOC3L2
+24	ENSG00000171495	MROH2B
+25	ENSG00000184616	SPDYE12
+26	ENSG00000017427	IGF1
+27	ENSG00000094796	KRT31
+28	ENSG00000159200	RCAN1
+29	ENSG00000143156	NME7
+[?2004hroot@98b4ef95c30c:/task# salmon --version; python3 --version; python3 - <<'PY'
+[?2004l[?2004h> import pandas, numpy, scipy, statsmodels, sklearn, pydeseq2
+[?2004l[?2004h> print('pandas', pandas.__version__)
+[?2004l[?2004h> print('pydeseq2', pydeseq2.__version__)
+[?2004l[?2004h> PY
+[?2004lsalmon 2.11.0
+Python 3.12.16
+pandas 3.1.1
+pydeseq2 0.5.4
+[?2004hroot@98b4ef95c30c:/task# for f in /task/input/previous_analysis/scripts/01_quantify.sh /task/input/previous_analysis/scripts/02_merge_counts.py /task/input/previous_analysis/scripts/03_de.py /task/software/README.txt; do echo "### $f"; cat "$f"; done
+[?2004l### /task/input/previous_analysis/scripts/01_quantify.sh
+#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+### /task/input/previous_analysis/scripts/02_merge_counts.py
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+### /task/input/previous_analysis/scripts/03_de.py
+#!/usr/bin/env python3
+"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+"""
+import os
+import sys
+
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+names = names.set_index("gene_id")["gene_name"]
+
+meta = pd.DataFrame({"condition": samples["condition"],
+                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+mat = counts[meta.index].T.round().astype(int)
+dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+dds.deseq2()
+st = DeseqStats(dds, contrast=["condition", "vehicle", "treated"], alpha=0.05, quiet=True, n_cpus=2)
+st.summary()
+res = st.results_df.reindex(counts.index)
+padj = res["padj"]
+table = pd.DataFrame({"gene_id": counts.index,
+                      "gene_name": names.reindex(counts.index).values,
+                      "base_mean": res["baseMean"].round(2).values,
+                      "log2fc": (res["log2FoldChange"]).round(4).values,
+                      "pvalue": res["pvalue"].values,
+                      "padj": padj.values})
+table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+### /task/software/README.txt
+All tools are on PATH (conda env at /opt/tools).
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import gzip, os
+[?2004l[?2004h> fa='/task/input/reference/transcripts.fa.gz'
+[?2004l[?2004h> n=0; lens=[]; names=[]
+[?2004l[?2004h> with gzip.open(fa,'rt') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         if line.startswith('>'):
+[?2004l[?2004h>             n+=1; names.append(line[1:].strip().split()[0]); lens.append(0)
+[?2004l[?2004h>         else: lens[-1]+=len(line.strip())
+[?2004l[?2004h> print('transcripts',n,'genes',len(set(names)))
+[?2004l[?2004h> print('length min/median/max',min(lens),sorted(lens)[len(lens)//2],max(lens))
+[?2004l[?2004h> print('first IDs',names[:5])
+[?2004l[?2004h> for p in sorted(['/task/input/fastq/'+x for x in os.listdir('/task/input/fastq')]):
+[?2004l[?2004h>     reads=None
+[?2004l[?2004h>     with gzip.open(p,'rt') as f:
+[?2004l[?2004h>         h=f.readline().strip(); s=f.readline().strip(); reads=s
+[?2004l[?2004h>     print(os.path.basename(p), 'first_read_len',len(reads), 'header',h)
+[?2004l[?2004h> PY
+[?2004ltranscripts 960 genes 960
+length min/median/max 804 2536 19245
+first IDs ['ENST00000654459', 'ENST00000593153', 'ENST00000285871', 'ENST00000228837', 'ENST00000319725']
+RS28.fastq.gz first_read_len 50 header @1
+RS39.fastq.gz first_read_len 50 header @1
+RS43.fastq.gz first_read_len 50 header @1
+RS45.fastq.gz first_read_len 50 header @1
+RS49.fastq.gz first_read_len 50 header @1
+RS50.fastq.gz first_read_len 50 header @1
+RS52.fastq.gz first_read_len 50 header @1
+RS56.fastq.gz first_read_len 50 header @1
+RS66.fastq.gz first_read_len 50 header @1
+RS69.fastq.gz first_read_len 50 header @1
+RS78.fastq.gz first_read_len 50 header @1
+RS86.fastq.gz first_read_len 50 header @1
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> x=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> print('tx2gene shape',x.shape,'unique tx',x.transcript_id.nunique(),'unique genes',x.gene_id.nunique())
+[?2004l[?2004h> print('duplicate transcripts',x[x.transcript_id.duplicated(False)].to_string(index=False))
+[?2004l[?2004h> m=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> print('mail rows',len(m),'unique genes',m.gene_id.nunique())
+[?2004l[?2004h> print('mail genes absent from tx2gene:',sorted(set(m.gene_id)-set(x.gene_id)))
+[?2004l[?2004h> PY
+[?2004ltx2gene shape (960, 3) unique tx 960 unique genes 800
+duplicate transcripts Empty DataFrame
+Columns: [transcript_id, gene_id, gene_name]
+Index: []
+mail rows 40 unique genes 40
+mail genes absent from tx2gene: []
+[?2004hroot@98b4ef95c30c:/task# rm -rf /tmp/rnaseq_work && mkdir -p /tmp/rnaseq_work/quant && salmon index -t /task/input/reference/transcripts.fa.gz -i /tmp/rnaseq_work/index -k 31 -p 2 > /tmp/rnaseq_work/index.log 2>&1 && tail -20 /tmp/rnaseq_work/index.log
+[?2004l[2m2026-11-13T06:31:08.807203Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving contig table to /tmp/rnaseq_work/index/index.ctab
+[2m2026-11-13T06:31:08.807252Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving reference info to /tmp/rnaseq_work/index/index.refinfo
+[2m2026-11-13T06:31:08.807298Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving equivalence class table to /tmp/rnaseq_work/index/index.ectab
+[2m2026-11-13T06:31:08.807336Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Index saved to /tmp/rnaseq_work/index/index
+[2m2026-11-13T06:31:08.807340Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m Index built and saved to /tmp/rnaseq_work/index/index
+[2m2026-11-13T06:31:08.807342Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m auto dict selection: 2225611 canonical k-mers (100000000 threshold), emitting Tiny artifacts: true
+[2m2026-11-13T06:31:08.807345Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m Emitting Tiny index artifacts (.tdct + .tct)
+[2m2026-11-13T06:31:08.807347Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Building and saving TinyDictionary to /tmp/rnaseq_work/index/index.tdct
+[2m2026-11-13T06:31:08.962058Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Building and saving TinyContigTable to /tmp/rnaseq_work/index/index.tct
+[2m2026-11-13T06:31:08.962498Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading SSHash dictionary from /tmp/rnaseq_work/index/index.ssi
+[2m2026-11-13T06:31:08.963138Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   k=31, 2419 strings
+[2m2026-11-13T06:31:08.963148Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading contig table from /tmp/rnaseq_work/index/index.ctab
+[2m2026-11-13T06:31:08.963167Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   2419 contigs, 4090 entries, entry_width=26 bits
+[2m2026-11-13T06:31:08.963174Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading reference info from /tmp/rnaseq_work/index/index.refinfo
+[2m2026-11-13T06:31:08.963240Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   960 references, max_ref_len=19245
+[2m2026-11-13T06:31:08.963255Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading equivalence class table from /tmp/rnaseq_work/index/index.ectab
+[2m2026-11-13T06:31:08.963269Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   2419 tiles, 1656 ECs, 2562 label entries
+[2m2026-11-13T06:31:08.963272Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   ref_shift=16, pos_mask=0x7fff
+[2m2026-11-13T06:31:08.964370Z[0m [32m INFO[0m [2msalmon_index[0m[2m:[0m index built: 960 references
+indexed 960 references (k=31, m=19)
+[?2004hroot@98b4ef95c30c:/task# tail -n +2 /task/input/samples.tsv | cut -f1,6 | while IFS=$'\t' read -r sid fq; do echo "Quantifying $sid"; salmon quant -i /tmp/rnaseq_work/index -l SR -r "/task/input/fastq/$fq" -p 2 --validateMappings --seqBias --gcBias -o "/tmp/rnaseq_work/quant/$sid" > "/tmp/rnaseq_work/quant/${sid}.log" 2>&1 || { cat "/tmp/rnaseq_work/quant/${sid}.log"; exit 1; }; done
+[?2004lQuantifying RS28
+Quantifying RS39
+Quantifying RS43
+Quantifying RS45
+Quantifying RS49
+Quantifying RS50
+Quantifying RS52
+Quantifying RS56
+Quantifying RS66
+Quantifying RS69
+Quantifying RS78
+Quantifying RS86
+[?2004hroot@98b4ef95c30c:/task# python3 /task/input/previous_analysis/scripts/02_merge_counts.py /tmp/rnaseq_work /tmp/rnaseq_work/gene_counts.tsv
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, json, glob, os
+[?2004l[?2004h> new=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('new shape',new.shape,'total per sample:')
+[?2004l[?2004h> print(new.sum().round(1).to_string())
+[?2004l[?2004h> print('\nmax abs difference versus predecessor by sample:')
+[?2004l[?2004h> print((new-old).abs().max().round(3).to_string())
+[?2004l[?2004h> print('\nmean absolute difference',float((new-old).abs().mean().mean()))
+[?2004l[?2004h> print('\nMapping summary:')
+[?2004l[?2004h> for d in sorted(glob.glob('/tmp/rnaseq_work/quant/*')):
+[?2004l[?2004h>     sid=os.path.basename(d)
+[?2004l[?2004h>     p=f'{d}/aux_info/meta_info.json'
+[?2004l[?2004h>     if os.path.exists(p):
+[?2004l[?2004h>         with open(p) as f: m=json.load(f)
+[?2004l[?2004h>         print(sid,'percent_mapped=',m.get('percent_mapped'),'num_processed=',m.get('num_processed'),'num_mapped=',m.get('num_mapped'))
+[?2004l[?2004h> PY
+[?2004lnew shape (800, 12) total per sample:
+RS28    44015.0
+RS39    50284.0
+RS43    42574.0
+RS45    41747.0
+RS49    47353.0
+RS50    39419.0
+RS52    35411.0
+RS56    44575.0
+RS66    47598.0
+RS69    46450.0
+RS78    38199.0
+RS86    41985.0
+
+max abs difference versus predecessor by sample:
+RS28      0.001
+RS39      0.002
+RS43      0.045
+RS45      0.015
+RS49      0.002
+RS50      0.004
+RS52      0.040
+RS56    568.000
+RS66    900.000
+RS69      0.002
+RS78      0.001
+RS86      0.001
+
+mean absolute difference 5.282328541666666
+
+Mapping summary:
+RS28 percent_mapped= 47.959161436541144 num_processed= 91776 num_mapped= 44015
+RS39 percent_mapped= 47.93746127079461 num_processed= 104895 num_mapped= 50284
+RS43 percent_mapped= 48.19007085776379 num_processed= 88346 num_mapped= 42574
+RS45 percent_mapped= 48.25908029500844 num_processed= 86506 num_mapped= 41747
+RS49 percent_mapped= 48.12981521761226 num_processed= 98386 num_mapped= 47353
+RS50 percent_mapped= 48.09482558777955 num_processed= 81961 num_mapped= 39419
+RS52 percent_mapped= 48.39617870956279 num_processed= 73169 num_mapped= 35411
+RS56 percent_mapped= 47.932684552932955 num_processed= 92995 num_mapped= 44575
+RS66 percent_mapped= 47.90458937198068 num_processed= 99360 num_mapped= 47598
+RS69 percent_mapped= 48.14369519703157 num_processed= 96482 num_mapped= 46450
+RS78 percent_mapped= 47.93569922698524 num_processed= 79688 num_mapped= 38199
+RS86 percent_mapped= 48.10325271250329 num_processed= 87281 num_mapped= 41985
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> x=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id')
+[?2004l[?2004h> pat='XIST|TSIX|XIST-AS|CDX4|CDKL5|CHIC1|DBP|DDX3X|DDX3Y|EIF1AX|EIF1AY|EIF2S3X|EIF2S3Y|KDM5C|KDM5D|KDM6A|UTY|NLGN4X|NLGN4Y|RPS4X|RPS4Y1|TMSB4X|TMSB4Y|ZFX|ZFY|USP9X|USP9Y|AMELX|AMely|SRY|TSPY|CDY|HSFX|HSFY|VCX|VCY|BPY2|RBMY|DAZ|PRY|SPRY3|XG|CD99|CXORF|YORF|MORF4L1|MORF4L2|GYG2|ARSE|PNPLA4|HDHD1|STS|MXRA5|PLP2|SSX|CTAGE|SPANX|GOLGA|FAM197Y|FAM58A|FAM120C|FAM133|FAM173A|FAM197|FAM229A|FTH1P|FXC1|IL3RA|JADE1|JARID1C|LDOC1|MAP7D3|MECP2|MID1|MIR361|MTMR8|NAP1L2|NXF3|OFD1|PBDC1|PGK1|PHF6|PHKA1|PRKX|PTCHD1|PUDP|RAP2C|REPS2|RLIM|RNF113A|RRP7B|SHROOM2|SLC35A2|SLC9A6|SMC1A|SPIN4|SYN1|TBPL1|TMEM164|TPRXB|TPRG1L|TPTEP|TRO|TSPYL2|USP51|XAGE|XIAP|XK|XPO4|XYLT1|ZRSR2'
+[?2004l[?2004h> print(x[x.gene_name.str.upper().str.contains(pat,regex=True,na=False)].to_string(index=False))
+[?2004l[?2004h> PY
+[?2004l  transcript_id         gene_id gene_name
+ENST00000362096 ENSG00000183878       UTY
+ENST00000487179 ENSG00000289604    CTAGE8
+ENST00000336949 ENSG00000165175   MID1IP1
+ENST00000250784 ENSG00000129824    RPS4Y1
+ENST00000298396 ENSG00000165584      SSX3
+ENST00000361365 ENSG00000198692    EIF1AY
+ENST00000336079 ENSG00000067048     DDX3Y
+ENST00000567390 ENSG00000261649  GOLGA6L7
+ENST00000440077 ENSG00000012817     KDM5D
+ENST00000429829 ENSG00000229807      XIST
+ENST00000375442 ENSG00000184205    TSPYL2
+ENST00000173898 ENSG00000067445       TRO
+ENST00000222122 ENSG00000105516       DBP
+ENST00000537866 ENSG00000159579    RSPRY1
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from pathlib import Path
+[?2004l[?2004h> x=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id')
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> # print the 100 highest-expressed gene annotations, including likely sex controls
+[?2004l[?2004h> print('Top expressed genes by mean NumReads:')
+[?2004l[?2004h> means=c.mean(axis=1).sort_values(ascending=False)
+[?2004l[?2004h> out=x.set_index('gene_id').loc[means.index[:120],['gene_name']].join(means.rename('mean_count'))
+[?2004l[?2004h> print(out.to_string())
+[?2004l[?2004h> PY
+[?2004lTop expressed genes by mean NumReads:
+                     gene_name  mean_count
+gene_id                                   
+ENSG00000164363        SLC6A18  680.000000
+ENSG00000130177          CDC16  565.750000
+ENSG00000164440          TXLNB  550.083333
+ENSG00000172464         OR5AP2  458.916667
+ENSG00000124429          POF1B  418.333333
+ENSG00000105609         LILRB5  399.917500
+ENSG00000060237           WNK1  378.500000
+ENSG00000019186        CYP24A1  335.333333
+ENSG00000107562         CXCL12  326.499833
+ENSG00000170743           SYT9  320.666667
+ENSG00000148308         GTF3C5  315.083333
+ENSG00000151338         MIPOL1  310.083417
+ENSG00000156875        MFSD14A  302.416667
+ENSG00000153140          CETN3  299.500000
+ENSG00000214944       ARHGEF28  286.000000
+ENSG00000057593             F7  285.500000
+ENSG00000061794         MRPS35  275.500000
+ENSG00000081760           AACS  273.833333
+ENSG00000133937            GSC  269.416667
+ENSG00000017427           IGF1  267.583333
+ENSG00000115649         CNPPD1  264.666667
+ENSG00000134824          FADS2  260.166667
+ENSG00000028116           VRK2  239.750000
+ENSG00000053900         ANAPC4  236.333333
+ENSG00000087157           PGS1  220.916667
+ENSG00000174607           UGT8  220.500000
+ENSG00000160959         LRRC14  219.666667
+ENSG00000187555           USP7  211.500000
+ENSG00000156206        CFAP161  197.500000
+ENSG00000289604         CTAGE8  196.333333
+ENSG00000179934           CCR8  192.500000
+ENSG00000173320          STOX2  191.583333
+ENSG00000244115  DNAJC25-GNG10  189.166667
+ENSG00000188610         FAM72B  185.583333
+ENSG00000197403          OR6N1  180.583333
+ENSG00000179913         B3GNT3  169.416667
+ENSG00000244414          CFHR1  169.000000
+ENSG00000269433        OPN1MW3  167.333333
+ENSG00000044115         CTNNA1  166.750000
+ENSG00000136352         NKX2-1  161.083333
+ENSG00000131725          WDR44  159.000000
+ENSG00000147459          DOCK5  156.000000
+ENSG00000148175           STOM  155.250000
+ENSG00000137142        IGFBPL1  155.250000
+ENSG00000248383        PCDHAC1  153.166667
+ENSG00000147443           DOK2  150.333333
+ENSG00000089060         SLC8B1  148.916667
+ENSG00000004660         CAMKK1  148.750000
+ENSG00000081019          RSBN1  147.750000
+ENSG00000176219         OR11H6  146.833333
+ENSG00000095485        CWF19L1  146.666667
+ENSG00000080166            DCT  146.500000
+ENSG00000185347          TEDC1  140.750000
+ENSG00000270946         CT45A9  139.333333
+ENSG00000103226          NOMO3  136.583333
+ENSG00000081189          MEF2C  136.166667
+ENSG00000156234         CXCL13  136.083333
+ENSG00000203710            CR1  132.833333
+ENSG00000122012           SV2C  129.750000
+ENSG00000151612         ZNF827  128.250000
+ENSG00000164776          PHKG1  128.166667
+ENSG00000186710         CFAP73  127.833333
+ENSG00000169393        ELSPBP1  127.583333
+ENSG00000165169         DYNLT3  127.250000
+ENSG00000064545       TMEM161A  126.666667
+ENSG00000175701           MTLN  125.083333
+ENSG00000060642           PIGV  124.750000
+ENSG00000130818         ZNF426  124.250000
+ENSG00000178531          CTXN1  123.166667
+ENSG00000079805           DNM2  121.667917
+ENSG00000164197         RNF180  121.666667
+ENSG00000120907         ADRA1A  119.166667
+ENSG00000170515          PA2G4  119.000000
+ENSG00000104827           CGB3  118.333333
+ENSG00000083838         ZNF446  117.583333
+ENSG00000100239         PPP6R2  117.166667
+ENSG00000135956        TMEM127  116.333750
+ENSG00000044459          CNTLN  115.833333
+ENSG00000171476           HOPX  115.500000
+ENSG00000196581          AJAP1  115.083333
+ENSG00000134684          YARS1  115.083333
+ENSG00000174327       SLC16A13  114.333333
+ENSG00000178035         IMPDH2  112.416667
+ENSG00000148136         OR13C4  110.416667
+ENSG00000021461        CYP3A43  109.916667
+ENSG00000176148        TCP11L1  108.416667
+ENSG00000101457        DNTTIP1  108.416667
+ENSG00000003056           M6PR  107.916667
+ENSG00000273749         CYFIP1  107.583333
+ENSG00000133106         EPSTI1  107.416667
+ENSG00000170323          FABP4  107.166667
+ENSG00000184857        TMEM186  106.416667
+ENSG00000165898          ISCA2  105.166667
+ENSG00000169507       SLC38A11  104.833333
+ENSG00000163377          TAFA4  103.666667
+ENSG00000146232         NFKBIE  103.333333
+ENSG00000205832       C16orf96  102.333333
+ENSG00000015479          MATR3  101.083500
+ENSG00000184292        TACSTD2   99.750000
+ENSG00000113391          ARB2A   99.083333
+ENSG00000006210         CX3CL1   98.750000
+ENSG00000186329        TMEM212   98.583333
+ENSG00000184205         TSPYL2   98.083333
+ENSG00000181751          MACIR   97.166667
+ENSG00000123146         ADGRE5   96.833250
+ENSG00000138794          CASP6   96.326000
+ENSG00000074370         ATP2A3   95.916667
+ENSG00000111241           FGF6   95.750000
+ENSG00000140395          SKIC8   95.000000
+ENSG00000141425         RPRD1A   94.666667
+ENSG00000139352          ASCL1   93.500000
+ENSG00000204613         TRIM10   92.666667
+ENSG00000147874          HAUS6   91.666667
+ENSG00000204219          TCEA3   91.583333
+ENSG00000132329          RAMP1   91.583333
+ENSG00000107614         TRDMT1   91.000000
+ENSG00000279514         OR4C16   90.833333
+ENSG00000119185       ITGB1BP1   90.500000
+ENSG00000101187        SLCO4A1   90.000000
+ENSG00000242221           PSG2   89.500000
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> # normalized log expression for global sample structure
+[?2004l[?2004h> cpm=c/c.sum(axis=0)*1e6
+[?2004l[?2004h> log=np.log10(cpm+1)
+[?2004l[?2004h> corr=log.corr()
+[?2004l[?2004h> print('Sample correlation matrix (log10 CPM):')
+[?2004l[?2004h> print(corr.round(3).to_string())
+[?2004l[?2004h> print('\nNearest sample for each sample by correlation:')
+[?2004l[?2004h> for s in corr:
+[?2004l[?2004h>     z=corr[s].drop(s).sort_values(ascending=False)
+[?2004l[?2004h>     print(s,'->',z.index[0],round(z.iloc[0],3),'| second',z.index[1],round(z.iloc[1],3))
+[?2004l[?2004h> PY
+[?2004lSample correlation matrix (log10 CPM):
+       RS28   RS39   RS43   RS45   RS49   RS50   RS52   RS56   RS66   RS69   RS78   RS86
+RS28  1.000  0.719  0.762  0.750  0.808  0.737  0.606  0.916  0.931  0.811  0.732  0.750
+RS39  0.719  1.000  0.665  0.843  0.824  0.709  0.806  0.727  0.703  0.813  0.638  0.657
+RS43  0.762  0.665  1.000  0.763  0.578  0.640  0.753  0.753  0.756  0.586  0.919  0.929
+RS45  0.750  0.843  0.763  1.000  0.801  0.811  0.850  0.763  0.746  0.806  0.744  0.754
+RS49  0.808  0.824  0.578  0.801  1.000  0.817  0.693  0.796  0.801  0.909  0.545  0.561
+RS50  0.737  0.709  0.640  0.811  0.817  1.000  0.768  0.716  0.725  0.806  0.615  0.624
+RS52  0.606  0.806  0.753  0.850  0.693  0.768  1.000  0.603  0.600  0.687  0.730  0.747
+RS56  0.916  0.727  0.753  0.763  0.796  0.716  0.603  1.000  0.908  0.793  0.717  0.734
+RS66  0.931  0.703  0.756  0.746  0.801  0.725  0.600  0.908  1.000  0.799  0.729  0.744
+RS69  0.811  0.813  0.586  0.806  0.909  0.806  0.687  0.793  0.799  1.000  0.550  0.568
+RS78  0.732  0.638  0.919  0.744  0.545  0.615  0.730  0.717  0.729  0.550  1.000  0.914
+RS86  0.750  0.657  0.929  0.754  0.561  0.624  0.747  0.734  0.744  0.568  0.914  1.000
+
+Nearest sample for each sample by correlation:
+RS28 -> RS66 0.931 | second RS56 0.916
+RS39 -> RS45 0.843 | second RS49 0.824
+RS43 -> RS86 0.929 | second RS78 0.919
+RS45 -> RS52 0.85 | second RS39 0.843
+RS49 -> RS69 0.909 | second RS39 0.824
+RS50 -> RS49 0.817 | second RS45 0.811
+RS52 -> RS45 0.85 | second RS39 0.806
+RS56 -> RS28 0.916 | second RS66 0.908
+RS66 -> RS28 0.931 | second RS56 0.908
+RS69 -> RS49 0.909 | second RS39 0.813
+RS78 -> RS43 0.919 | second RS86 0.914
+RS86 -> RS43 0.929 | second RS78 0.914
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> ann=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id').set_index('gene_id')
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> # likely sex control genes based on gene symbols
+[?2004l[?2004h> want=ann[ann.gene_name.str.upper().isin(['UTY','RPS4Y1','EIF1AY','DDX3Y','KDM5D','XIST','TSPYL2','RSPRY1','GOLGA6L7','POF1B'])].index
+[?2004l[?2004h> print('RAW Salmon gene NumReads:')
+[?2004l[?2004h> print(c.loc[want].join(ann[['gene_name']]).to_string())
+[?2004l[?2004h> cpm=c/c.sum(axis=0)*1e6
+[?2004l[?2004h> print('\nCPM:')
+[?2004l[?2004h> print(cpm.loc[want].round(2).join(ann[['gene_name']]).to_string())
+[?2004l[?2004h> # combine all Y markers and report XIST separately
+[?2004l[?2004h> Y=['ENSG00000183878','ENSG00000129824','ENSG00000198692','ENSG00000067048','ENSG00000012817']
+[?2004l[?2004h> print('\nY-marker combined counts and CPM; XIST CPM; Y fraction among these markers')
+[?2004l[?2004h> out=pd.DataFrame({'Y_count':c.loc[Y].sum(),'Y_CPM':cpm.loc[Y].sum(),'XIST_CPM':cpm.loc['ENSG00000229807']})
+[?2004l[?2004h> out['Y_frac_among_markers']=out.Y_CPM/(out.Y_CPM+out.XIST_CPM)
+[?2004l[?2004h> print(out.round(3).to_string())
+[?2004l[?2004h> PY
+[?2004lRAW Salmon gene NumReads:
+                  RS28   RS39   RS43   RS45   RS49   RS50   RS52   RS56   RS66   RS69   RS78   RS86 gene_name
+gene_id                                                                                                      
+ENSG00000183878    0.0   51.0    0.0   27.0   42.0   41.0   20.0    0.0    0.0   26.0    0.0    0.0       UTY
+ENSG00000129824    0.0  101.0    0.0   47.0   71.0   30.0   73.0    0.0    0.0   60.0    0.0    0.0    RPS4Y1
+ENSG00000198692    0.0   20.0    0.0   27.0   23.0   23.0   21.0    0.0    0.0   25.0    0.0    0.0    EIF1AY
+ENSG00000067048    0.0   44.0    0.0   26.0   48.0   48.0   35.0    0.0    0.0   36.0    0.0    0.0     DDX3Y
+ENSG00000261649    2.0   22.0   19.0   10.0    1.0    4.0   19.0    2.0    8.0    1.0   19.0   10.0  GOLGA6L7
+ENSG00000012817    0.0   53.0    0.0   47.0   64.0   50.0   37.0    0.0    0.0   49.0    0.0    0.0     KDM5D
+ENSG00000229807   49.0    0.0   27.0   15.0    0.0    0.0    0.0   47.0   69.0    0.0   62.0   74.0      XIST
+ENSG00000124429  466.0  483.0  583.0  488.0  348.0  461.0  370.0  393.0  485.0  386.0  259.0  298.0     POF1B
+ENSG00000184205   91.0  110.0  102.0  115.0   89.0   81.0   77.0  102.0   92.0   95.0  115.0  108.0    TSPYL2
+ENSG00000159579   19.0   38.0   30.0   33.0   21.0   28.0   28.0   30.0   26.0   23.0   18.0   27.0    RSPRY1
+
+CPM:
+                     RS28     RS39      RS43      RS45     RS49      RS50      RS52     RS56      RS66     RS69     RS78     RS86 gene_name
+gene_id                                                                                                                                    
+ENSG00000183878      0.00  1014.24      0.00    646.75   886.96   1040.11    564.80     0.00      0.00   559.74     0.00     0.00       UTY
+ENSG00000129824      0.00  2008.59      0.00   1125.83  1499.38    761.05   2061.51     0.00      0.00  1291.71     0.00     0.00    RPS4Y1
+ENSG00000198692      0.00   397.74      0.00    646.75   485.71    583.47    593.04     0.00      0.00   538.21     0.00     0.00    EIF1AY
+ENSG00000067048      0.00   875.03      0.00    622.80  1013.66   1217.69    988.39     0.00      0.00   775.03     0.00     0.00     DDX3Y
+ENSG00000261649     45.44   437.51    446.28    239.54    21.12    101.47    536.56    44.87    168.07    21.53   497.40   238.18  GOLGA6L7
+ENSG00000012817      0.00  1054.01      0.00   1125.83  1351.55   1268.42   1044.87     0.00      0.00  1054.90     0.00     0.00     KDM5D
+ENSG00000229807   1113.26     0.00    634.19    359.31     0.00      0.00      0.00  1054.40   1449.64     0.00  1623.08  1762.53      XIST
+ENSG00000124429  10587.30  9605.44  13693.80  11689.46  7349.06  11694.87  10448.73  8816.60  10189.50  8310.01  6780.28  7097.77     POF1B
+ENSG00000184205   2067.48  2187.57   2395.83   2754.69  1879.50   2054.85   2174.47  2288.28   1932.85  2045.21  3010.55  2572.35    TSPYL2
+ENSG00000159579    431.67   755.71    704.66    790.48   443.48    710.32    790.71   673.02    546.24   495.16   471.22   643.09    RSPRY1
+
+Y-marker combined counts and CPM; XIST CPM; Y fraction among these markers
+      Y_count     Y_CPM  XIST_CPM  Y_frac_among_markers
+RS28      0.0     0.000  1113.257                 0.000
+RS39    269.0  5349.615     0.000                 1.000
+RS43      0.0     0.000   634.190                 0.000
+RS45    174.0  4167.964   359.307                 0.921
+RS49    248.0  5237.261     0.000                 1.000
+RS50    192.0  4870.747     0.000                 1.000
+RS52    186.0  5252.605     0.000                 1.000
+RS56      0.0     0.000  1054.403                 0.000
+RS66      0.0     0.000  1449.641                 0.000
+RS69    196.0  4219.591     0.000                 1.000
+RS78      0.0     0.000  1623.079                 0.000
+RS86      0.0     0.000  1762.534                 0.000
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> ann=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id').set_index('gene_id')
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for pair in [('RS56','RS28','RS66'),('RS66','RS28','RS56'),('RS86','RS43','RS78'),('RS78','RS43','RS86'),('RS69','RS49','RS39')]:
+[?2004l[?2004h>     s,a,b=pair
+[?2004l[?2004h>     l=np.log2((c+1)/(c[[a,b]].mean(axis=1)+1))
+[?2004l[?2004h>     print('\n',s,'vs',a,'and',b,'most distinguishing genes')
+[?2004l[?2004h>     z=pd.DataFrame({'log2fc_vs_peers':l[s], 'a_count':c[a], 'b_count':c[b], 's_count':c[s], 'name':ann.gene_name}).sort_values('log2fc_vs_peers')
+[?2004l[?2004h>     print(pd.concat([z.head(15),z.tail(15)]).round(2).to_string())
+[?2004l[?2004h> PY
+[?2004l
+ RS56 vs RS28 and RS66 most distinguishing genes
+                 log2fc_vs_peers  a_count  b_count  s_count             name
+gene_id                                                                     
+ENSG00000290147              NaN     53.0     53.0     19.0  GUCA1ANB-GUCA1A
+ENSG00000154265              NaN     11.0     17.0      7.0            ABCA5
+ENSG00000135205              NaN     26.0     59.0     35.0          CCDC146
+ENSG00000111241              NaN     63.0     98.0     87.0             FGF6
+ENSG00000107164              NaN     19.0     21.0     22.0            FUBP3
+ENSG00000137868              NaN      9.0     13.0     15.0            STRA6
+ENSG00000119778              NaN     33.0     49.0     51.0           ATAD2B
+ENSG00000080823              NaN      1.0      3.0      1.0              MOK
+ENSG00000143365              NaN     16.0     15.0     21.0             RORC
+ENSG00000136754              NaN      9.0     15.0      7.0             ABI1
+ENSG00000163806              NaN     52.0     81.0     63.0            SPDYA
+ENSG00000144488              NaN     51.0     76.0     69.0            ESPNL
+ENSG00000037280              NaN      6.0      5.0      6.0             FLT4
+ENSG00000163072              NaN     21.0     16.0     24.0          NOSTRIN
+ENSG00000039523              NaN     35.0     33.0     37.0           RIPOR1
+ENSG00000279116              NaN     55.0     88.0     51.0            OR8D2
+ENSG00000060237              NaN    270.0    389.0    314.0             WNK1
+ENSG00000257949              NaN     48.0     31.0     32.0             TEN1
+ENSG00000167968              NaN     15.0     13.0     11.0         DNASE1L2
+ENSG00000165487              NaN     34.0     31.0     19.0            MICU2
+ENSG00000204613              NaN     86.0    113.0     66.0           TRIM10
+ENSG00000171136              NaN      5.0     22.0     12.0             RLN3
+ENSG00000100239              NaN     56.0     67.0     72.0           PPP6R2
+ENSG00000283632              NaN      6.0      8.0      7.0          EXOC3L2
+ENSG00000100448              NaN     47.0     59.0     54.0             CTSG
+ENSG00000057593              NaN    160.0    251.0    190.0               F7
+ENSG00000013375              NaN     10.0     15.0     14.0             PGM3
+ENSG00000103642              NaN     52.0     42.0     36.0            LACTB
+ENSG00000123124              NaN     30.0     37.0     26.0             WWP1
+ENSG00000078674              NaN     25.0     32.0     29.0             PCM1
+
+ RS66 vs RS28 and RS56 most distinguishing genes
+                 log2fc_vs_peers  a_count  b_count  s_count             name
+gene_id                                                                     
+ENSG00000290147              NaN     53.0     19.0     53.0  GUCA1ANB-GUCA1A
+ENSG00000154265              NaN     11.0      7.0     17.0            ABCA5
+ENSG00000135205              NaN     26.0     35.0     59.0          CCDC146
+ENSG00000111241              NaN     63.0     87.0     98.0             FGF6
+ENSG00000107164              NaN     19.0     22.0     21.0            FUBP3
+ENSG00000137868              NaN      9.0     15.0     13.0            STRA6
+ENSG00000119778              NaN     33.0     51.0     49.0           ATAD2B
+ENSG00000080823              NaN      1.0      1.0      3.0              MOK
+ENSG00000143365              NaN     16.0     21.0     15.0             RORC
+ENSG00000136754              NaN      9.0      7.0     15.0             ABI1
+ENSG00000163806              NaN     52.0     63.0     81.0            SPDYA
+ENSG00000144488              NaN     51.0     69.0     76.0            ESPNL
+ENSG00000037280              NaN      6.0      6.0      5.0             FLT4
+ENSG00000163072              NaN     21.0     24.0     16.0          NOSTRIN
+ENSG00000039523              NaN     35.0     37.0     33.0           RIPOR1
+ENSG00000279116              NaN     55.0     51.0     88.0            OR8D2
+ENSG00000060237              NaN    270.0    314.0    389.0             WNK1
+ENSG00000257949              NaN     48.0     32.0     31.0             TEN1
+ENSG00000167968              NaN     15.0     11.0     13.0         DNASE1L2
+ENSG00000165487              NaN     34.0     19.0     31.0            MICU2
+ENSG00000204613              NaN     86.0     66.0    113.0           TRIM10
+ENSG00000171136              NaN      5.0     12.0     22.0             RLN3
+ENSG00000100239              NaN     56.0     72.0     67.0           PPP6R2
+ENSG00000283632              NaN      6.0      7.0      8.0          EXOC3L2
+ENSG00000100448              NaN     47.0     54.0     59.0             CTSG
+ENSG00000057593              NaN    160.0    190.0    251.0               F7
+ENSG00000013375              NaN     10.0     14.0     15.0             PGM3
+ENSG00000103642              NaN     52.0     36.0     42.0            LACTB
+ENSG00000123124              NaN     30.0     26.0     37.0             WWP1
+ENSG00000078674              NaN     25.0     29.0     32.0             PCM1
+
+ RS86 vs RS43 and RS78 most distinguishing genes
+                 log2fc_vs_peers  a_count  b_count  s_count             name
+gene_id                                                                     
+ENSG00000290147              NaN     42.0     31.0     26.0  GUCA1ANB-GUCA1A
+ENSG00000154265              NaN     11.0      2.0     16.0            ABCA5
+ENSG00000135205              NaN     39.0     34.0     55.0          CCDC146
+ENSG00000111241              NaN     81.0    111.0     96.0             FGF6
+ENSG00000107164              NaN     25.0     37.0     33.0            FUBP3
+ENSG00000137868              NaN     28.0     22.0     19.0            STRA6
+ENSG00000119778              NaN     26.0     29.0     23.0           ATAD2B
+ENSG00000080823              NaN      5.0      5.0     13.0              MOK
+ENSG00000143365              NaN     24.0     11.0      9.0             RORC
+ENSG00000136754              NaN      1.0      6.0      6.0             ABI1
+ENSG00000163806              NaN     24.0     14.0     29.0            SPDYA
+ENSG00000144488              NaN     50.0     50.0     73.0            ESPNL
+ENSG00000037280              NaN     30.0     21.0     31.0             FLT4
+ENSG00000163072              NaN    101.0     69.0    112.0          NOSTRIN
+ENSG00000039523              NaN     39.0     44.0     37.0           RIPOR1
+ENSG00000279116              NaN     85.0     93.0    123.0            OR8D2
+ENSG00000060237              NaN    453.0    395.0    436.0             WNK1
+ENSG00000257949              NaN     34.0     31.0     68.0             TEN1
+ENSG00000167968              NaN     19.0     18.0     17.0         DNASE1L2
+ENSG00000165487              NaN     40.0     30.0     44.0            MICU2
+ENSG00000204613              NaN    120.0    101.0    119.0           TRIM10
+ENSG00000171136              NaN     32.0     19.0     14.0             RLN3
+ENSG00000100239              NaN    213.0    119.0    209.0           PPP6R2
+ENSG00000283632              NaN     60.0     37.0     57.0          EXOC3L2
+ENSG00000100448              NaN     23.0     22.0     23.0             CTSG
+ENSG00000057593              NaN    383.0    410.0    366.0               F7
+ENSG00000013375              NaN     16.0     19.0     21.0             PGM3
+ENSG00000103642              NaN     48.0     25.0     62.0            LACTB
+ENSG00000123124              NaN     33.0     30.0     31.0             WWP1
+ENSG00000078674              NaN     34.0     28.0     43.0             PCM1
+
+ RS78 vs RS43 and RS86 most distinguishing genes
+                 log2fc_vs_peers  a_count  b_count  s_count             name
+gene_id                                                                     
+ENSG00000290147              NaN     42.0     26.0     31.0  GUCA1ANB-GUCA1A
+ENSG00000154265              NaN     11.0     16.0      2.0            ABCA5
+ENSG00000135205              NaN     39.0     55.0     34.0          CCDC146
+ENSG00000111241              NaN     81.0     96.0    111.0             FGF6
+ENSG00000107164              NaN     25.0     33.0     37.0            FUBP3
+ENSG00000137868              NaN     28.0     19.0     22.0            STRA6
+ENSG00000119778              NaN     26.0     23.0     29.0           ATAD2B
+ENSG00000080823              NaN      5.0     13.0      5.0              MOK
+ENSG00000143365              NaN     24.0      9.0     11.0             RORC
+ENSG00000136754              NaN      1.0      6.0      6.0             ABI1
+ENSG00000163806              NaN     24.0     29.0     14.0            SPDYA
+ENSG00000144488              NaN     50.0     73.0     50.0            ESPNL
+ENSG00000037280              NaN     30.0     31.0     21.0             FLT4
+ENSG00000163072              NaN    101.0    112.0     69.0          NOSTRIN
+ENSG00000039523              NaN     39.0     37.0     44.0           RIPOR1
+ENSG00000279116              NaN     85.0    123.0     93.0            OR8D2
+ENSG00000060237              NaN    453.0    436.0    395.0             WNK1
+ENSG00000257949              NaN     34.0     68.0     31.0             TEN1
+ENSG00000167968              NaN     19.0     17.0     18.0         DNASE1L2
+ENSG00000165487              NaN     40.0     44.0     30.0            MICU2
+ENSG00000204613              NaN    120.0    119.0    101.0           TRIM10
+ENSG00000171136              NaN     32.0     14.0     19.0             RLN3
+ENSG00000100239              NaN    213.0    209.0    119.0           PPP6R2
+ENSG00000283632              NaN     60.0     57.0     37.0          EXOC3L2
+ENSG00000100448              NaN     23.0     23.0     22.0             CTSG
+ENSG00000057593              NaN    383.0    366.0    410.0               F7
+ENSG00000013375              NaN     16.0     21.0     19.0             PGM3
+ENSG00000103642              NaN     48.0     62.0     25.0            LACTB
+ENSG00000123124              NaN     33.0     31.0     30.0             WWP1
+ENSG00000078674              NaN     34.0     43.0     28.0             PCM1
+
+ RS69 vs RS49 and RS39 most distinguishing genes
+                 log2fc_vs_peers  a_count  b_count  s_count             name
+gene_id                                                                     
+ENSG00000290147              NaN     30.0     43.0     41.0  GUCA1ANB-GUCA1A
+ENSG00000154265              NaN     28.0     19.0     13.0            ABCA5
+ENSG00000135205              NaN     46.0     56.0     56.0          CCDC146
+ENSG00000111241              NaN    127.0    132.0     80.0             FGF6
+ENSG00000107164              NaN     37.0     33.0     16.0            FUBP3
+ENSG00000137868              NaN     19.0     19.0     23.0            STRA6
+ENSG00000119778              NaN     25.0     56.0     47.0           ATAD2B
+ENSG00000080823              NaN      1.0      6.0      0.0              MOK
+ENSG00000143365              NaN     14.0     10.0     16.0             RORC
+ENSG00000136754              NaN     12.0     10.0     13.0             ABI1
+ENSG00000163806              NaN     44.0     13.0     66.0            SPDYA
+ENSG00000144488              NaN     54.0     69.0     56.0            ESPNL
+ENSG00000037280              NaN      8.0     14.0      4.0             FLT4
+ENSG00000163072              NaN     24.0     85.0     32.0          NOSTRIN
+ENSG00000039523              NaN     57.0     37.0     50.0           RIPOR1
+ENSG00000279116              NaN     79.0    110.0     75.0            OR8D2
+ENSG00000060237              NaN    352.0    349.0    520.0             WNK1
+ENSG00000257949              NaN     22.0     37.0     44.0             TEN1
+ENSG00000167968              NaN     17.0     21.0     15.0         DNASE1L2
+ENSG00000165487              NaN     31.0     27.0     30.0            MICU2
+ENSG00000204613              NaN     93.0     97.0     81.0           TRIM10
+ENSG00000171136              NaN     11.0     10.0     20.0             RLN3
+ENSG00000100239              NaN     77.0    186.0     69.0           PPP6R2
+ENSG00000283632              NaN     14.0     10.0     12.0          EXOC3L2
+ENSG00000100448              NaN     83.0     18.0     77.0             CTSG
+ENSG00000057593              NaN    200.0    439.0    174.0               F7
+ENSG00000013375              NaN      9.0     22.0      8.0             PGM3
+ENSG00000103642              NaN     47.0     48.0     63.0            LACTB
+ENSG00000123124              NaN     27.0     39.0     26.0             WWP1
+ENSG00000078674              NaN     36.0     44.0     31.0             PCM1
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> ann=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id').set_index('gene_id')
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_work/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     d=(c[s]-pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)[s]).abs().sort_values(ascending=False)
+[?2004l[?2004h>     print('\nLargest fresh-versus-old differences for',s)
+[?2004l[?2004h>     print(pd.DataFrame({'fresh':c.loc[d.index[:20],s], 'old':pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0).loc[d.index[:20],s], 'diff':d.iloc[:20], 'name':ann.loc[d.index[:20],'gene_name']}).to_string())
+[?2004l[?2004h> PY
+[?2004l
+Largest fresh-versus-old differences for RS56
+                 fresh    old   diff     name
+gene_id                                      
+ENSG00000164440  936.0  368.0  568.0    TXLNB
+ENSG00000130177  878.0  327.0  551.0    CDC16
+ENSG00000164363  879.0  342.0  537.0  SLC6A18
+ENSG00000172464  667.0  270.0  397.0   OR5AP2
+ENSG00000107562  599.0  247.0  352.0   CXCL12
+ENSG00000148308  547.0  213.0  334.0   GTF3C5
+ENSG00000105609  450.0  179.0  271.0   LILRB5
+ENSG00000017427  437.0  175.0  262.0     IGF1
+ENSG00000124429  393.0  148.0  245.0    POF1B
+ENSG00000004660  386.0  153.0  233.0   CAMKK1
+ENSG00000156875  342.0  116.0  226.0  MFSD14A
+ENSG00000019186  362.0  155.0  207.0  CYP24A1
+ENSG00000151338  302.0  111.0  191.0   MIPOL1
+ENSG00000060237  314.0  126.0  188.0     WNK1
+ENSG00000170743  317.0  132.0  185.0     SYT9
+ENSG00000081760  283.0  109.0  174.0     AACS
+ENSG00000137142  282.0  113.0  169.0  IGFBPL1
+ENSG00000153140  262.0   93.0  169.0    CETN3
+ENSG00000156206  278.0  113.0  165.0  CFAP161
+ENSG00000115649  260.0  101.0  159.0   CNPPD1
+
+Largest fresh-versus-old differences for RS66
+                    fresh    old     diff     name
+gene_id                                           
+ENSG00000130177  1036.000  136.0  900.000    CDC16
+ENSG00000164363   768.000  190.0  578.000  SLC6A18
+ENSG00000164440   800.000  267.0  533.000    TXLNB
+ENSG00000172464   718.000  226.0  492.000   OR5AP2
+ENSG00000017427   529.000   48.0  481.000     IGF1
+ENSG00000148308   518.000  115.0  403.000   GTF3C5
+ENSG00000185347   381.000   20.0  361.000    TEDC1
+ENSG00000107562   501.999  157.0  344.999   CXCL12
+ENSG00000244414   309.000   49.0  260.000    CFHR1
+ENSG00000004660   278.000   21.0  257.000   CAMKK1
+ENSG00000087157   154.000  384.0  230.000     PGS1
+ENSG00000124429   485.000  259.0  226.000    POF1B
+ENSG00000156234   235.000   21.0  214.000   CXCL13
+ENSG00000203710   225.000   23.0  202.000      CR1
+ENSG00000173320   297.000  101.0  196.000    STOX2
+ENSG00000137142   234.000   57.0  177.000  IGFBPL1
+ENSG00000179934   283.000  106.0  177.000     CCR8
+ENSG00000103226   212.000   35.0  177.000    NOMO3
+ENSG00000248383   235.000   63.0  172.000  PCDHAC1
+ENSG00000170515   188.000   22.0  166.000    PA2G4
+[?2004hroot@98b4ef95c30c:/task# rm -rf /tmp/rnaseq_nobias && mkdir -p /tmp/rnaseq_nobias/quant && tail -n +2 /task/input/samples.tsv | cut -f1,6 | while IFS=$'\t' read -r sid fq; do salmon quant -i /tmp/rnaseq_work/index -l SR -r "/task/input/fastq/$fq" -p 2 --validateMappings -o "/tmp/rnaseq_nobias/quant/$sid" > "/tmp/rnaseq_nobias/quant/${sid}.log" 2>&1 || exit 1; done && echo no-bias quantification complete
+[?2004lno-bias quantification complete
+[?2004hroot@98b4ef95c30c:/task# python3 /task/input/previous_analysis/scripts/02_merge_counts.py /tmp/rnaseq_nobias /tmp/rnaseq_nobias/gene_counts.tsv && python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> new=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('max abs differences (no-bias fresh minus predecessor)')
+[?2004l[?2004h> print((new-old).abs().max().round(3).to_string())
+[?2004l[?2004h> print('mean abs difference',float((new-old).abs().mean().mean()))
+[?2004l[?2004h> PY
+[?2004lmax abs differences (no-bias fresh minus predecessor)
+RS28      0.0
+RS39      0.0
+RS43      0.0
+RS45      0.0
+RS49      0.0
+RS50      0.0
+RS52      0.0
+RS56    568.0
+RS66    900.0
+RS69      0.0
+RS78      0.0
+RS86      0.0
+mean abs difference 5.282290520833333
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import nnls
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> X=(c/c.sum(axis=0)).T
+[?2004l[?2004h> for s in c.columns:
+[?2004l[?2004h>     others=[x for x in c.columns if x!=s]
+[?2004l[?2004h>     A=X.loc[others].values
+[?2004l[?2004h>     y=X.loc[s].values
+[?2004l[?2004h>     # add equality constraint with large weight
+[?2004l[?2004h>     lam=1000.0
+[?2004l[?2004h>     A2=np.vstack([A,lam*np.ones(len(others))])
+[?2004l[?2004h>     y2=np.r_[y,lam]
+[?2004l[?2004h>     coef,res=nnls(A2,y2)
+[?2004l[?2004h>     pred=A.T@coef
+[?2004l[?2004h>     r=np.corrcoef(y,pred)[0,1]
+[?2004l[?2004h>     contrib=sorted(zip(others,coef),key=lambda z:z[1],reverse=True)
+[?2004l[?2004h>     print(f'{s}: R2={r**2:.4f} rmse={np.sqrt(np.mean((y-pred)**2)):.6g} coefficients=' + ', '.join(f'{a}={b:.3f}' for a,b in contrib[:5]))
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 11, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/numpy/_core/shape_base.py", line 290, in vstack
+    return _nx.concatenate(arrs, 0, dtype=dtype, casting=casting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 800 and the array at index 1 has size 11
+[?2004hroot@98b4ef95c30c:/task# printf '%s\n' '--- RS45 Salmon log ---'; grep -Ei 'warn|error|bias|fragment|mapping rate' /tmp/rnaseq_work/quant/RS45.log /tmp/rnaseq_work/quant/RS45/logs/salmon_quant.log; printf '%s\n' '--- RS56 log ---'; grep -Ei 'warn|error|bias|fragment|mapping rate' /tmp/rnaseq_work/quant/RS56.log /tmp/rnaseq_work/quant/RS56/logs/salmon_quant.log; printf '%s\n' '--- RS66 log ---'; grep -Ei 'warn|error|bias|fragment|mapping rate' /tmp/rnaseq_work/quant/RS66.log /tmp/rnaseq_work/quant/RS66/logs/salmon_quant.log
+[?2004l--- RS45 Salmon log ---
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.280933Z[0m [33m WARN[0m [2msalmon[0m[2m:[0m --validateMappings has no effect (deprecated in salmon too): selective alignment is the default mapping mode; pass --sketch for pseudoalignment.
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.361308Z[0m [32m INFO[0m [2msalmon_quant[0m[2m:[0m mapped 41747 / 86506 fragments (48.26%)
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.363871Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.002452776
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.363903Z[0m [33m WARN[0m [2msalmon_quant[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.364364Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.365632Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m deterministic: mapped 41747 / 86506 fragments (48.26%); quantifying from intermediate RAD
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.366925Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m using fragment-length distribution baked in the RAD header
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.366941Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m single-end fragment-length term: default prior widened to mean=250.0, sd=100.0 (pass --fldMean/--fldSD to use a known distribution as given)
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:16.390141Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m mapped 41747 / 86506 fragments from RAD
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:17.268147Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.877787685
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:17.268183Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:17.269049Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS45.log:[2m2026-11-13T06:31:17.270454Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 86506 fragments from intermediate RAD, 41747 quantified (48.26%); 1109 equivalence classes
+/tmp/rnaseq_work/quant/RS45/logs/salmon_quant.log:observed fragments: 86506
+/tmp/rnaseq_work/quant/RS45/logs/salmon_quant.log:mapped fragments: 41747
+/tmp/rnaseq_work/quant/RS45/logs/salmon_quant.log:mapping rate: 48.2591%
+/tmp/rnaseq_work/quant/RS45/logs/salmon_quant.log:fragment length mean (sd): 250.00 (25.00)
+--- RS56 log ---
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.340673Z[0m [33m WARN[0m [2msalmon[0m[2m:[0m --validateMappings has no effect (deprecated in salmon too): selective alignment is the default mapping mode; pass --sketch for pseudoalignment.
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.422370Z[0m [32m INFO[0m [2msalmon_quant[0m[2m:[0m mapped 44575 / 92995 fragments (47.93%)
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.424547Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.002078316
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.424587Z[0m [33m WARN[0m [2msalmon_quant[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.425040Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.426484Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m deterministic: mapped 44575 / 92995 fragments (47.93%); quantifying from intermediate RAD
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.427594Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m using fragment-length distribution baked in the RAD header
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.427616Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m single-end fragment-length term: default prior widened to mean=250.0, sd=100.0 (pass --fldMean/--fldSD to use a known distribution as given)
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:20.448401Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m mapped 44575 / 92995 fragments from RAD
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:21.282503Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.833853243
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:21.282542Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:21.283376Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS56.log:[2m2026-11-13T06:31:21.284952Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 92995 fragments from intermediate RAD, 44575 quantified (47.93%); 1088 equivalence classes
+/tmp/rnaseq_work/quant/RS56/logs/salmon_quant.log:observed fragments: 92995
+/tmp/rnaseq_work/quant/RS56/logs/salmon_quant.log:mapped fragments: 44575
+/tmp/rnaseq_work/quant/RS56/logs/salmon_quant.log:mapping rate: 47.9327%
+/tmp/rnaseq_work/quant/RS56/logs/salmon_quant.log:fragment length mean (sd): 250.00 (25.00)
+--- RS66 log ---
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.292016Z[0m [33m WARN[0m [2msalmon[0m[2m:[0m --validateMappings has no effect (deprecated in salmon too): selective alignment is the default mapping mode; pass --sketch for pseudoalignment.
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.376993Z[0m [32m INFO[0m [2msalmon_quant[0m[2m:[0m mapped 47598 / 99360 fragments (47.90%)
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.384002Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.006865683
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.384049Z[0m [33m WARN[0m [2msalmon_quant[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.384595Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.385575Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m deterministic: mapped 47598 / 99360 fragments (47.90%); quantifying from intermediate RAD
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.388900Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m using fragment-length distribution baked in the RAD header
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.388923Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m single-end fragment-length term: default prior widened to mean=250.0, sd=100.0 (pass --fldMean/--fldSD to use a known distribution as given)
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:21.413403Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m mapped 47598 / 99360 fragments from RAD
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:22.272734Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.859077487
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:22.272775Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:22.273649Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+/tmp/rnaseq_work/quant/RS66.log:[2m2026-11-13T06:31:22.275271Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 99360 fragments from intermediate RAD, 47598 quantified (47.90%); 1113 equivalence classes
+/tmp/rnaseq_work/quant/RS66/logs/salmon_quant.log:observed fragments: 99360
+/tmp/rnaseq_work/quant/RS66/logs/salmon_quant.log:mapped fragments: 47598
+/tmp/rnaseq_work/quant/RS66/logs/salmon_quant.log:mapping rate: 47.9046%
+/tmp/rnaseq_work/quant/RS66/logs/salmon_quant.log:fragment length mean (sd): 250.00 (25.00)
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from sklearn.decomposition import PCA
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sex=pd.read_csv('/task/input/samples.tsv',sep='\t').set_index('sample_id')
+[?2004l[?2004h> cpm=np.log2(c/c.sum(axis=0)*1e6+1)
+[?2004l[?2004h> # Remove known sex marker genes before global structure PCA
+[?2004l[?2004h> markers=['ENSG00000183878','ENSG00000129824','ENSG00000198692','ENSG00000067048','ENSG00000012817','ENSG00000229807']
+[?2004l[?2004h> z=cpm.drop(index=markers)
+[?2004l[?2004h> z=z.sub(z.mean(axis=1),axis=0).T
+[?2004l[?2004h> pc=PCA(n_components=4).fit_transform(z)
+[?2004l[?2004h> load=pd.DataFrame(pc,index=z.index,columns=[f'PC{i+1}' for i in range(4)])
+[?2004l[?2004h> out=sex.join(load)
+[?2004l[?2004h> out['corrected_condition']=out.condition.astype(str); out.loc['RS43','corrected_condition']='vehicle'; out.loc['RS49','corrected_condition']='treated'; out.loc['RS45','corrected_condition']='mixed/excluded'
+[?2004l[?2004h> print(out.round(3).to_string())
+[?2004l[?2004h> print('\nPC variance ratios:',PCA(n_components=4).fit(z).explained_variance_ratio_.round(3))
+[?2004l[?2004h> PY
+[?2004lcat > /tmp/run_candidate_de.py <<'PY'
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+counts=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+sheet=pd.read_csv('/task/input/samples.tsv',sep='\t').set_index('sample_id')
+# Current best correction: clean female RS43 actually vehicle; clean male RS49 actually treated; mixed RS45 excluded.
+meta=sheet.copy()
+meta.loc['RS43','condition']='vehicle'
+meta.loc['RS49','condition']='treated'
+keep=[s for s in meta.index if s!='RS45']
+meta=meta.loc[keep,['condition','library_prep_batch','donor_sex']]
+mat=counts[keep].T.round().astype(int)
+for design in ['~condition','~condition+library_prep_batch','~condition+donor_sex','~condition+donor_sex+library_prep_batch']:
+    print('\nDESIGN',design)
+    dds=DeseqDataSet(counts=mat,metadata=meta.rename(columns={'library_prep_batch':'batch'}),design=design,quiet=True,n_cpus=2)
+    dds.deseq2()
+    st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=.05,quiet=True,n_cpus=2)
+    st.summary()
+    r=st.results_df
+    print('tested',r.pvalue.notna().sum(),'significant',sum(r.padj<.05),'min padj',r.padj.min())
+    print(r.sort_values('padj').head(20)[['baseMean','log2FoldChange','pvalue','padj']].round(5).to_string())
+PY
+python3 /tmp/run_candidate_de.py > /tmp/candidate_de.txt 2>&1; tail -120 /tmp/candidate_de.txt
+          condition donor_id donor_sex library_prep_batch     fastq_file     PC1     PC2     PC3     PC4 corrected_condition
+sample_id                                                                                                                   
+RS28        treated     D909         F         2024-06-04  RS28.fastq.gz -15.626  -1.099   1.669   4.161             treated
+RS39        treated     D428         M         2024-05-14  RS39.fastq.gz   2.289  14.828  -1.278   3.105             treated
+RS43        treated     D672         M         2024-06-04  RS43.fastq.gz  16.138  -0.161   0.248  -1.110             vehicle
+RS45        vehicle     D503         M         2024-05-14  RS45.fastq.gz   7.843   0.852  -2.104  -2.578      mixed/excluded
+RS49        vehicle     D489         F         2024-05-14  RS49.fastq.gz -15.778   1.359   3.586   2.371             treated
+RS50        vehicle     D485         M         2024-06-04  RS50.fastq.gz  -0.994 -18.173  -2.514   0.174             vehicle
+RS52        vehicle     D268         M         2024-05-14  RS52.fastq.gz  17.023   0.041  -0.483   0.942             vehicle
+RS56        treated     D371         F         2024-06-04  RS56.fastq.gz -15.620   2.611 -13.741  -3.657             treated
+RS66        treated     D834         F         2024-06-04  RS66.fastq.gz -14.590  -1.493   3.028   7.781             treated
+RS69        treated     D434         M         2024-06-04  RS69.fastq.gz -15.906   1.638   8.079 -11.059             treated
+RS78        vehicle     D300         F         2024-05-14  RS78.fastq.gz  18.090  -0.598   1.812   0.320             vehicle
+RS86        vehicle     D574         F         2024-05-14  RS86.fastq.gz  17.132   0.195   1.698  -0.451             vehicle
+
+PC variance ratios: [0.52  0.121 0.063 0.051]
+[?2004hroot@98b4ef95c30c:/task# cat > /tmp/run_candidate_de.py <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> counts=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sheet=pd.read_csv('/task/input/samples.tsv',sep='\t').set_index('sample_id')
+[?2004l[?2004h> # Current best correction: clean female RS43 actually vehicle; clean male RS49 actually treated; mixed RS45 excluded.
+[?2004l[?2004h> meta=sheet.copy()
+[?2004l[?2004h> meta.loc['RS43','condition']='vehicle'
+[?2004l[?2004h> meta.loc['RS49','condition']='treated'
+[?2004l[?2004h> keep=[s for s in meta.index if s!='RS45']
+[?2004l[?2004h> meta=meta.loc[keep,['condition','library_prep_batch','donor_sex']]
+[?2004l[?2004h> mat=counts[keep].T.round().astype(int)
+[?2004l[?2004h> for design in ['~condition','~condition+library_prep_batch','~condition+donor_sex','~condition+donor_sex+library_prep_batch']:
+[?2004l[?2004h>     print('\nDESIGN',design)
+[?2004l[?2004h>     dds=DeseqDataSet(counts=mat,metadata=meta.rename(columns={'library_prep_batch':'batch'}),design=design,quiet=True,n_cpus=2)
+[?2004l[?2004h>     dds.deseq2()
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary()
+[?2004l[?2004h>     r=st.results_df
+[?2004l[?2004h>     print('tested',r.pvalue.notna().sum(),'significant',sum(r.padj<.05),'min padj',r.padj.min())
+[?2004l[?2004h>     print(r.sort_values('padj').head(20)[['baseMean','log2FoldChange','pvalue','padj']].round(5).to_string())
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /tmp/run_candidate_de.py > /tmp/candidate_de.txt 2>&1; tail -120 /tmp/candidate_de.txt
+[?2004l
+DESIGN ~condition
+tested 799 significant 113 min padj 2.44584268590154e-187
+                  baseMean  log2FoldChange  pvalue  padj
+gene_id                                                 
+ENSG00000130177  570.96392         2.67249     0.0   0.0
+ENSG00000103226  136.71896         2.53586     0.0   0.0
+ENSG00000170515  120.07749         2.76965     0.0   0.0
+ENSG00000148308  316.65306         2.44891     0.0   0.0
+ENSG00000105819   64.82283         3.07514     0.0   0.0
+ENSG00000244414  167.97558         2.37098     0.0   0.0
+ENSG00000143156   70.29305         2.86736     0.0   0.0
+ENSG00000137142  154.63879         2.14133     0.0   0.0
+ENSG00000146094   77.14031         2.62858     0.0   0.0
+ENSG00000184033   46.17336         2.91576     0.0   0.0
+ENSG00000164363  682.14177         2.38954     0.0   0.0
+ENSG00000080166  146.85226         1.99722     0.0   0.0
+ENSG00000234409   50.23410        -2.26068     0.0   0.0
+ENSG00000185002   38.33964        -2.36107     0.0   0.0
+ENSG00000105974   69.53532        -2.56470     0.0   0.0
+ENSG00000184857  102.58365        -2.36648     0.0   0.0
+ENSG00000064989   32.94416        -2.98111     0.0   0.0
+ENSG00000158711   39.56968        -2.92384     0.0   0.0
+ENSG00000130818  113.33053        -2.12835     0.0   0.0
+ENSG00000136840   56.61070         2.24112     0.0   0.0
+
+DESIGN ~condition+library_prep_batch
+Traceback (most recent call last):
+  File "/opt/tools/lib/python3.12/site-packages/formulaic/materializers/base.py", line 559, in _evaluate_factor
+    value, variables = self._lookup(factor.expr)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/formulaic/materializers/base.py", line 628, in _lookup
+    raise NameError(
+NameError: `library_prep_batch` is not present in the dataset or evaluation context.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tmp/run_candidate_de.py", line 15, in <module>
+    dds=DeseqDataSet(counts=mat,metadata=meta.rename(columns={'library_prep_batch':'batch'}),design=design,quiet=True,n_cpus=2)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pydeseq2/dds.py", line 299, in __init__
+    self.formulaic_contrasts = FormulaicContrasts(self.obs, self.design)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/formulaic_contrasts/_contrasts.py", line 25, in __init__
+    self.design_matrix = materializer_class(data, record_factor_metadata=True).get_model_matrix(design)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/formulaic/materializers/base.py", line 209, in get_model_matrix
+    self._evaluate_factor(factor, factor_evaluation_model_spec, drop_rows_set)
+  File "/opt/tools/lib/python3.12/site-packages/formulaic/materializers/base.py", line 580, in _evaluate_factor
+    raise FactorEvaluationError(
+formulaic.errors.FactorEvaluationError: Unable to evaluate factor `library_prep_batch`. [NameError: `library_prep_batch` is not present in the dataset or evaluation context.]
+[?2004hroot@98b4ef95c30c:/task# rm -rf /tmp/rnaseq_u && mkdir -p /tmp/rnaseq_u/quant && tail -n +2 /task/input/samples.tsv | cut -f1,6 | while IFS=$'\t' read -r sid fq; do salmon quant -i /tmp/rnaseq_work/index -l U -r "/task/input/fastq/$fq" -p 2 -o "/tmp/rnaseq_u/quant/$sid" > "/tmp/rnaseq_u/quant/${sid}.log" 2>&1 || { cat "/tmp/rnaseq_u/quant/${sid}.log"; exit 1; }; done
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /task/input/previous_analysis/scripts/02_merge_counts.py /tmp/rnaseq_u /tmp/rnaseq_u/gene_counts.tsv
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np, json, glob, os
+[?2004l[?2004h> u=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sr=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('U total mapped/assigned per sample:')
+[?2004l[?2004h> print(u.sum().round(3).to_string())
+[?2004l[?2004h> print('\nmax abs difference U vs SR:')
+[?2004l[?2004h> print((u-sr).abs().max().round(4).to_string())
+[?2004l[?2004h> print('\nmax abs difference U vs predecessor:')
+[?2004l[?2004h> print((u-old).abs().max().round(4).to_string())
+[?2004l[?2004h> print('\nMean absolute difference U vs predecessor:',float((u-old).abs().mean().mean()))
+[?2004l[?2004h> print('\nMapping rates (U):')
+[?2004l[?2004h> for d in sorted(glob.glob('/tmp/rnaseq_u/quant/*')):
+[?2004l[?2004h>     with open(d+'/aux_info/meta_info.json') as f: m=json.load(f)
+[?2004l[?2004h>     print(os.path.basename(d),m['percent_mapped'],m['num_mapped'],m['num_processed'])
+[?2004l[?2004h> PY
+[?2004lU total mapped/assigned per sample:
+RS28     88259.999
+RS39    100907.001
+RS43     84961.001
+RS45     83333.000
+RS49     94695.996
+RS50     78898.998
+RS52     70579.996
+RS56     89497.999
+RS66     95659.004
+RS69     92921.000
+RS78     76737.998
+RS86     83988.002
+
+max abs difference U vs SR:
+RS28    1095.000
+RS39    1524.000
+RS43     564.000
+RS45     463.000
+RS49    1260.000
+RS50     714.000
+RS52     464.000
+RS56     914.000
+RS66    1025.000
+RS69    1088.000
+RS78     440.000
+RS86     470.001
+
+max abs difference U vs predecessor:
+RS28    1095.000
+RS39    1524.000
+RS43     564.000
+RS45     463.000
+RS49    1260.000
+RS50     714.000
+RS52     464.000
+RS56    1482.000
+RS66    1925.000
+RS69    1088.000
+RS78     440.000
+RS86     470.001
+
+Mean absolute difference U vs predecessor: 58.45062468749999
+
+Mapping rates (U):
+RS28 96.1689330543933 88260 91776
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+NotADirectoryError: [Errno 20] Not a directory: '/tmp/rnaseq_u/quant/RS28.log/aux_info/meta_info.json'
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import nnls
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> X=(c/c.sum(axis=0)).T
+[?2004l[?2004h> for s in c.columns:
+[?2004l[?2004h>     others=[x for x in c.columns if x!=s]
+[?2004l[?2004h>     A=X.loc[others].values
+[?2004l[?2004h>     y=X.loc[s].values
+[?2004l[?2004h>     A_aug=np.vstack([A,np.ones(A.shape[0])])
+[?2004l[?2004h>     y_aug=np.r_[y,1.0]
+[?2004l[?2004h>     coef,res=nnls(A_aug,y_aug)
+[?2004l[?2004h>     pred=A.T@coef
+[?2004l[?2004h>     print(f'{s}: R2={np.corrcoef(y,pred)[0,1]**2:.5f} RMSE={np.sqrt(np.mean((y-pred)**2)):.5g} coeffs=' + ', '.join(f'{a}={b:.3f}' for a,b in sorted(zip(others,coef),key=lambda z:z[1],reverse=True)[:5]))
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/numpy/_core/shape_base.py", line 290, in vstack
+    return _nx.concatenate(arrs, 0, dtype=dtype, casting=casting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 800 and the array at index 1 has size 11
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> new=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('Totals: old')
+[?2004l[?2004h> print(old.sum().round(1).to_string())
+[?2004l[?2004h> print('\nCorrelation of each predecessor column with every fresh U column (log10 CPM):')
+[?2004l[?2004h> lo=np.log10(old/old.sum(axis=0)*1e6+1); ln=np.log10(new/new.sum(axis=0)*1e6+1)
+[?2004l[?2004h> print(lo.corrwith(ln,axis=1).round(3).to_string())
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     corr=ln.corrwith(lo[s]).sort_values(ascending=False)
+[?2004l[?2004h>     print('\nOld',s,'correlations to fresh profiles:')
+[?2004l[?2004h>     print(corr.round(4).to_string())
+[?2004l[?2004h>     ratio=pd.DataFrame({'old':old[s], 'new':new[s], 'new_over_old':(new[s]+1)/(old[s]+1)})
+[?2004l[?2004h>     print('ratio quantiles:',ratio.new_over_old.quantile([0,.1,.25,.5,.75,.9,1]).round(3).to_dict())
+[?2004l[?2004h> PY
+[?2004lTotals: old
+RS28    44015.0
+RS39    50284.0
+RS43    42574.0
+RS45    41747.0
+RS49    47353.0
+RS50    39419.0
+RS52    35411.0
+RS56    17716.0
+RS66    38199.0
+RS69    46450.0
+RS78    38199.0
+RS86    41985.0
+
+Correlation of each predecessor column with every fresh U column (log10 CPM):
+gene_id
+ENSG00000290147    0.735
+ENSG00000154265    0.323
+ENSG00000135205    0.850
+ENSG00000111241    0.905
+ENSG00000107164    0.823
+ENSG00000137868    0.454
+ENSG00000119778    0.902
+ENSG00000080823    0.770
+ENSG00000143365    0.889
+ENSG00000136754    0.802
+ENSG00000163806    0.702
+ENSG00000144488    0.780
+ENSG00000037280    0.824
+ENSG00000163072    0.793
+ENSG00000039523    0.489
+ENSG00000134265    0.406
+ENSG00000066294    0.679
+ENSG00000134007    0.761
+ENSG00000182742    0.735
+ENSG00000164683    0.784
+ENSG00000178966    0.875
+ENSG00000185864    0.809
+ENSG00000164736    0.831
+ENSG00000160445    0.746
+ENSG00000110944    0.888
+ENSG00000172464    0.871
+ENSG00000183878    0.999
+ENSG00000144339    0.797
+ENSG00000270379    0.172
+ENSG00000152137    0.702
+ENSG00000105974    0.798
+ENSG00000141665    0.850
+ENSG00000137693    0.747
+ENSG00000153487    0.933
+ENSG00000186442    0.852
+ENSG00000204219    0.909
+ENSG00000120907    0.636
+ENSG00000179934    0.776
+ENSG00000142173    0.473
+ENSG00000198173    0.941
+ENSG00000180872    0.912
+ENSG00000185437    0.400
+ENSG00000107819    0.926
+ENSG00000163918    0.567
+ENSG00000173567    0.463
+ENSG00000185640    0.486
+ENSG00000186832    0.442
+ENSG00000151612    0.951
+ENSG00000163629    0.642
+ENSG00000163377    0.902
+ENSG00000146232    0.918
+ENSG00000136877    0.830
+ENSG00000176490    0.908
+ENSG00000289604    0.962
+ENSG00000101335    0.861
+ENSG00000118965    0.937
+ENSG00000075218    0.643
+ENSG00000198798    0.707
+ENSG00000081760    0.939
+ENSG00000061794    0.523
+ENSG00000066185    0.885
+ENSG00000256043    0.666
+ENSG00000133597    0.933
+ENSG00000251246    0.891
+ENSG00000130720    0.921
+ENSG00000150337    0.836
+ENSG00000173715    0.888
+ENSG00000123607    0.914
+ENSG00000213983    0.877
+ENSG00000159784    0.886
+ENSG00000203734    0.714
+ENSG00000198856    0.799
+ENSG00000077420    0.851
+ENSG00000109684    0.597
+ENSG00000221838    0.624
+ENSG00000198829    0.886
+ENSG00000137269    0.843
+ENSG00000214274    0.886
+ENSG00000151239    0.830
+ENSG00000176256    0.792
+ENSG00000178531    0.621
+ENSG00000178537    0.898
+ENSG00000150551    0.833
+ENSG00000162576    0.814
+ENSG00000101439    0.689
+ENSG00000176428    0.811
+ENSG00000184033    0.790
+ENSG00000116171    0.834
+ENSG00000142700    0.731
+ENSG00000215009    0.839
+ENSG00000135144    0.961
+ENSG00000175701    0.909
+ENSG00000204703    0.719
+ENSG00000185888    0.834
+ENSG00000225921    0.719
+ENSG00000196290    0.882
+ENSG00000176219    0.959
+ENSG00000112576    0.750
+ENSG00000144043    0.870
+ENSG00000283740    0.950
+ENSG00000185002    0.865
+ENSG00000197487    0.733
+ENSG00000165169    0.905
+ENSG00000182177    0.772
+ENSG00000196182    0.617
+ENSG00000136021    0.793
+ENSG00000117616    0.851
+ENSG00000164124    0.901
+ENSG00000184599    0.899
+ENSG00000034693    0.661
+ENSG00000108604    0.946
+ENSG00000109265    0.537
+ENSG00000188554    0.897
+ENSG00000137198    0.854
+ENSG00000140481    0.843
+ENSG00000198680    0.693
+ENSG00000272674    0.357
+ENSG00000197870    0.958
+ENSG00000181315    0.722
+ENSG00000188243    0.693
+ENSG00000100591    0.737
+ENSG00000122966    0.742
+ENSG00000120333    0.617
+ENSG00000094796    0.781
+ENSG00000149476    0.885
+ENSG00000044115    0.849
+ENSG00000237452    0.882
+ENSG00000025423    0.973
+ENSG00000103546    0.554
+ENSG00000129654    0.715
+ENSG00000198650    0.827
+ENSG00000179826    0.916
+ENSG00000156875    0.972
+ENSG00000150636    0.762
+ENSG00000181552    0.641
+ENSG00000068745    0.890
+ENSG00000102174    0.864
+ENSG00000081189    0.920
+ENSG00000168081    0.803
+ENSG00000167881    0.771
+ENSG00000116761    0.869
+ENSG00000089060    0.505
+ENSG00000129911    0.775
+ENSG00000139610    0.725
+ENSG00000148143    0.801
+ENSG00000166452    0.894
+ENSG00000169393    0.774
+ENSG00000111802    0.781
+ENSG00000092978    0.829
+ENSG00000102384    0.678
+ENSG00000279170    0.805
+ENSG00000079313    0.681
+ENSG00000164535    0.681
+ENSG00000144040    0.877
+ENSG00000154310    0.222
+ENSG00000119689    0.888
+ENSG00000204356    0.979
+ENSG00000164542    0.956
+ENSG00000082126    0.882
+ENSG00000143156    0.826
+ENSG00000242221    0.953
+ENSG00000258890    0.567
+ENSG00000234409    0.870
+ENSG00000170323    0.752
+ENSG00000154975    0.652
+ENSG00000174684    0.809
+ENSG00000097021    0.785
+ENSG00000178802    0.888
+ENSG00000180871    0.803
+ENSG00000138814    0.826
+ENSG00000069011    0.727
+ENSG00000081019    0.908
+ENSG00000089091    0.849
+ENSG00000171385    0.807
+ENSG00000181751    0.977
+ENSG00000149428    0.929
+ENSG00000075303    0.901
+ENSG00000188807    0.709
+ENSG00000102145    0.566
+ENSG00000144214    0.572
+ENSG00000068078    0.868
+ENSG00000107201    0.685
+ENSG00000094755    0.544
+ENSG00000170745    0.757
+ENSG00000004660    0.881
+ENSG00000186710    0.477
+ENSG00000010030    0.832
+ENSG00000173404    0.536
+ENSG00000106591    0.736
+ENSG00000013441    0.796
+ENSG00000158296    0.945
+ENSG00000103226    0.839
+ENSG00000127838    0.615
+ENSG00000174607    0.801
+ENSG00000065054    0.841
+ENSG00000067798    0.747
+ENSG00000164776    0.922
+ENSG00000198919    0.685
+ENSG00000134716    0.698
+ENSG00000087365    0.683
+ENSG00000133937    0.985
+ENSG00000153802    0.641
+ENSG00000170162    0.729
+ENSG00000106976    0.806
+ENSG00000136457    0.757
+ENSG00000111144    0.649
+ENSG00000064545    0.957
+ENSG00000038945    0.802
+ENSG00000162923    0.894
+ENSG00000065183    0.795
+ENSG00000221989    0.844
+ENSG00000101266    0.689
+ENSG00000143793    0.140
+ENSG00000237988    0.734
+ENSG00000173757    0.777
+ENSG00000133134    0.755
+ENSG00000267281    0.883
+ENSG00000196126    0.871
+ENSG00000062598    0.844
+ENSG00000123146    0.860
+ENSG00000156958    0.843
+ENSG00000180090    0.261
+ENSG00000134343    0.332
+ENSG00000150712    0.910
+ENSG00000115204    0.613
+ENSG00000109674    0.913
+ENSG00000198482    0.723
+ENSG00000171055    0.912
+ENSG00000183741    0.797
+ENSG00000197361    0.793
+ENSG00000174807    0.815
+ENSG00000165185    0.839
+ENSG00000187609    0.666
+ENSG00000184616    0.852
+ENSG00000143549    0.734
+ENSG00000125826    0.906
+ENSG00000284762    0.844
+ENSG00000172059    0.642
+ENSG00000130023    0.736
+ENSG00000107562    0.892
+ENSG00000148136    0.863
+ENSG00000274419    0.914
+ENSG00000188175    0.677
+ENSG00000170515    0.789
+ENSG00000105819    0.820
+ENSG00000178691    0.557
+ENSG00000158428    0.927
+ENSG00000010361    0.814
+ENSG00000198844    0.904
+ENSG00000139352    0.829
+ENSG00000184857    0.845
+ENSG00000143258    0.834
+ENSG00000068097    0.879
+ENSG00000127152    0.834
+ENSG00000149480    0.871
+ENSG00000112039    0.954
+ENSG00000183423    0.913
+ENSG00000279804    0.871
+ENSG00000137166    0.776
+ENSG00000197903    0.814
+ENSG00000167612    0.386
+ENSG00000010626    0.705
+ENSG00000233932    0.860
+ENSG00000087206    0.876
+ENSG00000099203    0.892
+ENSG00000120370    0.840
+ENSG00000156587    0.726
+ENSG00000174827    0.800
+ENSG00000155659    0.955
+ENSG00000101444    0.890
+ENSG00000148468    0.411
+ENSG00000171223    0.847
+ENSG00000111879    0.858
+ENSG00000178445    0.494
+ENSG00000100124    0.849
+ENSG00000142541    0.609
+ENSG00000170370    0.761
+ENSG00000184292    0.843
+ENSG00000111269    0.508
+ENSG00000205456    0.842
+ENSG00000279514    0.752
+ENSG00000163703    0.890
+ENSG00000115282    0.578
+ENSG00000111679    0.702
+ENSG00000136100    0.858
+ENSG00000186118    0.774
+ENSG00000144550    0.768
+ENSG00000136840    0.815
+ENSG00000203710    0.746
+ENSG00000184185    0.707
+ENSG00000115649    0.694
+ENSG00000124228    0.902
+ENSG00000075188    0.769
+ENSG00000160959    0.977
+ENSG00000074800    0.924
+ENSG00000196411    0.501
+ENSG00000162924    0.529
+ENSG00000105171    0.839
+ENSG00000002330    0.409
+ENSG00000152402    0.855
+ENSG00000122012    0.815
+ENSG00000185215    0.947
+ENSG00000115380    0.626
+ENSG00000216490    0.797
+ENSG00000119487    0.765
+ENSG00000073754    0.714
+ENSG00000116106    0.652
+ENSG00000177990    0.755
+ENSG00000110400    0.508
+ENSG00000117281    0.941
+ENSG00000174937    0.663
+ENSG00000165219    0.931
+ENSG00000179029    0.739
+ENSG00000129355    0.597
+ENSG00000214978    0.634
+ENSG00000203783    0.688
+ENSG00000114698    0.726
+ENSG00000215277    0.835
+ENSG00000214107    0.905
+ENSG00000180398    0.660
+ENSG00000132463    0.449
+ENSG00000180917    0.851
+ENSG00000065485    0.923
+ENSG00000127526    0.885
+ENSG00000152467    0.891
+ENSG00000165948    0.856
+ENSG00000162521    0.534
+ENSG00000196581    0.818
+ENSG00000108861    0.571
+ENSG00000011295    0.851
+ENSG00000115107    0.838
+ENSG00000248383    0.746
+ENSG00000151338    0.986
+ENSG00000198597    0.834
+ENSG00000178234    0.648
+ENSG00000103044    0.696
+ENSG00000137726    0.621
+ENSG00000113391    0.784
+ENSG00000141425    0.879
+ENSG00000165175    0.659
+ENSG00000280094    0.872
+ENSG00000127191    0.942
+ENSG00000118707    0.774
+ENSG00000114779    0.431
+ENSG00000132670    0.814
+ENSG00000213047    0.442
+ENSG00000125084    0.874
+ENSG00000100380    0.830
+ENSG00000118257    0.726
+ENSG00000282881    0.859
+ENSG00000129824    1.000
+ENSG00000242114    0.918
+ENSG00000056291    0.766
+ENSG00000090932    0.605
+ENSG00000000419    0.803
+ENSG00000019186    0.973
+ENSG00000154258    0.862
+ENSG00000173320    0.764
+ENSG00000166145    0.684
+ENSG00000139734    0.955
+ENSG00000179562    0.940
+ENSG00000157107    0.770
+ENSG00000023228    0.901
+ENSG00000172575    0.917
+ENSG00000115718    0.883
+ENSG00000125753    0.897
+ENSG00000165584    0.881
+ENSG00000017427    0.796
+ENSG00000271447    0.870
+ENSG00000178035    0.871
+ENSG00000269433    0.640
+ENSG00000196535    0.885
+ENSG00000144010    0.633
+ENSG00000197858    0.621
+ENSG00000155833    0.647
+ENSG00000213906    0.759
+ENSG00000005513    0.827
+ENSG00000205038    0.929
+ENSG00000117360    0.597
+ENSG00000136859    0.771
+ENSG00000138794    0.816
+ENSG00000134463    0.467
+ENSG00000182903    0.744
+ENSG00000185046    0.927
+ENSG00000111678    0.672
+ENSG00000243073    0.649
+ENSG00000105063    0.845
+ENSG00000173198    0.417
+ENSG00000226314    0.830
+ENSG00000164111    0.867
+ENSG00000074317    0.690
+ENSG00000156886    0.862
+ENSG00000139117    0.620
+ENSG00000261308    0.297
+ENSG00000243729    0.380
+ENSG00000124253    0.920
+ENSG00000185033    0.524
+ENSG00000167081    0.831
+ENSG00000143384    0.807
+ENSG00000164363    0.908
+ENSG00000135956    0.857
+ENSG00000055147    0.861
+ENSG00000023608    0.838
+ENSG00000176438    0.828
+ENSG00000186716    0.703
+ENSG00000134152    0.530
+ENSG00000008018    0.921
+ENSG00000232268    0.895
+ENSG00000129646    0.763
+ENSG00000167359    0.870
+ENSG00000147896    0.438
+ENSG00000109861    0.863
+ENSG00000150593    0.847
+ENSG00000119396    0.540
+ENSG00000077498    0.880
+ENSG00000129521    0.652
+ENSG00000090686    0.869
+ENSG00000183023    0.888
+ENSG00000145817    0.890
+ENSG00000078618    0.749
+ENSG00000168610    0.865
+ENSG00000114166    0.957
+ENSG00000134824    0.967
+ENSG00000138434    0.907
+ENSG00000070269    0.788
+ENSG00000173372    0.900
+ENSG00000205436    0.645
+ENSG00000131467    0.645
+ENSG00000121152    0.887
+ENSG00000126882    0.656
+ENSG00000122687    0.824
+ENSG00000116691    0.810
+ENSG00000145192    0.803
+ENSG00000073536    0.659
+ENSG00000232113    0.694
+ENSG00000172009    0.776
+ENSG00000023892    0.684
+ENSG00000165533    0.814
+ENSG00000182330    0.638
+ENSG00000262246    0.482
+ENSG00000161202    0.736
+ENSG00000147459    0.888
+ENSG00000116198    0.407
+ENSG00000143476    0.375
+ENSG00000198171    0.858
+ENSG00000198598    0.845
+ENSG00000198692    1.000
+ENSG00000073711    0.688
+ENSG00000121270    0.859
+ENSG00000204540    0.803
+ENSG00000160712    0.759
+ENSG00000111859    0.933
+ENSG00000136856    0.889
+ENSG00000104325    0.832
+ENSG00000136108    0.978
+ENSG00000100483    0.962
+ENSG00000196092    0.759
+ENSG00000171495    0.804
+ENSG00000141431    0.746
+ENSG00000138688    0.788
+ENSG00000003056    0.834
+ENSG00000163481    0.797
+ENSG00000095917    0.790
+ENSG00000213930    0.830
+ENSG00000137142    0.861
+ENSG00000073756    0.658
+ENSG00000179010    0.814
+ENSG00000148308    0.879
+ENSG00000126231    0.915
+ENSG00000104827    0.889
+ENSG00000156471    0.400
+ENSG00000166848    0.864
+ENSG00000198056    0.648
+ENSG00000112110    0.566
+ENSG00000188610    0.957
+ENSG00000011260    0.835
+ENSG00000002016    0.825
+ENSG00000146276    0.596
+ENSG00000011332    0.839
+ENSG00000148677    0.883
+ENSG00000205832    0.907
+ENSG00000131018    0.902
+ENSG00000067048    1.000
+ENSG00000171163    0.754
+ENSG00000059573    0.853
+ENSG00000198081    0.846
+ENSG00000145743    0.742
+ENSG00000172640    0.830
+ENSG00000165632    0.736
+ENSG00000197457    0.586
+ENSG00000115365    0.671
+ENSG00000164440    0.909
+ENSG00000176148    0.695
+ENSG00000152284    0.883
+ENSG00000178917    0.789
+ENSG00000186625    0.857
+ENSG00000244115    0.940
+ENSG00000180611    0.819
+ENSG00000204977    0.814
+ENSG00000088451    0.864
+ENSG00000261649    0.893
+ENSG00000012817    1.000
+ENSG00000143512    0.635
+ENSG00000187555    0.954
+ENSG00000241878    0.822
+ENSG00000269858    0.741
+ENSG00000154822    0.788
+ENSG00000162669    0.760
+ENSG00000197472    0.914
+ENSG00000159917    0.854
+ENSG00000083838    0.765
+ENSG00000164252    0.822
+ENSG00000186329    0.334
+ENSG00000135374    0.432
+ENSG00000214860    0.819
+ENSG00000074370    0.867
+ENSG00000103353    0.769
+ENSG00000189181    0.680
+ENSG00000244414    0.810
+ENSG00000115520    0.796
+ENSG00000171611    0.882
+ENSG00000167578    0.852
+ENSG00000148826    0.781
+ENSG00000144815    0.917
+ENSG00000142224    0.510
+ENSG00000182916    0.913
+ENSG00000198003    0.794
+ENSG00000064989    0.850
+ENSG00000134183    0.698
+ENSG00000113119    0.784
+ENSG00000079805    0.791
+ENSG00000111911    0.915
+ENSG00000138756    0.899
+ENSG00000100479    0.848
+ENSG00000054611    0.823
+ENSG00000204130    0.531
+ENSG00000164125    0.659
+ENSG00000205517    0.578
+ENSG00000159200    0.747
+ENSG00000170852    0.731
+ENSG00000173894    0.490
+ENSG00000130818    0.874
+ENSG00000163508    0.587
+ENSG00000112996    0.727
+ENSG00000053900    0.763
+ENSG00000143149    0.655
+ENSG00000119718    0.663
+ENSG00000243955    0.757
+ENSG00000049618    0.638
+ENSG00000151503    0.691
+ENSG00000153885    0.582
+ENSG00000073670    0.879
+ENSG00000168010    0.911
+ENSG00000197409    0.716
+ENSG00000187650    0.671
+ENSG00000136238    0.785
+ENSG00000110031    0.797
+ENSG00000043355    0.879
+ENSG00000132323    0.827
+ENSG00000137177    0.674
+ENSG00000226792    0.738
+ENSG00000127578    0.845
+ENSG00000105609    0.863
+ENSG00000169193    0.841
+ENSG00000184347    0.676
+ENSG00000130713    0.780
+ENSG00000149269    0.896
+ENSG00000051180    0.826
+ENSG00000140280    0.864
+ENSG00000147874    0.690
+ENSG00000229807    0.965
+ENSG00000124429    0.891
+ENSG00000188770    0.501
+ENSG00000256394    0.871
+ENSG00000147604    0.987
+ENSG00000143195    0.442
+ENSG00000104889    0.948
+ENSG00000129595    0.748
+ENSG00000160883    0.907
+ENSG00000163825    0.805
+ENSG00000185347    0.785
+ENSG00000023445    0.810
+ENSG00000279263    0.921
+ENSG00000111291    0.677
+ENSG00000102543    0.720
+ENSG00000136352    0.973
+ENSG00000118412    0.724
+ENSG00000054118    0.789
+ENSG00000134684    0.939
+ENSG00000196811    0.687
+ENSG00000111011    0.930
+ENSG00000166558    0.823
+ENSG00000251369    0.679
+ENSG00000184205    0.659
+ENSG00000060642    0.944
+ENSG00000130177    0.814
+ENSG00000124233    0.759
+ENSG00000134851    0.832
+ENSG00000197993    0.689
+ENSG00000117215    0.835
+ENSG00000162771    0.908
+ENSG00000110852    0.732
+ENSG00000100453    0.784
+ENSG00000136536    0.923
+ENSG00000135423    0.900
+ENSG00000131725    0.892
+ENSG00000197403    0.851
+ENSG00000164985    0.632
+ENSG00000148175    0.931
+ENSG00000214944    0.814
+ENSG00000100344    0.905
+ENSG00000174652    0.937
+ENSG00000125910    0.745
+ENSG00000173369    0.556
+ENSG00000145919    0.854
+ENSG00000197782    0.723
+ENSG00000100294    0.413
+ENSG00000104067    0.944
+ENSG00000107249    0.565
+ENSG00000171115    0.834
+ENSG00000165943    0.688
+ENSG00000067445    0.241
+ENSG00000065802    0.705
+ENSG00000123106    0.802
+ENSG00000173588    0.625
+ENSG00000004838    0.774
+ENSG00000137872    0.900
+ENSG00000071564    0.868
+ENSG00000167363    0.737
+ENSG00000187867    0.767
+ENSG00000107614    0.847
+ENSG00000109917    0.805
+ENSG00000156384    0.863
+ENSG00000166436    0.933
+ENSG00000112139    0.781
+ENSG00000090316    0.722
+ENSG00000242372    0.939
+ENSG00000171885    0.740
+ENSG00000125414    0.506
+ENSG00000184709    0.744
+ENSG00000197408    0.382
+ENSG00000158315    0.855
+ENSG00000140563    0.814
+ENSG00000170743    0.661
+ENSG00000114013    0.778
+ENSG00000188760    0.706
+ENSG00000115593    0.950
+ENSG00000078098    0.520
+ENSG00000168348    0.883
+ENSG00000006210    0.951
+ENSG00000004478    0.769
+ENSG00000171992    0.658
+ENSG00000119185    0.864
+ENSG00000134759    0.932
+ENSG00000117748    0.851
+ENSG00000146592    0.475
+ENSG00000171133    0.687
+ENSG00000125878    0.699
+ENSG00000135250    0.899
+ENSG00000105516    0.831
+ENSG00000083307    0.896
+ENSG00000147443    0.785
+ENSG00000168209    0.716
+ENSG00000163932    0.901
+ENSG00000100368    0.685
+ENSG00000254093    0.722
+ENSG00000213516    0.766
+ENSG00000101049    0.808
+ENSG00000140395    0.884
+ENSG00000133561    0.903
+ENSG00000178202    0.906
+ENSG00000221932    0.365
+ENSG00000122435    0.635
+ENSG00000095485    0.976
+ENSG00000176788    0.765
+ENSG00000155959    0.871
+ENSG00000075790    0.813
+ENSG00000153162    0.872
+ENSG00000140575    0.830
+ENSG00000159167    0.690
+ENSG00000130487    0.951
+ENSG00000196739    0.595
+ENSG00000158711    0.735
+ENSG00000147262    0.608
+ENSG00000204248    0.731
+ENSG00000242366    0.909
+ENSG00000130653    0.888
+ENSG00000144036    0.531
+ENSG00000156234    0.743
+ENSG00000155876    0.976
+ENSG00000168484    0.874
+ENSG00000170946    0.597
+ENSG00000164197    0.413
+ENSG00000103852    0.947
+ENSG00000100399    0.761
+ENSG00000021461    0.932
+ENSG00000171476    0.849
+ENSG00000156206    0.842
+ENSG00000250821    0.722
+ENSG00000169507    0.828
+ENSG00000108733    0.540
+ENSG00000179913    0.908
+ENSG00000108039    0.597
+ENSG00000133477    0.850
+ENSG00000162630    0.926
+ENSG00000101457    0.974
+ENSG00000163501    0.819
+ENSG00000188051    0.852
+ENSG00000067221    0.839
+ENSG00000015479    0.851
+ENSG00000114993    0.859
+ENSG00000163040    0.189
+ENSG00000134369    0.819
+ENSG00000080166    0.879
+ENSG00000187123    0.449
+ENSG00000162426    0.829
+ENSG00000160683    0.664
+ENSG00000153140    0.865
+ENSG00000169777    0.880
+ENSG00000181418    0.906
+ENSG00000100106    0.635
+ENSG00000167699    0.904
+ENSG00000143603    0.794
+ENSG00000044459    0.773
+ENSG00000242419    0.873
+ENSG00000066923    0.844
+ENSG00000164404    0.782
+ENSG00000114204    0.812
+ENSG00000203618    0.803
+ENSG00000179134    0.816
+ENSG00000172519    0.799
+ENSG00000127540    0.591
+ENSG00000099840    0.873
+ENSG00000119688    0.664
+ENSG00000144868    0.928
+ENSG00000165898    0.929
+ENSG00000273749    0.668
+ENSG00000141052    0.746
+ENSG00000255151    0.422
+ENSG00000174327    0.859
+ENSG00000137691    0.674
+ENSG00000225950    0.929
+ENSG00000171595    0.858
+ENSG00000006007    0.781
+ENSG00000147955    0.785
+ENSG00000182973    0.612
+ENSG00000101187    0.956
+ENSG00000270946    0.939
+ENSG00000133106    0.973
+ENSG00000170523    0.856
+ENSG00000166401    0.658
+ENSG00000151062    0.813
+ENSG00000198732    0.813
+ENSG00000151247    0.666
+ENSG00000028116    0.847
+ENSG00000243710    0.957
+ENSG00000187486    0.837
+ENSG00000146094    0.877
+ENSG00000197062    0.831
+ENSG00000132329    0.954
+ENSG00000167657    0.580
+ENSG00000133243    0.479
+ENSG00000132475    0.736
+ENSG00000170222    0.762
+ENSG00000182809    0.751
+ENSG00000206559    0.844
+ENSG00000111325    0.847
+ENSG00000169221    0.778
+ENSG00000013392    0.701
+ENSG00000087157    0.817
+ENSG00000108828    0.720
+ENSG00000106462    0.769
+ENSG00000070367    0.747
+ENSG00000057019    0.742
+ENSG00000198589    0.893
+ENSG00000149575    0.916
+ENSG00000182798    0.905
+ENSG00000128335    0.657
+ENSG00000113141    0.628
+ENSG00000182348    0.852
+ENSG00000159579    0.723
+ENSG00000166317    0.928
+ENSG00000188070    0.784
+ENSG00000054282    0.769
+ENSG00000154328    0.895
+ENSG00000279116    0.924
+ENSG00000060237    0.898
+ENSG00000257949    0.893
+ENSG00000167968    0.537
+ENSG00000165487    0.959
+ENSG00000204613    0.953
+ENSG00000171136    0.940
+ENSG00000100239    0.903
+ENSG00000283632    0.580
+ENSG00000100448    0.941
+ENSG00000057593    0.852
+ENSG00000013375    0.903
+ENSG00000103642    0.920
+ENSG00000123124    0.823
+ENSG00000078674    0.613
+
+Old RS56 correlations to fresh profiles:
+RS56    0.8924
+RS66    0.8521
+RS28    0.8479
+RS69    0.7607
+RS49    0.7573
+RS45    0.7230
+RS50    0.6881
+RS43    0.6783
+RS39    0.6775
+RS86    0.6731
+RS78    0.6703
+RS52    0.5677
+ratio quantiles: {0.0: 1.0, 0.1: 3.248, 0.25: 4.0, 0.5: 4.698, 0.75: 5.5, 0.9: 6.667, 1.0: 29.0}
+
+Old RS66 correlations to fresh profiles:
+RS78    0.9780
+RS43    0.9266
+RS86    0.9221
+RS45    0.7558
+RS28    0.7551
+RS66    0.7492
+RS56    0.7382
+RS52    0.7353
+RS39    0.6580
+RS50    0.6487
+RS69    0.5756
+RS49    0.5534
+ratio quantiles: {0.0: 0.139, 0.1: 0.798, 0.25: 1.387, 0.5: 2.048, 0.75: 3.0, 0.9: 5.169, 1.0: 34.952}
+[?2004hroot@98b4ef95c30c:/task# rm -rf /tmp/repro && mkdir -p /tmp/repro/{a,b}; for s in RS56 RS66; do salmon quant -i /tmp/rnaseq_work/index -l U -r /task/input/fastq/$s.fastq.gz -p 1 -o /tmp/repro/a/$s >/tmp/repro/$s.a.log 2>&1; salmon quant -i /tmp/rnaseq_work/index -l U -r /task/input/fastq/$s.fastq.gz -p 4 -o /tmp/repro/b/$s >/tmp/repro/$s.b.log 2>&1; done
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     vals={}
+[?2004l[?2004h>     for tag in ['a','b']:
+[?2004l[?2004h>         q=pd.read_csv(f'/tmp/repro/{tag}/{s}/quant.sf',sep='\t')
+[?2004l[?2004h>         t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h>         vals[tag]=q.groupby(q.Name.map(dict(zip(t2g.transcript_id,t2g.gene_id))))['NumReads'].sum()
+[?2004l[?2004h>     print(s,'one-thread vs four-thread maxdiff',float((vals.a-vals.b).abs().max()),'vs predecessor maxdiff',float((vals.a-old[s]).abs().max()))
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+AttributeError: 'dict' object has no attribute 'a'
+[?2004hroot@98b4ef95c30c:/task# cat > /tmp/run_candidate_de_u.py <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> counts=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sheet=pd.read_csv('/task/input/samples.tsv',sep='\t').set_index('sample_id')
+[?2004l[?2004h> meta=sheet.copy()
+[?2004l[?2004h> meta.loc['RS43','condition']='vehicle'
+[?2004l[?2004h> meta.loc['RS49','condition']='treated'
+[?2004l[?2004h> keep=meta.index.drop('RS45')
+[?2004l[?2004h> meta=meta.loc[keep].rename(columns={'library_prep_batch':'batch'})
+[?2004l[?2004h> meta['batch']=meta['batch'].str.replace('-','').str.replace('2024','s2024')
+[?2004l[?2004h> mat=counts[keep].T.round().astype(int)
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> for design in ['~condition','~condition+donor_sex','~condition+batch','~condition+donor_sex+batch']:
+[?2004l[?2004h>     dds=DeseqDataSet(counts=mat,metadata=meta,design=design,quiet=True,n_cpus=2)
+[?2004l[?2004h>     dds.deseq2()
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary()
+[?2004l[?2004h>     r=st.results_df
+[?2004l[?2004h>     verdict=mail.gene_id.map(r.padj.lt(.05).reindex(r.index).to_dict()).fillna(False)
+[?2004l[?2004h>     print(design,'tested',int(r.pvalue.notna().sum()),'significant',int((r.padj<.05).sum()),'mail significant',int(verdict.sum()),'min padj',float(r.padj.min()))
+[?2004l[?2004h>     if design=='~condition+donor_sex+batch':
+[?2004l[?2004h>         r.to_csv('/tmp/final_candidate_results.tsv',sep='\t')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /tmp/run_candidate_de_u.py
+[?2004l~condition tested 798 significant 127 mail significant 18 min padj 7.649743344139461e-278
+~condition+donor_sex tested 797 significant 105 mail significant 18 min padj 1.9250835694641004e-227
+~condition+batch tested 800 significant 116 mail significant 18 min padj 1.5380853032394287e-184
+~condition+donor_sex+batch tested 800 significant 93 mail significant 17 min padj 5.591771619894615e-127
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np, json, glob, os
+[?2004l[?2004h> u=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sr=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('U totals:',u.sum().round(1).to_dict())
+[?2004l[?2004h> print('old totals:',old.sum().round(1).to_dict())
+[?2004l[?2004h> print('U-SR max:',(u-sr).abs().max().round(3).to_dict())
+[?2004l[?2004h> print('U-old max:',(u-old).abs().max().round(3).to_dict())
+[?2004l[?2004h> for d in sorted(glob.glob('/tmp/rnaseq_u/quant/*')):
+[?2004l[?2004h>     with open(d+'/aux_info/meta_info.json') as f: m=json.load(f)
+[?2004l[?2004h>     print(os.path.basename(d),'map%',round(m['percent_mapped'],2),'mapped',m['num_mapped'],'processed',m['num_processed'])
+[?2004l[?2004h> PY
+[?2004lU totals: {'RS28': 88260.0, 'RS39': 100907.0, 'RS43': 84961.0, 'RS45': 83333.0, 'RS49': 94696.0, 'RS50': 78899.0, 'RS52': 70580.0, 'RS56': 89498.0, 'RS66': 95659.0, 'RS69': 92921.0, 'RS78': 76738.0, 'RS86': 83988.0}
+old totals: {'RS28': 44015.0, 'RS39': 50284.0, 'RS43': 42574.0, 'RS45': 41747.0, 'RS49': 47353.0, 'RS50': 39419.0, 'RS52': 35411.0, 'RS56': 17716.0, 'RS66': 38199.0, 'RS69': 46450.0, 'RS78': 38199.0, 'RS86': 41985.0}
+U-SR max: {'RS28': 1095.0, 'RS39': 1524.0, 'RS43': 564.0, 'RS45': 463.0, 'RS49': 1260.0, 'RS50': 714.0, 'RS52': 464.0, 'RS56': 914.0, 'RS66': 1025.0, 'RS69': 1088.0, 'RS78': 440.0, 'RS86': 470.001}
+U-old max: {'RS28': 1095.0, 'RS39': 1524.0, 'RS43': 564.0, 'RS45': 463.0, 'RS49': 1260.0, 'RS50': 714.0, 'RS52': 464.0, 'RS56': 1482.0, 'RS66': 1925.0, 'RS69': 1088.0, 'RS78': 440.0, 'RS86': 470.001}
+RS28 map% 96.17 mapped 88260 processed 91776
+Traceback (most recent call last):
+  File "<stdin>", line 10, in <module>
+NotADirectoryError: [Errno 20] Not a directory: '/tmp/rnaseq_u/quant/RS28.log/aux_info/meta_info.json'
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.optimize import nnls
+[?2004l[?2004h> c=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> X=(c/c.sum(axis=0)).T
+[?2004l[?2004h> for s in c.columns:
+[?2004l[?2004h>     others=[x for x in c.columns if x!=s]
+[?2004l[?2004h>     A=X.loc[others].values; y=X.loc[s].values
+[?2004l[?2004h>     coef,_=nnls(np.vstack([A,np.ones(A.shape[0])]),np.r_[y,1.0])
+[?2004l[?2004h>     pred=A.T@coef
+[?2004l[?2004h>     top=', '.join(f'{a}={b:.3f}' for a,b in sorted(zip(others,coef),key=lambda z:z[1],reverse=True)[:4])
+[?2004l[?2004h>     print(f'{s}: R2={np.corrcoef(y,pred)[0,1]**2:.4f} RMSE={np.sqrt(np.mean((y-pred)**2)):.4g}; {top}')
+[?2004l[?2004h> PY
+[?2004lTraceback (most recent call last):
+  File "<stdin>", line 8, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/numpy/_core/shape_base.py", line 290, in vstack
+    return _nx.concatenate(arrs, 0, dtype=dtype, casting=casting)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 800 and the array at index 1 has size 11
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> new=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> lo=np.log10(old/old.sum(axis=0)*1e6+1); ln=np.log10(new/new.sum(axis=0)*1e6+1)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     corr=ln.corrwith(lo[s]).sort_values(ascending=False)
+[?2004l[?2004h>     print('\nOld',s,'best fresh correlations')
+[?2004l[?2004h>     print(corr.head(5).round(4).to_string())
+[?2004l[?2004h>     print('old total',old[s].sum(),'fresh total',new[s].sum(),'median fresh/old',float(((new[s]+1)/(old[s]+1)).median()))
+[?2004l[?2004h> PY
+[?2004l
+Old RS56 best fresh correlations
+RS56    0.8924
+RS66    0.8521
+RS28    0.8479
+RS69    0.7607
+RS49    0.7573
+old total 17715.999 fresh total 89497.99900000001 median fresh/old 4.698214285714286
+
+Old RS66 best fresh correlations
+RS78    0.9780
+RS43    0.9266
+RS86    0.9221
+RS45    0.7558
+RS28    0.7551
+old total 38199.0 fresh total 95659.004 median fresh/old 2.048076923076923
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, glob
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> m=dict(zip(t2g.transcript_id,t2g.gene_id))
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     vals={}
+[?2004l[?2004h>     for tag in ['a','b']:
+[?2004l[?2004h>         q=pd.read_csv(f'/tmp/repro/{tag}/{s}/quant.sf',sep='\t')
+[?2004l[?2004h>         vals[tag]=q.groupby(q.Name.map(m))['NumReads'].sum()
+[?2004l[?2004h>     print(s,'one-vs-four-thread maxdiff',float((vals['a']-vals['b']).abs().max()),'one-vs-old maxdiff',float((vals['a']-old[s]).abs().max()))
+[?2004l[?2004h> PY
+[?2004lRS56 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1482.0
+RS66 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1925.0
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> r=pd.read_csv('/tmp/final_candidate_results.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> ann=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t').drop_duplicates('gene_id').set_index('gene_id')
+[?2004l[?2004h> print('Conservative model: tested',r.pvalue.notna().sum(),'significant',int((r.padj<.05).sum()))
+[?2004l[?2004h> print('\nAll significant genes:')
+[?2004l[?2004h> print(r[r.padj<.05].join(ann[['gene_name']]).sort_values('padj')[['gene_name','baseMean','log2FoldChange','pvalue','padj']].round(5).to_string())
+[?2004l[?2004h> print('\nMailed-gene verdicts:')
+[?2004l[?2004h> out=mail[['rank','gene_id','gene_name']].copy()
+[?2004l[?2004h> out['log2fc']=r.loc[out.gene_id,'log2FoldChange'].values
+[?2004l[?2004h> out['padj']=r.loc[out.gene_id,'padj'].values
+[?2004l[?2004h> out['verdict']=np.where(out.padj<.05,'confirmed','retracted')
+[?2004l[?2004h> print(out.to_string(index=False))
+[?2004l[?2004h> PY
+[?2004lConservative model: tested 800 significant 93
+
+All significant genes:
+                  gene_name    baseMean  log2FoldChange   pvalue     padj
+gene_id                                                                  
+ENSG00000130177       CDC16  1158.77042         2.81874  0.00000  0.00000
+ENSG00000148308      GTF3C5   642.24634         2.35966  0.00000  0.00000
+ENSG00000103226       NOMO3   275.39970         2.49304  0.00000  0.00000
+ENSG00000143156        NME7   147.97676         2.88017  0.00000  0.00000
+ENSG00000170515       PA2G4   246.16138         2.75098  0.00000  0.00000
+ENSG00000244414       CFHR1   350.39450         2.35494  0.00000  0.00000
+ENSG00000105819       PMPCB   127.44441         2.85124  0.00000  0.00000
+ENSG00000136840  ST6GALNAC4   114.58336         2.40329  0.00000  0.00000
+ENSG00000184033      CTAG1B    92.42158         2.93458  0.00000  0.00000
+ENSG00000137142     IGFBPL1   319.15939         2.10650  0.00000  0.00000
+ENSG00000004660      CAMKK1   315.05102         3.33929  0.00000  0.00000
+ENSG00000185002        RFX6    76.39959        -2.47970  0.00000  0.00000
+ENSG00000146094        DOK3   154.31212         2.57518  0.00000  0.00000
+ENSG00000164363     SLC6A18  1378.43372         2.46760  0.00000  0.00000
+ENSG00000283632     EXOC3L2    60.44436        -2.52850  0.00000  0.00000
+ENSG00000215009       ACSM4    80.11404        -2.29263  0.00000  0.00000
+ENSG00000105974        CAV1   145.39596        -2.41356  0.00000  0.00000
+ENSG00000234409     CCDC188   101.33604        -2.06909  0.00000  0.00000
+ENSG00000080166         DCT   302.91459         1.90213  0.00000  0.00000
+ENSG00000005513        SOX8    48.22685        -2.97603  0.00000  0.00000
+ENSG00000156234      CXCL13   282.90513         2.47226  0.00000  0.00000
+ENSG00000158711        ELK4    76.12007        -2.91584  0.00000  0.00000
+ENSG00000064989      CALCRL    65.97476        -2.85896  0.00000  0.00000
+ENSG00000184857     TMEM186   203.26431        -2.36859  0.00000  0.00000
+ENSG00000130818      ZNF426   228.90890        -2.14634  0.00000  0.00000
+ENSG00000017427        IGF1   562.73864         2.48231  0.00000  0.00000
+ENSG00000081189       MEF2C   275.49064         1.49430  0.00000  0.00000
+ENSG00000138814      PPP3CA    36.22504        -3.02821  0.00000  0.00000
+ENSG00000185888      PRSS38    32.91608        -2.76097  0.00000  0.00000
+ENSG00000203710         CR1   273.00677         2.21826  0.00000  0.00000
+ENSG00000100591       AHSA1    50.18904        -2.28289  0.00000  0.00000
+ENSG00000170370        EMX2   114.13689         1.90316  0.00000  0.00000
+ENSG00000183023      SLC8A1   128.95720         2.12436  0.00000  0.00000
+ENSG00000125753        VASP   106.16606         2.03701  0.00000  0.00000
+ENSG00000215277     RNF212B    88.03778        -1.73657  0.00000  0.00000
+ENSG00000111291      GPRC5D    42.19738         2.56602  0.00000  0.00000
+ENSG00000171495      MROH2B    34.03984        -2.29909  0.00000  0.00000
+ENSG00000289604      CTAGE8   390.26758         1.80125  0.00000  0.00000
+ENSG00000198482      ZNF808   178.27720         2.51871  0.00000  0.00000
+ENSG00000196126    HLA-DRB1    19.77702        -3.19940  0.00000  0.00000
+ENSG00000077498         TYR   130.33290         1.56992  0.00000  0.00000
+ENSG00000023608      SNAPC1    78.62933        -1.46017  0.00000  0.00000
+ENSG00000216490       IFI30    94.91895         2.00482  0.00000  0.00000
+ENSG00000151247       EIF4E    16.70743        -3.28966  0.00000  0.00000
+ENSG00000185347       TEDC1   291.68211         2.87472  0.00000  0.00000
+ENSG00000000419        DPM1    28.71401         1.84862  0.00000  0.00000
+ENSG00000179562        GCC1    11.98352        -3.91922  0.00000  0.00000
+ENSG00000174807       CD248    16.52266        -2.34977  0.00000  0.00000
+ENSG00000127152      BCL11B    24.02531        -2.84576  0.00000  0.00000
+ENSG00000171611       PTCRA   105.38089        -1.21837  0.00000  0.00000
+ENSG00000141052       MYOCD    14.26457        -2.71204  0.00000  0.00000
+ENSG00000185046      ANKS1B   115.44151         1.45245  0.00000  0.00000
+ENSG00000186442        KRT3    34.63138         1.77997  0.00000  0.00000
+ENSG00000156206     CFAP161   393.00009         1.06018  0.00000  0.00000
+ENSG00000185215     TNFAIP2    46.70613         2.01313  0.00000  0.00000
+ENSG00000037280        FLT4    30.44573        -1.76651  0.00000  0.00000
+ENSG00000108828        VAT1    54.96357         1.44148  0.00000  0.00000
+ENSG00000109917        ZPR1    11.22804        -4.62068  0.00000  0.00000
+ENSG00000117748        RPA2    20.04557        -2.18582  0.00000  0.00000
+ENSG00000111144       LTA4H    16.09830        -1.98034  0.00000  0.00000
+ENSG00000204356       NELFE    25.87216         1.79135  0.00000  0.00000
+ENSG00000204540    PSORS1C1    13.70025        -2.27812  0.00000  0.00000
+ENSG00000172009       THOP1    33.28130        -1.61765  0.00000  0.00000
+ENSG00000038945        MSR1    38.78225        -1.33158  0.00000  0.00003
+ENSG00000179010      MRFAP1    80.35327         1.30966  0.00000  0.00003
+ENSG00000133477      FAM83F    43.46619         1.09327  0.00001  0.00008
+ENSG00000171055        FEZ2    44.17150        -1.23011  0.00001  0.00013
+ENSG00000198798      MAGEB3    26.87714        -1.26787  0.00002  0.00024
+ENSG00000068097      HEATR6    35.54041         1.13360  0.00003  0.00035
+ENSG00000101439        CST3    21.93994        -1.27402  0.00005  0.00059
+ENSG00000125084        WNT1   125.34116         0.70820  0.00010  0.00114
+ENSG00000151062    CACNA2D4     7.84262        -1.97792  0.00013  0.00141
+ENSG00000165584        SSX3    16.29334        -1.30311  0.00020  0.00222
+ENSG00000198003       ODAD3    27.99034         1.15886  0.00024  0.00256
+ENSG00000075188       NUP37    54.92282        -1.25695  0.00031  0.00329
+ENSG00000197361      FBXL22   161.11477        -1.02486  0.00071  0.00744
+ENSG00000229807        XIST    64.85535        -5.05204  0.00072  0.00744
+ENSG00000171163      ZNF692    44.97637        -0.80290  0.00109  0.01119
+ENSG00000243955       GSTA1    51.09695        -1.24726  0.00127  0.01281
+ENSG00000198598       MMP17    94.19118        -0.98436  0.00137  0.01373
+ENSG00000166558     SLC38A8   102.81675        -0.89285  0.00158  0.01555
+ENSG00000073536        NLE1   150.22733         1.13076  0.00159  0.01555
+ENSG00000122012        SV2C   268.97636         0.94430  0.00172  0.01654
+ENSG00000170323       FABP4   216.12240         0.95536  0.00220  0.02074
+ENSG00000196581       AJAP1   216.91090        -0.97357  0.00219  0.02074
+ENSG00000149269        PAK1    56.47037        -0.95647  0.00240  0.02233
+ENSG00000164111       ANXA5   113.53727         1.01465  0.00246  0.02260
+ENSG00000159917      ZNF235    85.74884         0.78414  0.00251  0.02281
+ENSG00000165898       ISCA2   193.96809        -0.92391  0.00258  0.02319
+ENSG00000186118       TEX38    55.35332        -0.97633  0.00272  0.02418
+ENSG00000060642        PIGV   252.25291        -0.75682  0.00346  0.03039
+ENSG00000161202        DVL3    86.97783         0.72003  0.00512  0.04455
+ENSG00000132670       PTPRA   155.87766         1.00397  0.00542  0.04665
+
+Mailed-gene verdicts:
+ rank         gene_id       gene_name    log2fc         padj   verdict
+    1 ENSG00000054282         SDCCAG8  0.096923 8.792321e-01 retracted
+    2 ENSG00000289604          CTAGE8  1.801254 9.917597e-13 confirmed
+    3 ENSG00000080166             DCT  1.902133 4.482673e-21 confirmed
+    4 ENSG00000110400         NECTIN1 -0.042740 9.446352e-01 retracted
+    5 ENSG00000130818          ZNF426 -2.146337 3.188147e-19 confirmed
+    6 ENSG00000178537        SLC25A20  0.100013 8.642560e-01 retracted
+    7 ENSG00000136536         MARCHF7  0.222541 7.537625e-01 retracted
+    8 ENSG00000170515           PA2G4  2.750979 5.402268e-44 confirmed
+    9 ENSG00000153140           CETN3  0.250927 5.420154e-01 retracted
+   10 ENSG00000216490           IFI30  2.004824 9.600178e-11 confirmed
+   11 ENSG00000186442            KRT3  1.779972 4.651267e-08 confirmed
+   12 ENSG00000237988          OR2I1P  0.283699 4.907130e-01 retracted
+   13 ENSG00000180917           CMTR2 -0.237464 5.917383e-01 retracted
+   14 ENSG00000156206         CFAP161  1.060176 6.520297e-08 confirmed
+   15 ENSG00000103226           NOMO3  2.493044 6.220209e-56 confirmed
+   16 ENSG00000136840      ST6GALNAC4  2.403294 7.899489e-33 confirmed
+   17 ENSG00000064989          CALCRL -2.858962 7.943333e-20 confirmed
+   18 ENSG00000137142         IGFBPL1  2.106504 9.031339e-31 confirmed
+   19 ENSG00000038945            MSR1 -1.331581 2.610547e-05 confirmed
+   20 ENSG00000111144           LTA4H -1.980344 9.969547e-07 confirmed
+   21 ENSG00000196535          MYO18A  0.182758 8.374713e-01 retracted
+   22 ENSG00000198844        ARHGEF15 -0.205919 7.876846e-01 retracted
+   23 ENSG00000283632         EXOC3L2 -2.528498 1.908548e-23 confirmed
+   24 ENSG00000171495          MROH2B -2.299085 8.376884e-13 confirmed
+   25 ENSG00000184616         SPDYE12  0.285186 5.056951e-01 retracted
+   26 ENSG00000017427            IGF1  2.482315 7.284647e-19 confirmed
+   27 ENSG00000094796           KRT31  0.276069 5.504418e-01 retracted
+   28 ENSG00000159200           RCAN1 -0.070022 9.188647e-01 retracted
+   29 ENSG00000143156            NME7  2.880168 1.669706e-48 confirmed
+   30 ENSG00000290147 GUCA1ANB-GUCA1A  0.146569 8.324763e-01 retracted
+   31 ENSG00000061794          MRPS35  0.103552 8.743071e-01 retracted
+   32 ENSG00000119778          ATAD2B  0.686939 5.158675e-02 retracted
+   33 ENSG00000182348         ZNF804B -0.593747 3.092458e-01 retracted
+   34 ENSG00000154310            TNIK -0.086862 9.308645e-01 retracted
+   35 ENSG00000184599           TAFA3 -0.154815 7.629175e-01 retracted
+   36 ENSG00000152284          TCF7L1  0.190262 7.369236e-01 retracted
+   37 ENSG00000181751           MACIR  0.015704 9.774061e-01 retracted
+   38 ENSG00000154258           ABCA9 -0.317343 5.975079e-01 retracted
+   39 ENSG00000182330         PRAMEF8 -0.008919 9.892968e-01 retracted
+   40 ENSG00000243073         PRAMEF4 -0.233226 6.768705e-01 retracted
+[?2004hroot@98b4ef95c30c:/task# cat > /tmp/run_final_de.py <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> counts=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> meta=pd.DataFrame({
+[?2004l[?2004h>     'sample_id':['RS28','RS39','RS43','RS49','RS50','RS52','RS56','RS66','RS69','RS78','RS86']
+[?2004l[?2004h> }).set_index('sample_id')
+[?2004l[?2004h> meta['condition']=['treated','treated','vehicle','treated','vehicle','vehicle','treated','treated','treated','vehicle','vehicle']
+[?2004l[?2004h> meta['sex']=['F','M','F','M','M','M','F','F','M','F','F']
+[?2004l[?2004h> meta['batch']=['s1','s1','s1','s1','s1','s1','s2','s2','s2','s1','s1']
+[?2004l[?2004h> mat=counts[meta.index].T.round().astype(int)
+[?2004l[?2004h> dds=DeseqDataSet(counts=mat,metadata=meta,design='~condition+sex+batch',quiet=True,n_cpus=2)
+[?2004l[?2004h> dds.deseq2()
+[?2004l[?2004h> st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=0.05,quiet=True,n_cpus=2)
+[?2004l[?2004h> st.summary()
+[?2004l[?2004h> r=st.results_df
+[?2004l[?2004h> r.to_csv('/tmp/final_results.tsv',sep='\t',na_rep='NA',float_format='%.10g')
+[?2004l[?2004h> print('rows',len(r),'pvalues non-NA',int(r.pvalue.notna().sum()),'padj non-NA',int(r.padj.notna().sum()))
+[?2004l[?2004h> print('significant',int((r.padj<.05).sum()),'padj range',r.padj.min(),r.padj.max())
+[?2004l[?2004h> print('log2fc finite',int(np.isfinite(r.log2FoldChange).sum()),'log2fc NA',int(r.log2FoldChange.isna().sum()))
+[?2004l[?2004h> print('\nTop 20 final results:')
+[?2004l[?2004h> print(r.sort_values('padj').head(20)[['baseMean','log2FoldChange','lfcSE','pvalue','padj']].round(6).to_string())
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> out=mail[['rank','gene_id','gene_name']].copy()
+[?2004l[?2004h> out['log2fc']=r.loc[out.gene_id,'log2FoldChange'].values
+[?2004l[?2004h> out['padj']=r.loc[out.gene_id,'padj'].values
+[?2004l[?2004h> out['verdict']=np.where(out.padj<.05,'confirmed','retracted')
+[?2004l[?2004h> print('\nMailed verdict counts:',out.verdict.value_counts().to_dict())
+[?2004l[?2004h> print(out.to_string(index=False))
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /tmp/run_final_de.py
+[?2004lrows 800 pvalues non-NA 800 padj non-NA 800
+significant 74 padj range 1.293737256781271e-137 0.9992242735108243
+log2fc finite 800 log2fc NA 0
+
+Top 20 final results:
+                    baseMean  log2FoldChange     lfcSE  pvalue  padj
+gene_id                                                             
+ENSG00000130177  1158.770416        2.803376  0.111087     0.0   0.0
+ENSG00000143156   147.976757        2.639262  0.185195     0.0   0.0
+ENSG00000103226   275.399701        2.398121  0.174327     0.0   0.0
+ENSG00000148308   642.246342        2.539361  0.187300     0.0   0.0
+ENSG00000170515   246.161383        2.784960  0.214018     0.0   0.0
+ENSG00000244414   350.394497        2.375264  0.192105     0.0   0.0
+ENSG00000105819   127.444411        2.704322  0.240859     0.0   0.0
+ENSG00000184033    92.421582        2.984184  0.266105     0.0   0.0
+ENSG00000137142   319.159386        2.004540  0.185390     0.0   0.0
+ENSG00000164363  1378.433725        2.647462  0.246264     0.0   0.0
+ENSG00000136840   114.583360        2.298028  0.231367     0.0   0.0
+ENSG00000283632    60.444363       -2.863287  0.288946     0.0   0.0
+ENSG00000185002    76.399591       -2.413154  0.248442     0.0   0.0
+ENSG00000146094   154.312125        2.461552  0.264284     0.0   0.0
+ENSG00000234409   101.336039       -2.119591  0.242007     0.0   0.0
+ENSG00000215009    80.114037       -2.130189  0.243786     0.0   0.0
+ENSG00000158711    76.120067       -2.979438  0.347734     0.0   0.0
+ENSG00000184857   203.264313       -2.093641  0.254201     0.0   0.0
+ENSG00000156234   282.905130        2.476109  0.301717     0.0   0.0
+ENSG00000100591    50.189044       -2.550651  0.313153     0.0   0.0
+
+Mailed verdict counts: {'retracted': 23, 'confirmed': 17}
+ rank         gene_id       gene_name    log2fc         padj   verdict
+    1 ENSG00000054282         SDCCAG8  0.100920 9.380355e-01 retracted
+    2 ENSG00000289604          CTAGE8  1.779691 6.574838e-07 confirmed
+    3 ENSG00000080166             DCT  1.888386 1.929279e-12 confirmed
+    4 ENSG00000110400         NECTIN1  0.049547 9.693108e-01 retracted
+    5 ENSG00000130818          ZNF426 -2.152188 2.072549e-13 confirmed
+    6 ENSG00000178537        SLC25A20  0.008196 9.930194e-01 retracted
+    7 ENSG00000136536         MARCHF7 -0.011181 9.930194e-01 retracted
+    8 ENSG00000170515           PA2G4  2.784960 1.657467e-36 confirmed
+    9 ENSG00000153140           CETN3  0.175974 8.482810e-01 retracted
+   10 ENSG00000216490           IFI30  2.357718 2.937252e-04 confirmed
+   11 ENSG00000186442            KRT3  1.818034 1.214135e-06 confirmed
+   12 ENSG00000237988          OR2I1P  0.182713 8.202997e-01 retracted
+   13 ENSG00000180917           CMTR2 -0.152509 8.511404e-01 retracted
+   14 ENSG00000156206         CFAP161  0.971959 2.342001e-05 confirmed
+   15 ENSG00000103226           NOMO3  2.398121 1.241942e-40 confirmed
+   16 ENSG00000136840      ST6GALNAC4  2.298028 2.188468e-21 confirmed
+   17 ENSG00000064989          CALCRL -2.887993 1.477185e-13 confirmed
+   18 ENSG00000137142         IGFBPL1  2.004540 2.668908e-25 confirmed
+   19 ENSG00000038945            MSR1 -1.261698 4.595477e-03 confirmed
+   20 ENSG00000111144           LTA4H -1.802598 1.771928e-04 confirmed
+   21 ENSG00000196535          MYO18A  0.195748 9.094171e-01 retracted
+   22 ENSG00000198844        ARHGEF15  0.051500 9.707472e-01 retracted
+   23 ENSG00000283632         EXOC3L2 -2.863287 2.525997e-21 confirmed
+   24 ENSG00000171495          MROH2B -2.247066 2.826542e-08 confirmed
+   25 ENSG00000184616         SPDYE12  0.360784 5.571896e-01 retracted
+   26 ENSG00000017427            IGF1  2.504165 9.942788e-07 confirmed
+   27 ENSG00000094796           KRT31  0.332561 6.447408e-01 retracted
+   28 ENSG00000159200           RCAN1 -0.269331 7.697912e-01 retracted
+   29 ENSG00000143156            NME7  2.639262 1.761855e-43 confirmed
+   30 ENSG00000290147 GUCA1ANB-GUCA1A  0.199614 8.660033e-01 retracted
+   31 ENSG00000061794          MRPS35  0.164373 8.690846e-01 retracted
+   32 ENSG00000119778          ATAD2B  0.448580 4.609643e-01 retracted
+   33 ENSG00000182348         ZNF804B -0.589950 6.173479e-01 retracted
+   34 ENSG00000154310            TNIK  0.160743 9.178421e-01 retracted
+   35 ENSG00000184599           TAFA3 -0.179968 8.257124e-01 retracted
+   36 ENSG00000152284          TCF7L1  0.142791 8.661438e-01 retracted
+   37 ENSG00000181751           MACIR -0.087895 9.537265e-01 retracted
+   38 ENSG00000154258           ABCA9 -0.216649 8.563757e-01 retracted
+   39 ENSG00000182330         PRAMEF8 -0.054226 9.707472e-01 retracted
+   40 ENSG00000243073         PRAMEF4 -0.270982 7.751526e-01 retracted
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> sheet=pd.read_csv('/task/input/samples.tsv',sep='\t').set_index('sample_id')
+[?2004l[?2004h> sex={
+[?2004l[?2004h>  'RS28':'F','RS39':'M','RS43':'F','RS45':'mixed','RS49':'M','RS50':'M',
+[?2004l[?2004h>  'RS52':'M','RS56':'F','RS66':'F','RS69':'M','RS78':'F','RS86':'F'}
+[?2004l[?2004h> condition={
+[?2004l[?2004h>  'RS28':'treated','RS39':'treated','RS43':'vehicle','RS45':'excluded','RS49':'treated',
+[?2004l[?2004h>  'RS50':'vehicle','RS52':'vehicle','RS56':'treated','RS66':'treated','RS69':'treated',
+[?2004l[?2004h>  'RS78':'vehicle','RS86':'vehicle'}
+[?2004l[?2004h> q=pd.DataFrame({'sheet_sex':sheet.donor_sex,'inferred_sex':sex,'sheet_condition':sheet.condition,'condition_used':condition})
+[?2004l[?2004h> q['sex_concordant']=q.sheet_sex==q.inferred_sex
+[?2004l[?2004h> q['condition_corrected']=q.sheet_condition!=q.condition_used
+[?2004l[?2004h> print(q.to_string())
+[?2004l[?2004h> print('\nAnalysis metadata distribution:')
+[?2004l[?2004h> a=q[q.condition_used!='excluded']
+[?2004l[?2004h> print(pd.crosstab([a.condition_used,a.inferred_sex],a.library_prep_batch,margins=True).to_string())
+[?2004l[?2004h> PY
+[?2004l     sheet_sex inferred_sex sheet_condition condition_used  sex_concordant  condition_corrected
+RS28         F            F         treated        treated            True                False
+RS39         M            M         treated        treated            True                False
+RS43         M            F         treated        vehicle           False                 True
+RS45         M        mixed         vehicle       excluded           False                 True
+RS49         F            M         vehicle        treated           False                 True
+RS50         M            M         vehicle        vehicle            True                False
+RS52         M            M         vehicle        vehicle            True                False
+RS56         F            F         treated        treated            True                False
+RS66         F            F         treated        treated            True                False
+RS69         M            M         treated        treated            True                False
+RS78         F            F         vehicle        vehicle            True                False
+RS86         F            F         vehicle        vehicle            True                False
+
+Analysis metadata distribution:
+Traceback (most recent call last):
+  File "<stdin>", line 16, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 6434, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'library_prep_batch'
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np, json, glob, os
+[?2004l[?2004h> u=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sr=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('U-SR max absolute differences:')
+[?2004l[?2004h> print((u-sr).abs().max().round(4).to_string())
+[?2004l[?2004h> print('\nU-old max absolute differences:')
+[?2004l[?2004h> print((u-old).abs().max().round(4).to_string())
+[?2004l[?2004h> print('\nU totals and mapping rates:')
+[?2004l[?2004h> for s in u.columns:
+[?2004l[?2004h>     with open(f'/tmp/rnaseq_u/quant/{s}/aux_info/meta_info.json') as f: m=json.load(f)
+[?2004l[?2004h>     print(s,'assigned',round(float(u[s].sum()),3),'mapped',m['num_mapped'],'processed',m['num_processed'],'map_pct',round(m['percent_mapped'],3))
+[?2004l[?2004h> PY
+[?2004lU-SR max absolute differences:
+RS28    1095.000
+RS39    1524.000
+RS43     564.000
+RS45     463.000
+RS49    1260.000
+RS50     714.000
+RS52     464.000
+RS56     914.000
+RS66    1025.000
+RS69    1088.000
+RS78     440.000
+RS86     470.001
+
+U-old max absolute differences:
+RS28    1095.000
+RS39    1524.000
+RS43     564.000
+RS45     463.000
+RS49    1260.000
+RS50     714.000
+RS52     464.000
+RS56    1482.000
+RS66    1925.000
+RS69    1088.000
+RS78     440.000
+RS86     470.001
+
+U totals and mapping rates:
+RS28 assigned 88259.999 mapped 88260 processed 91776 map_pct 96.169
+RS39 assigned 100907.001 mapped 100907 processed 104895 map_pct 96.198
+RS43 assigned 84961.001 mapped 84961 processed 88346 map_pct 96.168
+RS45 assigned 83333.0 mapped 83333 processed 86506 map_pct 96.332
+RS49 assigned 94695.996 mapped 94696 processed 98386 map_pct 96.249
+RS50 assigned 78898.998 mapped 78899 processed 81961 map_pct 96.264
+RS52 assigned 70579.996 mapped 70580 processed 73169 map_pct 96.462
+RS56 assigned 89497.999 mapped 89498 processed 92995 map_pct 96.24
+RS66 assigned 95659.004 mapped 95659 processed 99360 map_pct 96.275
+RS69 assigned 92921.0 mapped 92921 processed 96482 map_pct 96.309
+RS78 assigned 76737.998 mapped 76738 processed 79688 map_pct 96.298
+RS86 assigned 83988.002 mapped 83988 processed 87281 map_pct 96.227
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> new=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> lo=np.log10(old/old.sum(axis=0)*1e6+1); ln=np.log10(new/new.sum(axis=0)*1e6+1)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     corr=ln.corrwith(lo[s]).sort_values(ascending=False)
+[?2004l[?2004h>     print('\nOld',s,'correlation to each fresh U profile:')
+[?2004l[?2004h>     print(corr.round(4).to_string())
+[?2004l[?2004h>     print('old total',round(old[s].sum(),2),'fresh total',round(new[s].sum(),2))
+[?2004l[?2004h> PY
+[?2004l
+Old RS56 correlation to each fresh U profile:
+RS56    0.8924
+RS66    0.8521
+RS28    0.8479
+RS69    0.7607
+RS49    0.7573
+RS45    0.7230
+RS50    0.6881
+RS43    0.6783
+RS39    0.6775
+RS86    0.6731
+RS78    0.6703
+RS52    0.5677
+old total 17716.0 fresh total 89498.0
+
+Old RS66 correlation to each fresh U profile:
+RS78    0.9780
+RS43    0.9266
+RS86    0.9221
+RS45    0.7558
+RS28    0.7551
+RS66    0.7492
+RS56    0.7382
+RS52    0.7353
+RS39    0.6580
+RS50    0.6487
+RS69    0.5756
+RS49    0.5534
+old total 38199.0 fresh total 95659.0
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t'); m=dict(zip(t2g.transcript_id,t2g.gene_id))
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     vals={}
+[?2004l[?2004h>     for tag in ['a','b']:
+[?2004l[?2004h>         q=pd.read_csv(f'/tmp/repro/{tag}/{s}/quant.sf',sep='\t')
+[?2004l[?2004h>         vals[tag]=q.groupby(q.Name.map(m))['NumReads'].sum()
+[?2004l[?2004h>     print(s,'one-vs-four-thread maxdiff',round(float((vals['a']-vals['b']).abs().max()),6),'one-vs-old maxdiff',round(float((vals['a']-old[s]).abs().max()),3))
+[?2004l[?2004h> PY
+[?2004lRS56 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1482.0
+RS66 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1925.0
+[?2004hroot@98b4ef95c30c:/task# mkdir -p /task/output
+[?2004l[?2004hroot@98b4ef95c30c:/task# cat > /tmp/write_outputs.py <<'PY'
+[?2004l[?2004h> import os
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> OUT='/task/output'
+[?2004l[?2004h> t2g=pd.read_csv(f'{IN}/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> sheet=pd.read_csv(f'{IN}/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> counts=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> res=pd.read_csv('/tmp/final_results.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> mail=pd.read_csv(f'{IN}/previous_analysis/mail_top_responders.tsv',sep='\t',dtype={'rank':int})
+[?2004l[?2004h> 
+[?2004l[?2004h> # Required gene-by-sample Salmon NumReads matrix, preserving tx2gene gene order.
+[?2004l[?2004h> expected_genes=list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> counts=counts.reindex(index=expected_genes,columns=sheet.index)
+[?2004l[?2004h> counts.index.name='gene_id'
+[?2004l[?2004h> counts.to_csv(f'{OUT}/gene_counts.tsv',sep='\t',float_format='%.6f',na_rep='NA')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Library-level QC and analysis-use metadata.
+[?2004l[?2004h> inferred_sex={
+[?2004l[?2004h>     'RS28':'F','RS39':'M','RS43':'F','RS45':'mixed','RS49':'M','RS50':'M',
+[?2004l[?2004h>     'RS52':'M','RS56':'F','RS66':'F','RS69':'M','RS78':'F','RS86':'F'
+[?2004l[?2004h> }
+[?2004l[?2004h> condition_used={
+[?2004l[?2004h>     'RS28':'treated','RS39':'treated','RS43':'vehicle','RS45':'excluded',
+[?2004l[?2004h>     'RS49':'treated','RS50':'vehicle','RS52':'vehicle','RS56':'treated',
+[?2004l[?2004h>     'RS66':'treated','RS69':'treated','RS78':'vehicle','RS86':'vehicle'
+[?2004l[?2004h> }
+[?2004l[?2004h> note={
+[?2004l[?2004h>     'RS28':'clean inferred-F library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS39':'clean inferred-M library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS43':'clean inferred-F library; library/donor swap with RS49; actual condition vehicle',
+[?2004l[?2004h>     'RS45':'mixed inferred-F and inferred-M donor material; excluded',
+[?2004l[?2004h>     'RS49':'clean inferred-M library; library/donor swap with RS43; actual condition treated',
+[?2004l[?2004h>     'RS50':'clean inferred-M library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS52':'clean inferred-M library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS56':'clean inferred-F library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS66':'clean inferred-F library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS69':'clean inferred-M library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS78':'clean inferred-F library; sample-sheet condition retained',
+[?2004l[?2004h>     'RS86':'clean inferred-F library; sample-sheet condition retained'
+[?2004l[?2004h> }
+[?2004l[?2004h> qc=pd.DataFrame(index=sheet.index)
+[?2004l[?2004h> qc.index.name='sample_id'
+[?2004l[?2004h> qc['inferred_sex']=pd.Series(inferred_sex)
+[?2004l[?2004h> qc['condition_used']=pd.Series(condition_used)
+[?2004l[?2004h> qc['sheet_condition']=sheet.condition
+[?2004l[?2004h> qc['sheet_donor_sex']=sheet.donor_sex
+[?2004l[?2004h> qc['library_prep_batch']=sheet.library_prep_batch
+[?2004l[?2004h> Y=['ENSG00000183878','ENSG00000129824','ENSG00000198692','ENSG00000067048','ENSG00000012817']
+[?2004l[?2004h> X=['ENSG00000229807']
+[?2004l[?2004h> tot=counts.sum(axis=0)
+[?2004l[?2004h> qc['assigned_reads']=[round(float(tot[s]),6) for s in qc.index]
+[?2004l[?2004h> qc['y_marker_reads']=[round(float(counts.loc[Y,s].sum()),6) for s in qc.index]
+[?2004l[?2004h> qc['xist_reads']=[round(float(counts.loc[X[0],s]),6) for s in qc.index]
+[?2004l[?2004h> qc['qc_note']=pd.Series(note)
+[?2004l[?2004h> qc.to_csv(f'{OUT}/sample_qc.tsv',sep='\t',na_rep='NA')
+[?2004l[?2004h> 
+[?2004l[?2004h> # All-gene DE table. pvalues/padj were generated with corrected condition and inferred sex plus prep batch.
+[?2004l[?2004h> deo=pd.DataFrame(index=res.index)
+[?2004l[?2004h> deo.index.name='gene_id'
+[?2004l[?2004h> deo['gene_name']=t2g.drop_duplicates('gene_id').set_index('gene_id').loc[res.index,'gene_name']
+[?2004l[?2004h> deo['base_mean']=res.base_mean
+[?2004l[?2004h> deo['log2fc']=res.log2FoldChange
+[?2004l[?2004h> # Guarantee the required finite log2fc contract for any unestimable gene.
+[?2004l[?2004h> deo['log2fc']=deo['log2fc'].replace([np.inf,-np.inf],np.nan).fillna(0.0)
+[?2004l[?2004h> deo['pvalue']=res.pvalue
+[?2004l[?2004h> deo['padj']=res.padj
+[?2004l[?2004h> deo['significant']=(deo.padj<0.05).astype(int)
+[?2004l[?2004h> deo=deo.reindex(expected_genes)
+[?2004l[?2004h> deo.to_csv(f'{OUT}/de_results.tsv',sep='\t',float_format='%.10g',na_rep='NA')
+[?2004l[?2004h> 
+[?2004l[?2004h> err=mail[['rank','gene_id','gene_name']].copy()
+[?2004l[?2004h> err['log2fc']=res.loc[err.gene_id,'log2FoldChange'].values
+[?2004l[?2004h> err['padj']=res.loc[err.gene_id,'padj'].values
+[?2004l[?2004h> err['significant']=(err.padj<0.05).astype(int)
+[?2004l[?2004h> err['verdict']=np.where(err.padj<0.05,'confirmed','retracted')
+[?2004l[?2004h> err=err[['rank','gene_id','gene_name','log2fc','padj','significant','verdict']]
+[?2004l[?2004h> err.to_csv(f'{OUT}/erratum.tsv',sep='\t',index=False,float_format='%.10g',na_rep='NA')
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /tmp/write_outputs.py
+[?2004lTraceback (most recent call last):
+  File "/tmp/write_outputs.py", line 63, in <module>
+    deo['base_mean']=res.base_mean
+                     ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 6434, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'base_mean'. Did you mean: 'baseMean'?
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import os, numpy as np, pandas as pd
+[?2004l[?2004h> O='/task/output'; I='/task/input'
+[?2004l[?2004h> t2g=pd.read_csv(f'{I}/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> sheet=pd.read_csv(f'{I}/samples.tsv',sep='\t')
+[?2004l[?2004h> mail=pd.read_csv(f'{I}/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> files=['gene_counts.tsv','sample_qc.tsv','de_results.tsv','erratum.tsv']
+[?2004l[?2004h> print('files:')
+[?2004l[?2004h> for f in files:
+[?2004l[?2004h>     p=f'{O}/{f}'; print(f,os.path.getsize(p),'bytes')
+[?2004l[?2004h> 
+[?2004l[?2004h> c=pd.read_csv(f'{O}/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert c.shape==(800,12)
+[?2004l[?2004h> assert list(c.columns)==list(sheet.sample_id)
+[?2004l[?2004h> assert list(c.index)==list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> assert c.notna().all().all() and np.isfinite(c.to_numpy()).all() and (c>=0).all().all()
+[?2004l[?2004h> print('gene_counts OK:',c.shape,'range',float(c.min().min()),float(c.max().max()))
+[?2004l[?2004h> 
+[?2004l[?2004h> q=pd.read_csv(f'{O}/sample_qc.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert q.shape[0]==12 and list(q.index)==list(sheet.sample_id)
+[?2004l[?2004h> assert set(q.inferred_sex)=={'F','M','mixed'}
+[?2004l[?2004h> assert set(q.condition_used)<= {'treated','vehicle','excluded'}
+[?2004l[?2004h> assert (q.condition_used=='excluded').sum()==1
+[?2004l[?2004h> print('sample_qc OK; inferred:',q.inferred_sex.value_counts().to_dict(),'used:',q.condition_used.value_counts().to_dict())
+[?2004l[?2004h> 
+[?2004l[?2004h> d=pd.read_csv(f'{O}/de_results.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert d.shape==(800,len(d.columns)) and list(d.index)==list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> assert np.isfinite(d.log2fc).all()
+[?2004l[?2004h> assert d.significant.isin([0,1]).all()
+[?2004l[?2004h> assert ((d.significant==1)==d.padj.notna()&(d.padj<0.05)).all()
+[?2004l[?2004h> print('de_results OK: tested',int(d.padj.notna().sum()),'significant',int(d.significant.sum()),'finite log2fc',int(np.isfinite(d.log2fc).sum()))
+[?2004l[?2004h> 
+[?2004l[?2004h> e=pd.read_csv(f'{O}/erratum.tsv',sep='\t')
+[?2004l[?2004h> assert len(e)==len(mail)==40
+[?2004l[?2004h> assert list(e.gene_id)==list(mail.gene_id)
+[?2004l[?2004h> assert set(e.verdict)=={'confirmed','retracted'}
+[?2004l[?2004h> assert (e.verdict=='confirmed').sum()==e.significant.sum()
+[?2004l[?2004h> print('erratum OK:',e.verdict.value_counts().to_dict())
+[?2004l[?2004h> print('\nQC summary:')
+[?2004l[?2004h> print(q[['inferred_sex','sheet_condition','condition_used','assigned_reads','y_marker_reads','xist_reads']].to_string())
+[?2004l[?2004h> print('\nOutput file headers:')
+[?2004l[?2004h> for f in files:
+[?2004l[?2004h>     print('\n'+f)
+[?2004l[?2004h>     print(open(f'{O}/{f}').readline().rstrip())
+[?2004l[?2004h> PY
+[?2004lfiles:
+gene_counts.tsv 111665 bytes
+sample_qc.tsv 1553 bytes
+Traceback (most recent call last):
+  File "<stdin>", line 9, in <module>
+  File "<frozen genericpath>", line 62, in getsize
+FileNotFoundError: [Errno 2] No such file or directory: '/task/output/de_results.tsv'
+[?2004hroot@98b4ef95c30c:/task# printf '%s\n' '--- final result columns/header ---'; head -3 /tmp/final_results.tsv; printf '%s\n' '--- writer error ---'; python3 /tmp/write_outputs.py
+[?2004l--- final result columns/header ---
+gene_id	baseMean	log2FoldChange	lfcSE	stat	pvalue	padj
+ENSG00000290147	72.14105998	0.1996140965	0.3267947046	0.6108241463	0.5413160061	0.8660033087
+ENSG00000154265	25.66978391	0.9141764903	0.3706508028	2.466409039	0.01364753863	0.1347905049
+--- writer error ---
+Traceback (most recent call last):
+  File "/tmp/write_outputs.py", line 63, in <module>
+    deo['base_mean']=res.base_mean
+                     ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 6434, in __getattr__
+    return object.__getattribute__(self, name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'DataFrame' object has no attribute 'base_mean'. Did you mean: 'baseMean'?
+[?2004hroot@98b4ef95c30c:/task# sed -i "s/res\.base_mean/res['baseMean']/" /tmp/write_outputs.py
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 /tmp/write_outputs.py
+[?2004l[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import os, json, numpy as np, pandas as pd
+[?2004l[?2004h> I='/task/input'; O='/task/output'
+[?2004l[?2004h> t2g=pd.read_csv(f'{I}/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> sheet=pd.read_csv(f'{I}/samples.tsv',sep='\t')
+[?2004l[?2004h> mail=pd.read_csv(f'{I}/previous_analysis/mail_top_responders.tsv',sep='\t')
+[?2004l[?2004h> files=['gene_counts.tsv','sample_qc.tsv','de_results.tsv','erratum.tsv']
+[?2004l[?2004h> print('files:')
+[?2004l[?2004h> for f in files:
+[?2004l[?2004h>     p=f'{O}/{f}'
+[?2004l[?2004h>     assert os.path.isfile(p), p
+[?2004l[?2004h>     print(f,os.path.getsize(p),'bytes')
+[?2004l[?2004h> 
+[?2004l[?2004h> c=pd.read_csv(f'{O}/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert c.shape==(800,12)
+[?2004l[?2004h> assert list(c.columns)==list(sheet.sample_id)
+[?2004l[?2004h> assert list(c.index)==list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> assert c.notna().all().all() and np.isfinite(c.to_numpy()).all() and (c>=0).all().all()
+[?2004l[?2004h> print('gene_counts OK:',c.shape,'range',float(c.min().min()),float(c.max().max()))
+[?2004l[?2004h> 
+[?2004l[?2004h> q=pd.read_csv(f'{O}/sample_qc.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert q.shape[0]==12 and list(q.index)==list(sheet.sample_id)
+[?2004l[?2004h> assert set(q.inferred_sex)=={'F','M','mixed'}
+[?2004l[?2004h> assert set(q.condition_used)<= {'treated','vehicle','excluded'}
+[?2004l[?2004h> assert (q.condition_used=='excluded').sum()==1
+[?2004l[?2004h> print('sample_qc OK; inferred:',q.inferred_sex.value_counts().to_dict(),'used:',q.condition_used.value_counts().to_dict())
+[?2004l[?2004h> 
+[?2004l[?2004h> d=pd.read_csv(f'{O}/de_results.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert d.shape==(800,len(d.columns)) and list(d.index)==list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> assert np.isfinite(d.log2fc).all()
+[?2004l[?2004h> assert d.significant.isin([0,1]).all()
+[?2004l[?2004h> assert ((d.significant==1)==(d.padj.notna() & (d.padj<0.05))).all()
+[?2004l[?2004h> print('de_results OK: tested',int(d.padj.notna().sum()),'significant',int(d.significant.sum()),'finite log2fc',int(np.isfinite(d.log2fc).sum()))
+[?2004l[?2004h> 
+[?2004l[?2004h> e=pd.read_csv(f'{O}/erratum.tsv',sep='\t')
+[?2004l[?2004h> assert len(e)==len(mail)==40
+[?2004l[?2004h> assert list(e.gene_id)==list(mail.gene_id)
+[?2004l[?2004h> assert set(e.verdict)=={'confirmed','retracted'}
+[?2004l[?2004h> assert (e.verdict=='confirmed').sum()==e.significant.sum()
+[?2004l[?2004h> print('erratum OK:',e.verdict.value_counts().to_dict())
+[?2004l[?2004h> print('\nQC summary:')
+[?2004l[?2004h> print(q[['inferred_sex','sheet_condition','condition_used','assigned_reads','y_marker_reads','xist_reads']].to_string())
+[?2004l[?2004h> print('\nOutput file headers:')
+[?2004l[?2004h> for f in files:
+[?2004l[?2004h>     print(f+': '+open(f'{O}/{f}').readline().rstrip())
+[?2004l[?2004h> PY
+[?2004lfiles:
+gene_counts.tsv 111665 bytes
+sample_qc.tsv 1553 bytes
+de_results.tsv 61008 bytes
+erratum.tsv 2654 bytes
+gene_counts OK: (800, 12) range 0.0 3018.0
+sample_qc OK; inferred: {'F': 6, 'M': 5, 'mixed': 1} used: {'treated': 6, 'vehicle': 5, 'excluded': 1}
+de_results OK: tested 800 significant 74 finite log2fc 800
+erratum OK: {'retracted': 23, 'confirmed': 17}
+
+QC summary:
+          inferred_sex sheet_condition condition_used  assigned_reads  y_marker_reads  xist_reads
+sample_id                                                                                        
+RS28                 F         treated        treated       88259.999             0.0       113.0
+RS39                 M         treated        treated      100907.001           527.0         0.0
+RS43                 F         treated        vehicle       84961.001             0.0        69.0
+RS45             mixed         vehicle       excluded       83333.000           332.0        33.0
+RS49                 M         vehicle        treated       94695.996           517.0         0.0
+RS50                 M         vehicle        vehicle       78898.998           394.0         1.0
+RS52                 M         vehicle        vehicle       70579.996           382.0         0.0
+RS56                 F         treated        treated       89497.999             0.0       103.0
+RS66                 F         treated        treated       95659.004             0.0       147.0
+RS69                 M         treated        treated       92921.000           403.0         1.0
+RS78                 F         vehicle        vehicle       76737.998             0.0       139.0
+RS86                 F         vehicle        vehicle       83988.002             0.0       149.0
+
+Output file headers:
+gene_counts.tsv: gene_id	RS28	RS39	RS43	RS45	RS49	RS50	RS52	RS56	RS66	RS69	RS78	RS86
+sample_qc.tsv: sample_id	inferred_sex	condition_used	sheet_condition	sheet_donor_sex	library_prep_batch	assigned_reads	y_marker_reads	xist_reads	qc_note
+de_results.tsv: gene_id	gene_name	base_mean	log2fc	pvalue	padj	significant
+erratum.tsv: rank	gene_id	gene_name	log2fc	padj	significant	verdict
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np, glob, os, json
+[?2004l[?2004h> u=pd.read_csv('/tmp/rnaseq_u/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sr=pd.read_csv('/tmp/rnaseq_nobias/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('U vs SR maximum absolute difference:',round(float((u-sr).abs().max().max()),6))
+[?2004l[?2004h> print('Per-sample U-old maximum differences:')
+[?2004l[?2004h> print((u-old).abs().max().round(3).to_string())
+[?2004l[?2004h> print('\nMapping and assignment summary:')
+[?2004l[?2004h> for s in u.columns:
+[?2004l[?2004h>     with open(f'/tmp/rnaseq_u/quant/{s}/aux_info/meta_info.json') as f: m=json.load(f)
+[?2004l[?2004h>     print(s,'assigned',round(u[s].sum(),2),'mapped',m['num_mapped'],'/',m['num_processed'],f"({m['percent_mapped']:.2f}%)")
+[?2004l[?2004h> PY
+[?2004lU vs SR maximum absolute difference: 1524.0
+Per-sample U-old maximum differences:
+RS28    1095.000
+RS39    1524.000
+RS43     564.000
+RS45     463.000
+RS49    1260.000
+RS50     714.000
+RS52     464.000
+RS56    1482.000
+RS66    1925.000
+RS69    1088.000
+RS78     440.000
+RS86     470.001
+
+Mapping and assignment summary:
+RS28 assigned 88260.0 mapped 88260 / 91776 (96.17%)
+RS39 assigned 100907.0 mapped 100907 / 104895 (96.20%)
+RS43 assigned 84961.0 mapped 84961 / 88346 (96.17%)
+RS45 assigned 83333.0 mapped 83333 / 86506 (96.33%)
+RS49 assigned 94696.0 mapped 94696 / 98386 (96.25%)
+RS50 assigned 78899.0 mapped 78899 / 81961 (96.26%)
+RS52 assigned 70580.0 mapped 70580 / 73169 (96.46%)
+RS56 assigned 89498.0 mapped 89498 / 92995 (96.24%)
+RS66 assigned 95659.0 mapped 95659 / 99360 (96.28%)
+RS69 assigned 92921.0 mapped 92921 / 96482 (96.31%)
+RS78 assigned 76738.0 mapped 76738 / 79688 (96.30%)
+RS86 assigned 83988.0 mapped 83988 / 87281 (96.23%)
+[?2004hroot@98b4ef95c30c:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t'); m=dict(zip(t2g.transcript_id,t2g.gene_id))
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> for s in ['RS56','RS66']:
+[?2004l[?2004h>     vals={}
+[?2004l[?2004h>     for tag in ['a','b']:
+[?2004l[?2004h>         q=pd.read_csv(f'/tmp/repro/{tag}/{s}/quant.sf',sep='\t')
+[?2004l[?2004h>         vals[tag]=q.groupby(q.Name.map(m))['NumReads'].sum()
+[?2004l[?2004h>     print(s,'one-vs-four-thread maxdiff',round(float((vals['a']-vals['b']).abs().max()),8),'one-vs-old maxdiff',round(float((vals['a']-old[s]).abs().max()),3))
+[?2004l[?2004h> PY
+[?2004lRS56 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1482.0
+RS66 one-vs-four-thread maxdiff 0.0 one-vs-old maxdiff 1925.0
+[?2004hroot@98b4ef95c30c:/task# 

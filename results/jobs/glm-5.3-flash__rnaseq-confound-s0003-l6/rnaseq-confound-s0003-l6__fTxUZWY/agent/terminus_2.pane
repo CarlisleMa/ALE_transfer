@@ -1,0 +1,348 @@
+[?2004hroot@ee66aa67aad6:/task# find /task/input -maxdepth 3 -type f -printf '%p\t%k KB\n' | sort
+[?2004l/task/input/fastq/RS28.fastq.gz	1764 KB
+/task/input/fastq/RS39.fastq.gz	2020 KB
+/task/input/fastq/RS43.fastq.gz	1704 KB
+/task/input/fastq/RS45.fastq.gz	1668 KB
+/task/input/fastq/RS49.fastq.gz	1892 KB
+/task/input/fastq/RS50.fastq.gz	1580 KB
+/task/input/fastq/RS52.fastq.gz	1412 KB
+/task/input/fastq/RS56.fastq.gz	1792 KB
+/task/input/fastq/RS66.fastq.gz	1912 KB
+/task/input/fastq/RS69.fastq.gz	1856 KB
+/task/input/fastq/RS78.fastq.gz	1536 KB
+/task/input/fastq/RS86.fastq.gz	1684 KB
+/task/input/lab_notes.md	4 KB
+/task/input/previous_analysis/HANDOVER.md	4 KB
+/task/input/previous_analysis/de_draft.tsv	44 KB
+/task/input/previous_analysis/gene_counts_merged.tsv	60 KB
+/task/input/previous_analysis/mail_top_responders.tsv	4 KB
+/task/input/previous_analysis/scripts/01_quantify.sh	4 KB
+/task/input/previous_analysis/scripts/02_merge_counts.py	4 KB
+/task/input/previous_analysis/scripts/03_de.py	4 KB
+/task/input/reference/transcripts.fa.gz	696 KB
+/task/input/reference/tx2gene.tsv	40 KB
+/task/input/samples.tsv	4 KB
+[?2004hroot@ee66aa67aad6:/task# printf '\n--- samples.tsv ---\n'; cat /task/input/samples.tsv; printf '\n--- lab_notes.md ---\n'; cat /task/input/lab_notes.md; printf '\n--- HANDOVER.md ---\n'; cat /task/input/previous_analysis/HANDOVER.md
+[?2004l
+--- samples.tsv ---
+sample_id	condition	donor_id	donor_sex	library_prep_batch	fastq_file
+RS28	treated	D909	F	2024-06-04	RS28.fastq.gz
+RS39	treated	D428	M	2024-05-14	RS39.fastq.gz
+RS43	treated	D672	M	2024-06-04	RS43.fastq.gz
+RS45	vehicle	D503	M	2024-05-14	RS45.fastq.gz
+RS49	vehicle	D489	F	2024-05-14	RS49.fastq.gz
+RS50	vehicle	D485	M	2024-06-04	RS50.fastq.gz
+RS52	vehicle	D268	M	2024-05-14	RS52.fastq.gz
+RS56	treated	D371	F	2024-06-04	RS56.fastq.gz
+RS66	treated	D834	F	2024-06-04	RS66.fastq.gz
+RS69	treated	D434	M	2024-06-04	RS69.fastq.gz
+RS78	vehicle	D300	F	2024-05-14	RS78.fastq.gz
+RS86	vehicle	D574	F	2024-05-14	RS86.fastq.gz
+
+--- lab_notes.md ---
+# Wet-lab notes: compound vs vehicle, primary cells
+
+- Cells: primary cells from 12 unrelated donors (one culture per donor), passage 2.
+- Treatment: compound at 1 uM or vehicle (0.1% DMSO) for 24 h; one condition per donor.
+- RNA: column purification with on-column DNase; RIN >= 8.9 for all samples.
+- Gene panel: the transcripts in `reference/` (targeted panel plus sex-chromosome control genes).
+- Library prep: poly-A selection, unstranded. Two prep sessions because the first kit lot ran out: 2024-05-14 (6 libraries, kit lot A, operator 1) and 2024-06-04 (6 libraries, kit lot B, operator 2, different PCR cycler). The session of each library is in the sample sheet.
+- Sequencing: all libraries pooled equimolar on one lane, 50-cycle single read. The core delivered adapter-trimmed reads; read names and base qualities were stripped to placeholders by their export tool.
+
+--- HANDOVER.md ---
+# Hand-over note: compound vs vehicle RNA-seq
+
+Written on my last day. Sorry for the state of things.
+
+## What is in this folder
+- `scripts/01_quantify.sh` - salmon index and quantification of the 12 FASTQ files
+- `scripts/02_merge_counts.py` - gene-level matrix from the salmon output
+- `scripts/03_de.py` - DESeq2 model (pydeseq2), compound vs vehicle
+- `gene_counts_merged.tsv` - gene-level matrix (output of 01 + 02)
+- `de_draft.tsv` - draft differential-expression table (output of 03)
+- `mail_top_responders.tsv` - the 40 genes I mailed to the wet lab on 2 July as "top responder genes"
+
+## Notes
+- The salmon output directories were on the scratch disk, which has been purged since. Only the
+  merged matrix is left.
+- The mailed list came from my first differential-expression run (smallest adjusted p-values first,
+  sex-chromosome control genes taken out). The table of that run was overwritten; `de_draft.tsv` is
+  from a later run.
+- Samples were used as listed in the sample sheet.
+- The wet lab has started to order qPCR primers for the mailed genes, so they need to know soon
+  which of them hold up.
+- All scripts take their paths as arguments, see the usage line at the top of each.
+[?2004hroot@ee66aa67aad6:/task# for f in /task/input/previous_analysis/scripts/*; do printf '\n--- %s ---\n' "$f"; sed -n '1,240p' "$f"; done
+[?2004l
+--- /task/input/previous_analysis/scripts/01_quantify.sh ---
+#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+
+--- /task/input/previous_analysis/scripts/02_merge_counts.py ---
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+
+--- /task/input/previous_analysis/scripts/03_de.py ---
+#!/usr/bin/env python3
+"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+"""
+import os
+import sys
+
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+names = names.set_index("gene_id")["gene_name"]
+
+meta = pd.DataFrame({"condition": samples["condition"],
+                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+mat = counts[meta.index].T.round().astype(int)
+dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+dds.deseq2()
+st = DeseqStats(dds, contrast=["condition", "vehicle", "treated"], alpha=0.05, quiet=True, n_cpus=2)
+st.summary()
+res = st.results_df.reindex(counts.index)
+padj = res["padj"]
+table = pd.DataFrame({"gene_id": counts.index,
+                      "gene_name": names.reindex(counts.index).values,
+                      "base_mean": res["baseMean"].round(2).values,
+                      "log2fc": (res["log2FoldChange"]).round(4).values,
+                      "pvalue": res["pvalue"].values,
+                      "padj": padj.values})
+table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004hroot@ee66aa67aad6:/task# printf '\n--- previous counts head ---\n'; head -n 8 /task/input/previous_analysis/gene_counts_merged.tsv; printf '\n--- DE draft head ---\n'; head -n 12 /task/input/previous_analysis/de_draft.tsv; printf '\n--- mailed genes ---\n'; cat /task/input/previous_analysis/mail_top_responders.tsv
+[?2004l
+--- previous counts head ---
+gene_id	RS28	RS39	RS43	RS45	RS49	RS50	RS52	RS56	RS66	RS69	RS78	RS86
+ENSG00000290147	53.0	43.0	42.0	27.0	30.0	26.0	30.0	6.0	31.0	41.0	31.0	26.0
+ENSG00000154265	11.0	19.0	11.0	9.0	28.0	7.0	8.0	2.0	2.0	13.0	2.0	16.0
+ENSG00000135205	26.0	56.0	39.0	35.0	46.0	27.0	27.0	9.0	34.0	56.0	34.0	55.0
+ENSG00000111241	63.0	132.0	81.0	119.0	127.0	71.0	84.0	27.0	111.0	80.0	111.0	96.0
+ENSG00000107164	19.0	33.0	25.0	33.0	37.0	16.0	26.0	11.0	37.0	16.0	37.0	33.0
+ENSG00000137868	9.0	19.0	28.0	19.0	19.0	18.0	14.0	5.0	22.0	23.0	22.0	19.0
+ENSG00000119778	33.0	56.0	26.0	44.0	25.0	29.0	25.0	23.0	29.0	47.0	29.0	23.0
+
+--- DE draft head ---
+gene_id	gene_name	base_mean	log2fc	pvalue	padj
+ENSG00000290147	GUCA1ANB-GUCA1A	29.96	-0.4158	0.0770316	0.994964
+ENSG00000154265	ABCA5	9.74	0.2143	0.701381	0.994964
+ENSG00000135205	CCDC146	34.23	-0.0494	0.843285	0.994964
+ENSG00000111241	FGF6	85.92	0.2196	0.253563	0.994964
+ENSG00000107164	FUBP3	25.6	0.255	0.327309	0.994964
+ENSG00000137868	STRA6	16.91	-0.023	0.931913	0.994964
+ENSG00000119778	ATAD2B	31.98	-0.4335	0.093953	0.994964
+ENSG00000080823	MOK	3.81	0.9981	0.206373	0.994964
+ENSG00000143365	RORC	13.93	-0.3991	0.241213	0.994964
+ENSG00000136754	ABI1	7.11	0.0395	0.938313	0.994964
+ENSG00000163806	SPDYA	33.92	-0.0879	0.864331	0.994964
+
+--- mailed genes ---
+rank	gene_id	gene_name
+1	ENSG00000054282	SDCCAG8
+2	ENSG00000289604	CTAGE8
+3	ENSG00000080166	DCT
+4	ENSG00000110400	NECTIN1
+5	ENSG00000130818	ZNF426
+6	ENSG00000178537	SLC25A20
+7	ENSG00000136536	MARCHF7
+8	ENSG00000170515	PA2G4
+9	ENSG00000153140	CETN3
+10	ENSG00000216490	IFI30
+11	ENSG00000186442	KRT3
+12	ENSG00000237988	OR2I1P
+13	ENSG00000180917	CMTR2
+14	ENSG00000156206	CFAP161
+15	ENSG00000103226	NOMO3
+16	ENSG00000136840	ST6GALNAC4
+17	ENSG00000064989	CALCRL
+18	ENSG00000137142	IGFBPL1
+19	ENSG00000038945	MSR1
+20	ENSG00000111144	LTA4H
+21	ENSG00000196535	MYO18A
+22	ENSG00000198844	ARHGEF15
+23	ENSG00000283632	EXOC3L2
+24	ENSG00000171495	MROH2B
+25	ENSG00000184616	SPDYE12
+26	ENSG00000017427	IGF1
+27	ENSG00000094796	KRT31
+28	ENSG00000159200	RCAN1
+29	ENSG00000143156	NME7
+30	ENSG00000290147	GUCA1ANB-GUCA1A
+31	ENSG00000061794	MRPS35
+32	ENSG00000119778	ATAD2B
+33	ENSG00000182348	ZNF804B
+34	ENSG00000154310	TNIK
+35	ENSG00000184599	TAFA3
+36	ENSG00000152284	TCF7L1
+37	ENSG00000181751	MACIR
+38	ENSG00000154258	ABCA9
+39	ENSG00000182330	PRAMEF8
+40	ENSG00000243073	PRAMEF4
+[?2004hroot@ee66aa67aad6:/task# printf '\n--- tools ---\n'; salmon --version; python3 --version; python3 -c 'import pandas,statsmodels,sklearn,pydeseq2; print("pandas",pandas.__version__,"statsmodels",statsmodels.__version__,"sklearn",sklearn.__version__,"pydeseq2",pydeseq2.__version__)'
+[?2004l
+--- tools ---
+salmon 2.11.0
+Python 3.12.16
+pandas 3.1.1 statsmodels 0.14.6 sklearn 1.9.1 pydeseq2 0.5.4
+[?2004hroot@ee66aa67aad6:/task# for f in /task/input/previous_analysis/scripts/*; do echo "===== $f ====="; nl -ba "$f"; done
+[?2004l===== /task/input/previous_analysis/scripts/01_quantify.sh =====
+     1	#!/bin/bash
+     2	# Quantification of all libraries of the sample sheet with salmon.
+     3	# usage: bash 01_quantify.sh <work_dir>
+     4	# (PROJECT_INPUT overrides the input location, default /task/input)
+     5	set -euo pipefail
+     6	IN=${PROJECT_INPUT:-/task/input}
+     7	WORK=${1:?usage: 01_quantify.sh <work_dir>}
+     8	mkdir -p "$WORK/quant"
+     9	salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+    10	tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+    11	  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    12	    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+    13	done
+    14	echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+===== /task/input/previous_analysis/scripts/02_merge_counts.py =====
+     1	#!/usr/bin/env python3
+     2	"""Gene-level matrix from the salmon output of 01_quantify.sh.
+     3	usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+     4	"""
+     5	import os
+     6	import sys
+     7	
+     8	import pandas as pd
+     9	
+    10	IN = os.environ.get("PROJECT_INPUT", "/task/input")
+    11	work, out = sys.argv[1], sys.argv[2]
+    12	samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+    13	t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+    14	gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+    15	cols = {}
+    16	for sid in samples["sample_id"]:
+    17	    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    18	    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+    19	matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+    20	matrix.index.name = "gene_id"
+    21	matrix.round(3).to_csv(out, sep="\t")
+===== /task/input/previous_analysis/scripts/03_de.py =====
+     1	#!/usr/bin/env python3
+     2	"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+     3	usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+     4	"""
+     5	import os
+     6	import sys
+     7	
+     8	import pandas as pd
+     9	from pydeseq2.dds import DeseqDataSet
+    10	from pydeseq2.ds import DeseqStats
+    11	IN = os.environ.get("PROJECT_INPUT", "/task/input")
+    12	counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+    13	sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+    14	samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+    15	names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+    16	names = names.set_index("gene_id")["gene_name"]
+    17	
+    18	meta = pd.DataFrame({"condition": samples["condition"],
+    19	                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+    20	mat = counts[meta.index].T.round().astype(int)
+    21	dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+    22	dds.deseq2()
+    23	st = DeseqStats(dds, contrast=["condition", "vehicle", "treated"], alpha=0.05, quiet=True, n_cpus=2)
+    24	st.summary()
+    25	res = st.results_df.reindex(counts.index)
+    26	padj = res["padj"]
+    27	table = pd.DataFrame({"gene_id": counts.index,
+    28	                      "gene_name": names.reindex(counts.index).values,
+    29	                      "base_mean": res["baseMean"].round(2).values,
+    30	                      "log2fc": (res["log2FoldChange"]).round(4).values,
+    31	                      "pvalue": res["pvalue"].values,
+    32	                      "padj": padj.values})
+    33	table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004hroot@ee66aa67aad6:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> s=pd.read_csv('/task/input/samples.tsv',sep='\t')
+[?2004l[?2004h> t=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> c=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t')
+[?2004l[?2004h> print('samples:',len(s), 'transcripts:',len(t), 'unique genes:',t.gene_id.nunique(), 'count matrix:',c.shape)
+[?2004l[?2004h> print('conditions:',s.condition.value_counts().to_dict())
+[?2004l[?2004h> print('session balance:')
+[?2004l[?2004h> print(pd.crosstab(s.condition,s.library_prep_batch))
+[?2004l[?2004h> print('\nPrevious per-sample totals:')
+[?2004l[?2004h> print(c.set_index('gene_id').sum().sort_values().to_string())
+[?2004l[?2004h> PY
+[?2004lsamples: 12 transcripts: 960 unique genes: 800 count matrix: (800, 13)
+conditions: {'treated': 6, 'vehicle': 6}
+session balance:
+library_prep_batch  2024-05-14  2024-06-04
+condition                                 
+treated                      1           5
+vehicle                      5           1
+
+Previous per-sample totals:
+RS56    17715.999
+RS52    35411.001
+RS78    38199.000
+RS66    38199.000
+RS50    39419.000
+RS45    41747.001
+RS86    41984.999
+RS43    42573.999
+RS28    44015.003
+RS69    46450.002
+RS49    47352.998
+RS39    50284.001
+[?2004hroot@ee66aa67aad6:/task# for f in /task/input/fastq/*.fastq.gz; do n=$(gzip -cd "$f" | awk 'END{print NR/4}'); printf '%s\t%s\n' "$(basename "$f")" "$n"; done
+[?2004lRS28.fastq.gz	91776
+RS39.fastq.gz	104895
+RS43.fastq.gz	88346
+RS45.fastq.gz	86506
+RS49.fastq.gz	98386
+RS50.fastq.gz	81961
+RS52.fastq.gz	73169
+RS56.fastq.gz	92995
+RS66.fastq.gz	99360
+RS69.fastq.gz	96482
+RS78.fastq.gz	79688
+RS86.fastq.gz	87281
+[?2004hroot@ee66aa67aad6:/task# rm -rf /task/output /task/work && mkdir -p /task/output /task/work && salmon index -t /task/input/reference/transcripts.fa.gz -i /task/work/index -k 31 -p 2 > /task/work/salmon_index.log 2>&1 && echo SALMON_INDEX_OK
+[?2004lSALMON_INDEX_OK
+[?2004hroot@ee66aa67aad6:/task# for f in /task/input/fastq/*.fastq.gz; do s=$(basename "$f" .fastq.gz); salmon quant -i /task/work/index -l A -1 "$f" -p 2 --validateMappings -o /task/work/quant/$s > /task/work/quant_${s}.log 2>&1 || { echo "FAILED $s"; tail -n 40 /task/work/quant_${s}.log; exit 1; }; done; echo SALMON_QUANT_OK
+[?2004lFAILED RS28
+[2m2026-11-13T04:27:03.360311Z[0m [33m WARN[0m [2msalmon[0m[2m:[0m --validateMappings has no effect (deprecated in salmon too): selective alignment is the default mapping mode; pass --sketch for pseudoalignment.
+Error: the number of -1 and -2 files must match
+logout

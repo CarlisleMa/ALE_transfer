@@ -1,0 +1,15 @@
+from openmm import app, unit, Vec3
+from parmed.openmm.topsystem import load_topology
+pdb=app.PDBFile('/opt/tools/lib/python3.12/site-packages/pdbfixer/tests/data/alanine-dipeptide.pdb')
+ff=app.ForceField('amber14-all.xml')
+mod=app.Modeller(pdb.topology,pdb.positions)
+box=unit.Quantity((Vec3(30,0,0),Vec3(0,32,0),Vec3(0,0,34)),unit.angstrom)
+mod.topology.setPeriodicBoxVectors(box)
+mod.addHydrogens(ff)
+sys=ff.createSystem(mod.topology,nonbondedMethod=app.PME,nonbondedCutoff=9.0*unit.angstrom)
+structure=load_topology(mod.topology,system=sys,xyz=mod.positions,box=[30.0,32.0,34.0,90.0,90.0,90.0])
+print('STRUCT',len(structure.atoms),len(structure.residues),sum(a.charge for a in structure.atoms),structure.box)
+print('RES',[(r.name,r.number,[a.name for a in r.atoms]) for r in structure.residues])
+structure.save('/task/output/test_parmed_openmm.prmtop',overwrite=True)
+structure.save('/task/output/test_parmed_openmm.inpcrd',format='rst7',overwrite=True)
+print('SAVED')

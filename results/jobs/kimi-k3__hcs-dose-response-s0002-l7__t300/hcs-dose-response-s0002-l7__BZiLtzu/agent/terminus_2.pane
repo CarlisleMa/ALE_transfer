@@ -1,0 +1,2249 @@
+[?2004hroot@3fb925ae59ab:/task# ls -la /task /task/input
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 13 03:04 .
+drwxr-xr-x 1 root root 4096 Nov 13 04:27 ..
+dr-xr-xr-x 1 root root 4096 Nov 13 03:04 input
+drwxr-xr-x 2 root root 4096 Nov 12 02:04 output
+drwxr-xr-x 1 root root 4096 Nov 13 03:04 software
+
+/task/input:
+total 32
+dr-xr-xr-x 1 root root 4096 Nov 13 03:04 .
+drwxr-xr-x 1 root root 4096 Nov 13 03:04 ..
+-r--r--r-- 1 root root 3557 Nov 13 03:04 analysis_sop.md
+dr-xr-xr-x 1 root root 4096 Nov 13 03:04 annotations
+-r--r--r-- 1 root root 1678 Nov 13 03:04 assay_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 13 03:04 flatfield
+dr-xr-xr-x 1 root root 4096 Nov 13 03:04 images
+-r--r--r-- 1 root root 2475 Nov 13 03:04 plate_layout.tsv
+[?2004hroot@3fb925ae59ab:/task# cat /task/input/analysis_sop.md
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@3fb925ae59ab:/task# cat /task/input/assay_notes.md
+[?2004l# Assay notes - plate HCS-4588 (imaged 2025-03-09)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+[?2004hroot@3fb925ae59ab:/task# cat /task/input/plate_layout.tsv
+[?2004lwell	compound	dose_uM	role
+A01	REF-INH	10	reference
+A02	CPD-3353	0.01372	compound
+A03	DMSO	0	vehicle
+A04	CPD-3353	0.04115	compound
+A05	CPD-3353	0.1235	compound
+A06	CPD-3353	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-3353	1.111	compound
+A09	CPD-3353	3.333	compound
+A10	CPD-3353	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-3353	30	compound
+B01	CPD-2467	0.01372	compound
+B02	DMSO	0	vehicle
+B03	CPD-2467	0.04115	compound
+B04	CPD-2467	0.1235	compound
+B05	CPD-2467	0.3704	compound
+B06	DMSO	0	vehicle
+B07	CPD-2467	1.111	compound
+B08	CPD-2467	3.333	compound
+B09	CPD-2467	10	compound
+B10	DMSO	0	vehicle
+B11	CPD-2467	30	compound
+B12	REF-INH	10	reference
+C01	CPD-1985	0.01372	compound
+C02	DMSO	0	vehicle
+C03	CPD-1985	0.04115	compound
+C04	REF-INH	10	reference
+C05	CPD-1985	0.1235	compound
+C06	DMSO	0	vehicle
+C07	CPD-1985	0.3704	compound
+C08	CPD-1985	1.111	compound
+C09	CPD-1985	3.333	compound
+C10	DMSO	0	vehicle
+C11	CPD-1985	10	compound
+C12	CPD-1985	30	compound
+D01	DMSO	0	vehicle
+D02	CPD-1550	0.01372	compound
+D03	CPD-1550	0.04115	compound
+D04	CPD-1550	0.1235	compound
+D05	DMSO	0	vehicle
+D06	CPD-1550	0.3704	compound
+D07	REF-INH	10	reference
+D08	CPD-1550	1.111	compound
+D09	DMSO	0	vehicle
+D10	CPD-1550	3.333	compound
+D11	CPD-1550	10	compound
+D12	CPD-1550	30	compound
+E01	CPD-1142	0.01372	compound
+E02	REF-INH	10	reference
+E03	CPD-1142	0.04115	compound
+E04	DMSO	0	vehicle
+E05	CPD-1142	0.1235	compound
+E06	CPD-1142	0.3704	compound
+E07	CPD-1142	1.111	compound
+E08	DMSO	0	vehicle
+E09	CPD-1142	3.333	compound
+E10	CPD-1142	10	compound
+E11	CPD-1142	30	compound
+E12	DMSO	0	vehicle
+F01	CPD-7090	0.01372	compound
+F02	CPD-7090	0.04115	compound
+F03	CPD-7090	0.1235	compound
+F04	DMSO	0	vehicle
+F05	CPD-7090	0.3704	compound
+F06	CPD-7090	1.111	compound
+F07	CPD-7090	3.333	compound
+F08	DMSO	0	vehicle
+F09	CPD-7090	10	compound
+F10	REF-INH	10	reference
+F11	CPD-7090	30	compound
+F12	DMSO	0	vehicle
+G01	CPD-1987	0.01372	compound
+G02	CPD-1987	0.04115	compound
+G03	DMSO	0	vehicle
+G04	CPD-1987	0.1235	compound
+G05	CPD-1987	0.3704	compound
+G06	CPD-1987	1.111	compound
+G07	DMSO	0	vehicle
+G08	CPD-1987	3.333	compound
+G09	REF-INH	10	reference
+G10	CPD-1987	10	compound
+G11	DMSO	0	vehicle
+G12	CPD-1987	30	compound
+H01	DMSO	0	vehicle
+H02	CPD-5484	0.01372	compound
+H03	CPD-5484	0.04115	compound
+H04	CPD-5484	0.1235	compound
+H05	DMSO	0	vehicle
+H06	CPD-5484	0.3704	compound
+H07	CPD-5484	1.111	compound
+H08	CPD-5484	3.333	compound
+H09	DMSO	0	vehicle
+H10	CPD-5484	10	compound
+H11	REF-INH	10	reference
+H12	CPD-5484	30	compound
+[?2004hroot@3fb925ae59ab:/task# ls /task/input/annotations /task/input/images | head -50; ls /task/input/annotations | wc -l; ls /task/input/images | wc -l
+[?2004l/task/input/annotations:
+A08.tsv
+A12.tsv
+C10.tsv
+D01.tsv
+D12.tsv
+G03.tsv
+G10.tsv
+H12.tsv
+
+/task/input/images:
+A01_ch1.tif
+A01_ch2.tif
+A02_ch1.tif
+A02_ch2.tif
+A03_ch1.tif
+A03_ch2.tif
+A04_ch1.tif
+A04_ch2.tif
+A05_ch1.tif
+A05_ch2.tif
+A06_ch1.tif
+A06_ch2.tif
+A07_ch1.tif
+A07_ch2.tif
+A08_ch1.tif
+A08_ch2.tif
+A09_ch1.tif
+A09_ch2.tif
+A10_ch1.tif
+A10_ch2.tif
+A11_ch1.tif
+A11_ch2.tif
+A12_ch1.tif
+A12_ch2.tif
+B01_ch1.tif
+B01_ch2.tif
+B02_ch1.tif
+B02_ch2.tif
+B03_ch1.tif
+B03_ch2.tif
+B04_ch1.tif
+B04_ch2.tif
+B05_ch1.tif
+B05_ch2.tif
+B06_ch1.tif
+B06_ch2.tif
+B07_ch1.tif
+B07_ch2.tif
+B08_ch1.tif
+8
+192
+[?2004hroot@3fb925ae59ab:/task# ls -la /task/software; ls /task/output
+[?2004ltotal 12
+drwxr-xr-x 1 root root 4096 Nov 13 03:04 .
+drwxr-xr-x 1 root root 4096 Nov 13 03:04 ..
+-rwxr-xr-x 1 root root   49 Nov 13 03:04 README.txt
+[?2004hroot@3fb925ae59ab:/task# cat /task/software/README.txt; head -5 /task/input/annotations/A08.tsv; wc -l /task/input/annotations/*.tsv
+[?2004lAll tools are on PATH (conda env at /opt/tools).
+x_px	y_px
+112.5	19.7
+203.6	46.6
+80.6	64.2
+89.5	57.2
+  70 /task/input/annotations/A08.tsv
+  64 /task/input/annotations/A12.tsv
+ 116 /task/input/annotations/C10.tsv
+  67 /task/input/annotations/D01.tsv
+  70 /task/input/annotations/D12.tsv
+ 122 /task/input/annotations/G03.tsv
+ 124 /task/input/annotations/G10.tsv
+  67 /task/input/annotations/H12.tsv
+ 700 total
+[?2004hroot@3fb925ae59ab:/task# cd /task && python3 -c "
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> for f in ['images/A03_ch1.tif','images/A03_ch2.tif','flatfield/flat_ch1.tif','flatfield/flat_ch2.tif','flatfield/dark.tif']:
+[?2004l[?2004h>     im = tifffile.imread('/task/input/'+f)
+[?2004l[?2004h>     print(f, im.dtype, im.shape, im.min(), im.max(), np.median(im), im.mean())
+[?2004l[?2004h> "
+[?2004limages/A03_ch1.tif uint16 (320, 320) 105 2980 123.0 222.907236328125
+images/A03_ch2.tif uint16 (320, 320) 163 590 206.0 232.713466796875
+flatfield/flat_ch1.tif uint16 (320, 320) 1775 2514 2269.0 2258.509296875
+flatfield/flat_ch2.tif uint16 (320, 320) 1649 2213 2025.0 2016.85623046875
+flatfield/dark.tif uint16 (320, 320) 99 102 100.0 100.0012890625
+[?2004hroot@3fb925ae59ab:/task# python3 -c "import cellpose, torch, skimage, scipy, pandas; print(cellpose.__version__, torch.__version__)"
+[?2004lTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+AttributeError: module 'cellpose' has no attribute '__version__'
+[?2004hroot@3fb925ae59ab:/task# mkdir -p /task/work && cat > /task/work/explore.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def load(w,ch):
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{w}_ch{ch}.tif').astype(np.float32)
+[?2004l[?2004h>     fl = fl1 if ch==1 else fl2
+[?2004l[?2004h>     return (im-dark)/(fl-dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> wells = sorted(set(os.path.basename(p)[:3] for p in glob.glob(IN+'/images/*_ch1.tif')))
+[?2004l[?2004h> print(len(wells),'wells')
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for w in wells:
+[?2004l[?2004h>     c1 = load(w,1); c2 = load(w,2)
+[?2004l[?2004h>     g1 = np.hypot(*np.gradient(c1)).mean()
+[?2004l[?2004h>     g2 = np.hypot(*np.gradient(c2)).mean()
+[?2004l[?2004h>     # laplacian variance on ch1
+[?2004l[?2004h>     lv = ndi.laplace(c1).var()
+[?2004l[?2004h>     rows.append((w, g1, g2, lv, c1.mean(), c2.mean(), np.median(c2)))
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> df = pd.DataFrame(rows, columns=['well','grad1','grad2','lapvar1','mean1','mean2','med2'])
+[?2004l[?2004h> df['g1n'] = df.grad1/df.grad1.median()
+[?2004l[?2004h> df.sort_values('grad1', inplace=True)
+[?2004l[?2004h> print(df.to_string(index=False, float_format=lambda v: f'{v:.4f}'))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# python3 /task/work/explore.py
+[?2004l96 wells
+well  grad1  grad2  lapvar1  mean1  mean2   med2    g1n
+ H01 0.0054 0.0039   0.0007 0.0175 0.0424 0.0388 0.2727
+ H03 0.0067 0.0050   0.0011 0.0202 0.0613 0.0553 0.3420
+ H04 0.0078 0.0055   0.0010 0.0235 0.0556 0.0456 0.3951
+ D06 0.0081 0.0050   0.0004 0.0804 0.0859 0.0656 0.4101
+ E09 0.0082 0.0049   0.0004 0.0815 0.0986 0.0891 0.4181
+ B01 0.0085 0.0032   0.0013 0.0249 0.0413 0.0412 0.4315
+ F07 0.0095 0.0062   0.0004 0.0824 0.1173 0.0907 0.4824
+ H05 0.0104 0.0070   0.0013 0.0320 0.0820 0.0666 0.5291
+ D07 0.0108 0.0059   0.0004 0.0840 0.0931 0.0663 0.5463
+ E07 0.0110 0.0041   0.0004 0.0861 0.0711 0.0691 0.5589
+ E01 0.0114 0.0030   0.0013 0.0417 0.0372 0.0372 0.5787
+ B12 0.0121 0.0099   0.0013 0.0417 0.1134 0.0848 0.6152
+ H07 0.0124 0.0079   0.0013 0.0427 0.0854 0.0648 0.6273
+ F01 0.0125 0.0043   0.0012 0.0449 0.0402 0.0322 0.6349
+ H06 0.0127 0.0080   0.0012 0.0455 0.0775 0.0557 0.6437
+ B05 0.0129 0.0040   0.0019 0.0354 0.0511 0.0477 0.6571
+ B03 0.0130 0.0036   0.0019 0.0355 0.0531 0.0525 0.6610
+ H02 0.0131 0.0058   0.0014 0.0484 0.0653 0.0527 0.6625
+ B07 0.0132 0.0053   0.0019 0.0365 0.0620 0.0533 0.6707
+ H10 0.0135 0.0099   0.0014 0.0473 0.1151 0.0869 0.6868
+ H09 0.0136 0.0100   0.0014 0.0483 0.1185 0.0900 0.6885
+ B08 0.0136 0.0072   0.0020 0.0383 0.0862 0.0709 0.6908
+ A02 0.0137 0.0031   0.0014 0.0491 0.0394 0.0393 0.6931
+ H08 0.0138 0.0089   0.0014 0.0477 0.0954 0.0701 0.7020
+ F12 0.0138 0.0117   0.0014 0.0476 0.1452 0.1096 0.7028
+ A01 0.0139 0.0052   0.0013 0.0524 0.0478 0.0358 0.7042
+ H12 0.0139 0.0048   0.0015 0.0497 0.1014 0.1007 0.7070
+ H11 0.0139 0.0113   0.0014 0.0507 0.1364 0.1010 0.7077
+ C01 0.0140 0.0053   0.0013 0.0505 0.0509 0.0384 0.7126
+ D01 0.0141 0.0052   0.0014 0.0505 0.0508 0.0391 0.7137
+ D12 0.0141 0.0106   0.0015 0.0513 0.1286 0.0969 0.7164
+ A12 0.0142 0.0116   0.0014 0.0500 0.1239 0.0884 0.7207
+ A04 0.0142 0.0067   0.0014 0.0491 0.0662 0.0491 0.7207
+ A11 0.0143 0.0101   0.0015 0.0518 0.1130 0.0818 0.7250
+ A09 0.0144 0.0094   0.0015 0.0502 0.1059 0.0785 0.7301
+ C12 0.0145 0.0110   0.0015 0.0507 0.1506 0.1176 0.7354
+ A10 0.0145 0.0095   0.0015 0.0519 0.1060 0.0781 0.7369
+ A03 0.0147 0.0062   0.0015 0.0565 0.0691 0.0548 0.7451
+ G01 0.0147 0.0029   0.0014 0.0484 0.0335 0.0334 0.7478
+ A06 0.0148 0.0067   0.0015 0.0544 0.0668 0.0478 0.7500
+ A08 0.0149 0.0094   0.0014 0.0517 0.1212 0.0966 0.7539
+ G12 0.0149 0.0113   0.0016 0.0504 0.1349 0.1011 0.7575
+ E12 0.0150 0.0112   0.0015 0.0535 0.1258 0.0911 0.7590
+ A05 0.0155 0.0065   0.0017 0.0573 0.0577 0.0406 0.7845
+ A07 0.0158 0.0082   0.0015 0.0586 0.0793 0.0545 0.8013
+ B09 0.0177 0.0089   0.0025 0.0487 0.0978 0.0732 0.8978
+ B11 0.0181 0.0126   0.0021 0.0569 0.1332 0.0928 0.9191
+ E02 0.0191 0.0038   0.0022 0.0676 0.0634 0.0633 0.9675
+ E03 0.0203 0.0038   0.0024 0.0720 0.0618 0.0617 1.0325
+ C08 0.0217 0.0112   0.0024 0.0770 0.1078 0.0703 1.1030
+ G05 0.0224 0.0076   0.0024 0.0754 0.1433 0.1299 1.1347
+ G04 0.0226 0.0074   0.0023 0.0791 0.2281 0.2251 1.1470
+ B04 0.0226 0.0039   0.0025 0.0803 0.0652 0.0650 1.1475
+ G11 0.0226 0.0135   0.0025 0.0807 0.1248 0.0753 1.1480
+ D02 0.0226 0.0034   0.0024 0.0773 0.0427 0.0409 1.1490
+ C06 0.0227 0.0096   0.0025 0.0813 0.0954 0.0651 1.1508
+ C10 0.0227 0.0130   0.0024 0.0791 0.1341 0.0889 1.1517
+ C11 0.0230 0.0145   0.0024 0.0786 0.1812 0.1317 1.1669
+ G08 0.0232 0.0116   0.0024 0.0801 0.1337 0.0960 1.1794
+ G06 0.0234 0.0092   0.0024 0.0816 0.1029 0.0752 1.1855
+ E05 0.0234 0.0037   0.0027 0.0780 0.0566 0.0560 1.1869
+ D10 0.0235 0.0139   0.0024 0.0799 0.1349 0.0848 1.1940
+ D05 0.0235 0.0089   0.0026 0.0816 0.1032 0.0762 1.1951
+ C09 0.0236 0.0137   0.0024 0.0788 0.1158 0.0655 1.1960
+ F03 0.0237 0.0076   0.0026 0.0792 0.0560 0.0304 1.2031
+ E06 0.0237 0.0038   0.0024 0.0821 0.0593 0.0590 1.2034
+ D03 0.0238 0.0048   0.0026 0.0853 0.0656 0.0592 1.2088
+ D08 0.0238 0.0113   0.0026 0.0787 0.0947 0.0545 1.2093
+ F09 0.0239 0.0042   0.0024 0.0830 0.0747 0.0742 1.2103
+ G10 0.0239 0.0144   0.0026 0.0849 0.1343 0.0827 1.2138
+ G09 0.0240 0.0129   0.0025 0.0836 0.1293 0.0857 1.2187
+ E08 0.0240 0.0116   0.0026 0.0822 0.1215 0.0822 1.2203
+ F11 0.0241 0.0144   0.0027 0.0835 0.1548 0.1042 1.2233
+ D09 0.0241 0.0135   0.0025 0.0814 0.1479 0.1026 1.2252
+ G07 0.0242 0.0109   0.0026 0.0816 0.1250 0.0895 1.2272
+ F06 0.0242 0.0091   0.0026 0.0825 0.0895 0.0608 1.2293
+ C03 0.0243 0.0034   0.0027 0.0808 0.0485 0.0483 1.2327
+ E04 0.0243 0.0091   0.0026 0.0846 0.0962 0.0679 1.2332
+ C05 0.0243 0.0094   0.0027 0.0795 0.0759 0.0445 1.2349
+ B06 0.0245 0.0108   0.0025 0.0818 0.1004 0.0646 1.2418
+ B10 0.0245 0.0139   0.0026 0.0831 0.1609 0.1132 1.2439
+ G02 0.0246 0.0111   0.0026 0.0848 0.5698 0.5696 1.2475
+ C04 0.0246 0.0087   0.0026 0.0813 0.0741 0.0457 1.2482
+ B02 0.0247 0.0076   0.0026 0.0829 0.0650 0.0421 1.2529
+ E11 0.0247 0.0145   0.0026 0.0839 0.1637 0.1154 1.2557
+ G03 0.0248 0.0085   0.0028 0.0835 0.0738 0.0471 1.2584
+ F08 0.0250 0.0112   0.0028 0.0839 0.1037 0.0629 1.2680
+ F02 0.0250 0.0059   0.0027 0.0862 0.0619 0.0477 1.2694
+ C02 0.0252 0.0077   0.0027 0.0851 0.0675 0.0442 1.2765
+ D11 0.0252 0.0046   0.0027 0.0878 0.0890 0.0883 1.2807
+ C07 0.0254 0.0117   0.0027 0.0845 0.1097 0.0699 1.2865
+ F05 0.0254 0.0077   0.0027 0.0865 0.0742 0.0500 1.2873
+ F10 0.0254 0.0148   0.0029 0.0861 0.1482 0.0939 1.2881
+ E10 0.0254 0.0097   0.0027 0.0864 0.1217 0.0939 1.2897
+ D04 0.0257 0.0066   0.0028 0.0869 0.0727 0.0558 1.3019
+ F04 0.0261 0.0073   0.0029 0.0868 0.0714 0.0507 1.3253
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/explore2.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, time
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def load(w,ch):
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{w}_ch{ch}.tif').astype(np.float32)
+[?2004l[?2004h>     if ch==1: return (im-dark)/(fl1-dark)
+[?2004l[?2004h>     fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h>     return (im-dark)/(fl2-dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+[?2004l[?2004h> for w,df in sorted(ann.items()):
+[?2004l[?2004h>     print(w, len(df), 'pts; x range', df.x_px.min(), df.x_px.max(), 'y range', df.y_px.min(), df.y_px.max())
+[?2004l[?2004h> 
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for w in sorted(ann):
+[?2004l[?2004h>     c1 = load(w,1)
+[?2004l[?2004h>     t=time.time()
+[?2004l[?2004h>     masks, flows, styles = model.eval(c1, channels=[0,0], diameter=None)
+[?2004l[?2004h>     n = masks.max()
+[?2004l[?2004h>     man = ann[w]
+[?2004l[?2004h>     xs = np.clip(np.round(man.x_px.values).astype(int),0,319)
+[?2004l[?2004h>     ys = np.clip(np.round(man.y_px.values).astype(int),0,319)
+[?2004l[?2004h>     hit = masks[ys,xs]>0
+[?2004l[?2004h>     print(f'{w}: cellpose={n} manual={len(man)} pts_in_mask={hit.sum()} time={time.time()-t:.1f}s')
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     minor = np.array([p.minor_axis_length for p in props])
+[?2004l[?2004h>     major = np.array([p.major_axis_length for p in props])
+[?2004l[?2004h>     area = np.array([p.area for p in props])
+[?2004l[?2004h>     print('  minor pct:', np.percentile(minor,[0,1,5,25,50,75,95,99,100]).round(2))
+[?2004l[?2004h>     print('  major pct:', np.percentile(major,[0,5,50,95,100]).round(2))
+[?2004l[?2004h>     print('  area pct:', np.percentile(area,[0,1,5,50,95,100]).round(1))
+[?2004l[?2004h>     # edge touching
+[?2004l[?2004h>     edge_tr = sum(1 for p in props if p.bbox[0]==0 or p.bbox[1]==0)
+[?2004l[?2004h>     edge_br = sum(1 for p in props if p.bbox[2]==320 or p.bbox[3]==320)
+[?2004l[?2004h>     print('  touch top/left:',edge_tr,' touch bottom/right:',edge_br)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# python3 /task/work/explore2.py
+[?2004lA08 69 pts; x range 8.3 304.5 y range 19.7 310.1
+A12 63 pts; x range 18.7 303.6 y range 24.3 309.7
+C10 115 pts; x range 25.7 302.8 y range 1.0 290.4
+D01 66 pts; x range 42.5 297.9 y range 92.2 309.7
+D12 69 pts; x range 1.0 293.4 y range 18.4 269.3
+G03 121 pts; x range 2.1 306.7 y range 9.8 310.1
+G10 123 pts; x range 1.9 309.7 y range 1.0 306.4
+H12 66 pts; x range 28.0 287.4 y range 35.4 306.0
+Traceback (most recent call last):
+  File "/task/work/explore2.py", line 23, in <module>
+    masks, flows, styles = model.eval(c1, channels=[0,0], diameter=None)
+    ^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 3)
+[?2004hroot@3fb925ae59ab:/task# sed -i 's/masks, flows, styles = model.eval/masks, flows, styles, diams = model.eval/; s/time={time.time()-t:.1f}s/time={time.time()-t:.1f}s diams={diams}/' /task/work/explore2.py && python3 /task/work/explore2.py
+[?2004lA08 69 pts; x range 8.3 304.5 y range 19.7 310.1
+A12 63 pts; x range 18.7 303.6 y range 24.3 309.7
+C10 115 pts; x range 25.7 302.8 y range 1.0 290.4
+D01 66 pts; x range 42.5 297.9 y range 92.2 309.7
+D12 69 pts; x range 1.0 293.4 y range 18.4 269.3
+G03 121 pts; x range 2.1 306.7 y range 9.8 310.1
+G10 123 pts; x range 1.9 309.7 y range 1.0 306.4
+H12 66 pts; x range 28.0 287.4 y range 35.4 306.0
+A08: cellpose=75 manual=69 pts_in_mask=67 time=185.0s diams=10.217717978886725
+  minor pct: [ 4.13  4.16  4.52  9.38 10.1  10.84 11.7  12.19 12.62]
+  major pct: [ 4.47  5.13 12.53 14.71 15.3 ]
+  area pct: [ 15.   15.7  17.7 101.  131.6 138. ]
+  touch top/left: 0  touch bottom/right: 2
+A12: cellpose=62 manual=63 pts_in_mask=57 time=186.2s diams=10.341765891652821
+  minor pct: [ 5.29  5.98  7.48  9.74 10.31 10.97 11.65 12.43 12.48]
+  major pct: [ 5.71  9.86 12.46 14.72 15.08]
+  area pct: [ 24.   39.9  58.3 100.5 131.  143. ]
+  touch top/left: 0  touch bottom/right: 4
+C10: cellpose=111 manual=115 pts_in_mask=106 time=183.2s diams=9.706684619910243
+  minor pct: [ 4.04  4.35  6.15  9.46 10.01 10.65 11.58 12.07 12.3 ]
+  major pct: [ 4.96  9.64 12.26 15.07 22.16]
+  area pct: [ 17.   17.1  46.5  96.  132.5 188. ]
+  touch top/left: 1  touch bottom/right: 0
+D01: cellpose=60 manual=66 pts_in_mask=55 time=152.1s diams=9.507891862878783
+  minor pct: [ 4.03  4.17  5.07  9.2  10.17 11.06 11.53 11.93 12.42]
+  major pct: [ 4.47  8.94 12.48 15.5  18.86]
+  area pct: [ 15.   15.6  37.  101.5 136.1 146. ]
+  touch top/left: 0  touch bottom/right: 2
+D12: cellpose=65 manual=69 pts_in_mask=62 time=135.3s diams=10.764051215546116
+  minor pct: [ 4.06  4.53  5.76  9.08 10.11 10.72 11.43 12.04 12.04]
+  major pct: [ 4.62  9.86 12.35 14.31 15.72]
+  area pct: [ 15.   18.2  46.8  97.  125.8 139. ]
+  touch top/left: 1  touch bottom/right: 0
+G03: cellpose=129 manual=121 pts_in_mask=108 time=155.4s diams=9.640875829802336
+  minor pct: [ 4.03  4.07  4.57  8.52  9.74 10.57 11.74 12.21 12.58]
+  major pct: [ 4.47  5.1  12.23 14.66 17.38]
+  area pct: [ 15.   15.3  18.4  94.  128.2 140. ]
+  touch top/left: 2  touch bottom/right: 3
+G10: cellpose=118 manual=123 pts_in_mask=111 time=82.1s diams=9.640875829802336
+  minor pct: [ 4.03  4.28  6.22  9.16  9.9  10.49 11.55 12.11 12.3 ]
+  major pct: [ 4.62  8.81 12.45 14.46 26.13]
+  area pct: [ 15.   16.3  42.8  97.5 124.3 209. ]
+  touch top/left: 4  touch bottom/right: 3
+H12: cellpose=64 manual=66 pts_in_mask=59 time=93.7s diams=9.304852983362556
+  minor pct: [ 4.    4.24  4.62  8.98  9.64 10.57 11.19 11.56 11.66]
+  major pct: [ 4.75  5.89 11.99 13.98 18.81]
+  area pct: [ 16.   16.6  22.5  92.5 118.2 139. ]
+  touch top/left: 0  touch bottom/right: 0
+[?2004hroot@3fb925ae59ab:/task# nproc; free -g | head -2
+[?2004l4
+               total        used        free      shared  buff/cache   available
+Mem:              15           7           6           0           2           8
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/seg_all.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, time, sys
+[?2004l[?2004h> import multiprocessing as mp
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'; OUT='/task/work/masks'
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> def worker(wq, tq):
+[?2004l[?2004h>     import torch
+[?2004l[?2004h>     torch.set_num_threads(max(1, 12//max(1,mp.cpu_count()//40)))
+[?2004l[?2004h>     torch.set_num_threads(2)
+[?2004l[?2004h>     from cellpose import models
+[?2004l[?2004h>     model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h>     dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h>     fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         w = wq.get()
+[?2004l[?2004h>         if w is None: break
+[?2004l[?2004h>         fp = f'{OUT}/{w}.npy'
+[?2004l[?2004h>         if os.path.exists(fp):
+[?2004l[?2004h>             tq.put((w,'cached')); continue
+[?2004l[?2004h>         im = tifffile.imread(f'{IN}/images/{w}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>         c1 = (im-dark)/(fl1-dark)
+[?2004l[?2004h>         t=time.time()
+[?2004l[?2004h>         masks, flows, styles, diams = model.eval(c1, channels=[0,0], diameter=None)
+[?2004l[?2004h>         np.save(fp, masks.astype(np.int32))
+[?2004l[?2004h>         tq.put((w, f'{masks.max()} cells {time.time()-t:.0f}s'))
+[?2004l[?2004h> 
+[?2004l[?2004h> def main():
+[?2004l[?2004h>     wells = sorted(set(os.path.basename(p)[:3] for p in glob.glob(IN+'/images/*_ch1.tif')))
+[?2004l[?2004h>     nproc = int(sys.argv[1]) if len(sys.argv)>1 else 8
+[?2004l[?2004h>     wq = mp.Queue(); tq = mp.Queue()
+[?2004l[?2004h>     for w in wells: wq.put(w)
+[?2004l[?2004h>     for _ in range(nproc): wq.put(None)
+[?2004l[?2004h>     ps = [mp.Process(target=worker, args=(wq,tq)) for _ in range(nproc)]
+[?2004l[?2004h>     for p in ps: p.start()
+[?2004l[?2004h>     done=0
+[?2004l[?2004h>     while done < len(wells):
+[?2004l[?2004h>         w,msg = tq.get()
+[?2004l[?2004h>         done+=1
+[?2004l[?2004h>         print(f'[{done}/{len(wells)}] {w}: {msg}', flush=True)
+[?2004l[?2004h>     for p in ps: p.join()
+[?2004l[?2004h>     print('ALL DONE')
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     main()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# nohup python3 /task/work/seg_all.py 10 > /task/work/seg.log 2>&1 &
+[?2004l[1] 624
+[?2004hroot@3fb925ae59ab:/task# echo started
+[?2004lstarted
+[?2004hroot@3fb925ae59ab:/task# kill %1; sleep 2; pkill -f seg_all.py; sleep 1; sed -i 's/torch.set_num_threads(max(1, 12\/\/max(1,mp.cpu_count()\/\/40)))/torch.set_num_threads(1)/; s/^    torch.set_num_threads(2)$/    pass/' /task/work/seg_all.py; grep -n 'set_num_threads' /task/work/seg_all.py
+[?2004l[1]+  Terminated              nohup python3 /task/work/seg_all.py 10 > /task/work/seg.log 2>&1
+nohup python3 /task/work/seg_all.py 4 > /task/work/seg.log 2>&1 &
+echo relaunched
+9:    torch.set_num_threads(1)
+[?2004hroot@3fb925ae59ab:/task# nohup python3 /task/work/seg_all.py 4 > /task/work/seg.log 2>&1 &
+[?2004l[1] 858
+[?2004hroot@3fb925ae59ab:/task# echo relaunched
+[?2004lrelaunched
+[?2004hroot@3fb925ae59ab:/task# sleep 60; tail -5 /task/work/seg.log
+[?2004lnohup: ignoring input
+[?2004hroot@3fb925ae59ab:/task# sleep 60; tail -10 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004lnohup: ignoring input
+0
+[?2004hroot@3fb925ae59ab:/task# sleep 90; tail -10 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004lnohup: ignoring input
+[1/96] A01: 43 cells 134s
+[2/96] A04: 68 cells 133s
+[3/96] A03: 44 cells 137s
+[4/96] A02: 67 cells 147s
+4
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/check_val.py << 'EOF'
+[?2004l[?2004h> import numpy as np, glob, os, pandas as pd
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> MINMINOR = 11.0/1.3  # px
+[?2004l[?2004h> H = W = 320
+[?2004l[?2004h> ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+[?2004l[?2004h> print('well manual raw filt edge_final')
+[?2004l[?2004h> for w in sorted(ann):
+[?2004l[?2004h>     fp=f'/task/work/masks/{w}.npy'
+[?2004l[?2004h>     if not os.path.exists(fp):
+[?2004l[?2004h>         print(w,'mask not ready'); continue
+[?2004l[?2004h>     masks = np.load(fp)
+[?2004l[?2004h>     raw = masks.max()
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     keep1 = [p for p in props if p.minor_axis_length >= MINMINOR]
+[?2004l[?2004h>     keep2 = [p for p in keep1 if not (p.bbox[2]==H or p.bbox[3]==W)]
+[?2004l[?2004h>     man=len(ann[w]); tol=max(3,0.1*man)
+[?2004l[?2004h>     print(f'{w} {man} {raw} {len(keep1)} {len(keep2)} tol={tol:.1f} pass={abs(len(keep2)-man)<=tol}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# sleep 45; tail -3 /task/work/seg.log
+[?2004l[2/96] A04: 68 cells 133s
+[3/96] A03: 44 cells 137s
+[4/96] A02: 67 cells 147s
+[?2004hroot@3fb925ae59ab:/task# sleep 240; tail -4 /task/work/seg.log
+[?2004l
+tail -4 /task/work/seg.log; ls /task/work/masks | wc -l
+[10/96] A10: 65 cells 95s
+[11/96] A09: 60 cells 100s
+[12/96] A12: 62 cells 108s
+[13/96] B02: 125 cells 137s
+[?2004hroot@3fb925ae59ab:/task# 
+[?2004l[?2004hroot@3fb925ae59ab:/task# tail -4 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[10/96] A10: 65 cells 95s
+[11/96] A09: 60 cells 100s
+[12/96] A12: 62 cells 108s
+[13/96] B02: 125 cells 137s
+13
+[?2004hroot@3fb925ae59ab:/task# python3 /task/work/check_val.py
+[?2004lwell manual raw filt edge_final
+A08 69 75 66 65 tol=6.9 pass=True
+A12 63 62 56 54 tol=6.3 pass=False
+C10 mask not ready
+D01 mask not ready
+D12 mask not ready
+G03 mask not ready
+G10 mask not ready
+H12 mask not ready
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/compute.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'; OUT='/task/output'; MASKS='/task/work/masks'
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> MINMINOR = 11.0/1.3  # 8.4615 px
+[?2004l[?2004h> H = W = 320
+[?2004l[?2004h> 
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl = {1: tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32),
+[?2004l[?2004h>       2: tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)}
+[?2004l[?2004h> 
+[?2004l[?2004h> def load(w,ch):
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{w}_ch{ch}.tif').astype(np.float32)
+[?2004l[?2004h>     return (im-dark)/(fl[ch]-dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv(IN+'/plate_layout.tsv', sep='\t')
+[?2004lnumerate(keep, start=1):
+        kept[masks==p.label] = i
+    cellmask_all[w] = kept
+    n = len(keep)
+    c2 = load(w,2)
+    if n>0:
+        cyto = cyto_mask(kept>0)
+        ring = (~ndi.binary_dilation(kept>0, iterations=5))
+        bg = np.median(c2[ring]) if ring.sum()>50 else np.median(c2)
+        vals = ndi.mean(c2, labels=cyto, index=np.arange(1,n+1))
+        marker = float(np.mean(vals - bg))
+    else:
+        marker = np.nan
+    rows.append((w, n, marker))
+meas = pd.DataFrame(rows, columns=['well','n_cells','marker_per_cell'])
+meas = meas.merge(qc[['well','qc_pass']], on='well')
+meas['marker_per_cell_out'] = meas.marker_per_cell.map(lambda v: 'NA' if pd.isna(v) else f'{v:.4f}')
+meas[['well','n_cells','marker_per_cell_out','qc_pass']].rename(columns={'marker_per_cell_out':'marker_per_cell'}).to_csv(OUT+'/well_measurements.tsv', sep='\t', index=False)
+print(meas.to_string(index=False))
+
+# ---- validation table ----
+ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+vrows=[]
+for w in sorted(ann):
+    man = len(ann[w]); pc = int(meas.loc[meas.well==w,'n_cells'].iloc[0])
+    tol = max(3, 0.1*man)
+    vrows.append((w, man, pc, abs(pc-man)<=tol))
+pd.DataFrame(vrows, columns=['field','manual_count','pipeline_count','pass'])[['field','manual_count','pipeline_count']].to_csv(OUT+'/validation.tsv', sep='\t', index=False)
+print('validation:', vrows)
+
+# ---- dose response ----
+df = layout.merge(meas, on='well')
+df = df[df.qc_pass==1]
+veh = df[df.role=='vehicle']
+veh_r1 = veh.n_cells.mean(); veh_r2 = veh.marker_per_cell.mean()
+print('vehicle means: n=', veh_r1, 'marker=', veh_r2)
+
+def logistic(c, bottom, ec50, h):
+    return bottom + (1-bottom)/(1+(c/ec50)**h)
+
+def fit_compound(sub, vehval, col):
+    d = sub.sort_values('dose_uM')
+    c = d.dose_uM.values.astype(float)
+    r = (d[col]/vehval).values.astype(float)
+    ok = ~np.isnan(r)
+    c, r = c[ok], r[ok]
+    cmax = c.max()
+    try:
+        p0=[max(0.0, min(0.5, r[-1])), np.median(c), 1.0]
+        popt,_ = curve_fit(logistic, c, r, p0=p0,
+                           bounds=([0.0, 1e-6, 0.05],[0.999, 1e3, 10.0]), maxfev=200000)
+        bottom, ec50, h = popt
+    except Exception as e:
+        # fallback: try a few inits
+        popt=None
+        for b0 in [0.0,0.2,0.5]:
+            for e0 in [0.1,1.0,10.0]:
+                for h0 in [0.5,1.0,2.0]:
+                    try:
+                        popt,_ = curve_fit(logistic, c, r, p0=[b0,e0,h0],
+                                           bounds=([0.0,1e-6,0.05],[0.999,1e3,10.0]), maxfev=200000)
+                        break
+                    except Exception: pass
+                if popt is not None: break
+            if popt is not None: break
+        if popt is None:
+            return 'inactive', (c,r,[?2004h> layout['well'] = layout['well'].str.strip()
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---- focus QC: normalized gradient sharpness on ch1, regression vs density ----
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for w in layout.well:
+[?2004l[?2004h>     c1 = load(w,1)
+[?2004l[?2004h>     g = np.hypot(*np.gradient(c1)).mean()
+[?2004l[?2004h>     rows.append((w, c1.mean(), g))
+[?2004l[?2004h> qc = pd.DataFrame(rows, columns=['well','mean1','grad1'])
+[?2004l[?2004h> # robust linear fit grad ~ mean (out-of-focus wells fall far below)
+[?2004l[?2004h> X = np.vstack([np.ones(len(qc)), qc.mean1]).T
+[?2004l[?2004h> coef, *_ = np.linalg.lstsq(X, qc.grad1, rcond=None)
+[?2004l[?2004h> resid = qc.grad1 - X@coef
+[?2004l[?2004h> mad = np.median(np.abs(resid-np.median(resid))) * 1.4826
+[?2004l[?2004h> qc['zres'] = (resid - np.median(resid))/ (mad if mad>0 else 1)
+[?2004l[?2004h> qc['qc_pass'] = (qc.zres > -4).astype(int)
+[?2004l[?2004h> print('QC failures:', qc.loc[qc.qc_pass==0,'well'].tolist())
+[?2004l[?2004h> print(qc.sort_values('zres').head(8).to_string(index=False))
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---- per-well segmentation-based readouts ----
+[?2004l[?2004h> def cyto_mask(nuc):
+[?2004l[?2004h>     m = np.zeros_like(nuc, dtype=bool)
+[?2004l[?2004h>     m[2:,:] |= nuc[:-2,:]
+[?2004l[?2004h>     m[:-2,:] |= nuc[2:,:]
+[?2004l[?2004h>     m[:,2:] |= nuc[:,:-2]
+[?2004l[?2004h>     m[:,:-2] |= nuc[:,2:]
+[?2004l[?2004h>     return m & ~nuc
+[?2004l[?2004h> 
+[?2004l[?2004h> cellmask_all = {}
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for w in layout.well:
+[?2004l[?2004h>     masks = np.load(f'{MASKS}/{w}.npy')
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     keep = [p for p in props if p.minor_axis_length >= MINMINOR and not (p.bbox[2]==H or p.bbox[3]==W)]
+[?2004l[?2004h>     kept = np.zeros_like(masks)
+[?2004l[?2004h>     for i,p in enumerate(keep, start=1):
+[?2004l[?2004h>         kept[masks==p.label] = i
+[?2004l[?2004h>     cellmask_all[w] = kept
+[?2004l[?2004h>     n = len(keep)
+[?2004l[?2004h>     c2 = load(w,2)
+[?2004l[?2004h>     if n>0:
+[?2004l[?2004h>         cyto = cyto_mask(kept>0)
+[?2004l[?2004h>         ring = (~ndi.binary_dilation(kept>0, iterations=5))
+[?2004l[?2004h>         bg = np.median(c2[ring]) if ring.sum()>50 else np.median(c2)
+[?2004l[?2004h>         vals = ndi.mean(c2, labels=cyto, index=np.arange(1,n+1))
+[?2004l[?2004h>         marker = float(np.mean(vals - bg))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         marker = np.nan
+[?2004l[?2004h>     rows.append((w, n, marker))
+[?2004l[?2004h> meas = pd.DataFrame(rows, columns=['well','n_cells','marker_per_cell'])
+[?2004l[?2004h> meas = meas.merge(qc[['well','qc_pass']], on='well')
+[?2004l[?2004h> meas['marker_per_cell_out'] = meas.marker_per_cell.map(lambda v: 'NA' if pd.isna(v) else f'{v:.4f}')
+[?2004l[?2004h> meas[['well','n_cells','marker_per_cell_out','qc_pass']].rename(columns={'marker_per_cell_out':'marker_per_cell'}).to_csv(OUT+'/well_measurements.tsv', sep='\t', index=False)
+[?2004l[?2004h> print(meas.to_string(index=False))
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---- validation table ----
+[?2004l[?2004h> ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+[?2004l[?2004h> vrows=[]
+[?2004l[?2004h> for w in sorted(ann):
+[?2004l[?2004h>     man = len(ann[w]); pc = int(meas.loc[meas.well==w,'n_cells'].iloc[0])
+[?2004l[?2004h>     tol = max(3, 0.1*man)
+[?2004l[?2004h>     vrows.append((w, man, pc, abs(pc-man)<=tol))
+[?2004l[?2004h> pd.DataFrame(vrows, columns=['field','manual_count','pipeline_count','pass'])[['field','manual_count','pipeline_count']].to_csv(OUT+'/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('validation:', vrows)
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---- dose response ----
+[?2004l[?2004h> df = layout.merge(meas, on='well')
+[?2004l[?2004h> df = df[df.qc_pass==1]
+[?2004l[?2004h> veh = df[df.role=='vehicle']
+[?2004l[?2004h> veh_r1 = veh.n_cells.mean(); veh_r2 = veh.marker_per_cell.mean()
+[?2004l[?2004h> print('vehicle means: n=', veh_r1, 'marker=', veh_r2)
+[?2004l[?2004h> 
+[?2004l[?2004h> def logistic(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1-bottom)/(1+(c/ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_compound(sub, vehval, col):
+[?2004l[?2004h>     d = sub.sort_values('dose_uM')
+[?2004l[?2004h>     c = d.dose_uM.values.astype(float)
+[?2004l[?2004h>     r = (d[col]/vehval).values.astype(float)
+[?2004l[?2004h>     ok = ~np.isnan(r)
+[?2004l[?2004h>     c, r = c[ok], r[ok]
+[?2004l[?2004h>     cmax = c.max()
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         p0=[max(0.0, min(0.5, r[-1])), np.median(c), 1.0]
+[?2004l[?2004h>         popt,_ = curve_fit(logistic, c, r, p0=p0,
+[?2004l[?2004h>                            bounds=([0.0, 1e-6, 0.05],[0.999, 1e3, 10.0]), maxfev=200000)
+[?2004l[?2004h>         bottom, ec50, h = popt
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         # fallback: try a few inits
+[?2004l[?2004h>         popt=None
+[?2004l[?2004h>         for b0 in [0.0,0.2,0.5]:
+[?2004l[?2004h>             for e0 in [0.1,1.0,10.0]:
+[?2004l[?2004h>                 for h0 in [0.5,1.0,2.0]:
+[?2004l[?2004h>                     try:
+[?2004l[?2004h>                         popt,_ = curve_fit(logistic, c, r, p0=[b0,e0,h0],
+[?2004l[?2004h>                                            bounds=([0.0,1e-6,0.05],[0.999,1e3,10.0]), maxfev=200000)
+[?2004l[?2004h>                         break
+[?2004l[?2004h>                     except Exception: pass
+[?2004l[?2004h>                 if popt is not None: break
+[?2004l[?2004h>             if popt is not None: break
+[?2004l[?2004h>         if popt is None:
+[?2004l[?2004h>             return 'inactive', (c,r,None)
+[?2004l[?2004h>     bottom, ec50, h = popt
+[?2004l[?2004h>     # response at highest tested conc
+[?2004l[?2004h>     rmax = logistic(cmax, *popt)
+[?2004l[?2004h>     if rmax > 0.5:
+[?2004l[?2004h>         return 'inactive', (c,r,popt)
+[?2004l[?2004h>     if bottom >= 0.5:
+[?2004l[?2004h>         return 'inactive', (c,r,popt)
+[?2004l[?2004h>     ic = ec50 * ((1-0.5)/(0.5-bottom))**(1.0/h)
+[?2004l[?2004h>     if ic > cmax:
+[?2004l[?2004h>         return 'inactive', (c,r,popt)
+[?2004l[?2004h>     return float(ic), (c,r,popt)
+[?2004l[?2004h> 
+[?2004l[?2004h> out=[]
+[?2004l[?2004h> for comp in sorted(df[df.role=='compound'].compound.unique()):
+[?2004l[?2004h>     sub = df[df.compound==comp]
+[?2004l[?2004h>     ic50, d1 = fit_compound(sub, veh_r2, 'marker_per_cell')
+[?2004l[?2004h>     gi50, d2 = fit_compound(sub, veh_r1, 'n_cells')
+[?2004l[?2004h>     out.append((comp, ic50, gi50))
+[?2004l[?2004h>     print(comp, 'IC50 marker:', ic50, 'GI50 count:', gi50)
+[?2004l[?2004h>     print('  marker c,r,fit:', d1)
+[?2004l[?2004h>     print('  count  c,r,fit:', d2)
+[?2004l[?2004h> 
+[?2004l[?2004h> def fmt(v):
+[?2004l[?2004h>     return 'inactive' if isinstance(v,str) else f'{v:.4g}'
+[?2004l[?2004h> pd.DataFrame([(c, fmt(a), fmt(b)) for c,a,b in out],
+[?2004l[?2004h>              columns=['compound','ic50_marker_uM','gi50_count_uM']).to_csv(OUT+'/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('DONE')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# echo written
+[?2004lwritten
+[?2004hroot@3fb925ae59ab:/task# python3 -c "compile(open('/task/work/compute.py').read(),'c','exec'); print('SYNTAX OK')"
+[?2004lSYNTAX OK
+[?2004hroot@3fb925ae59ab:/task# tail -3 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[14/96] B03: 48 cells 166s
+[15/96] B04: 107 cells 141s
+[16/96] B01: 19 cells 182s
+16
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/analyze_objects.py << 'EOF'
+[?2004l[?2004h> import numpy as np, glob, os, pandas as pd
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+[?2004l[?2004h> for w in sorted(ann):
+[?2004l[?2004h>     fp=f'/task/work/masks/{w}.npy'
+[?2004l[?2004h>     if not os.path.exists(fp): continue
+[?2004l[?2004h>     masks=np.load(fp)
+[?2004l[?2004h>     man=ann[w]
+[?2004l[?2004h>     xs=np.clip(np.round(man.x_px.values).astype(int),0,319)
+[?2004l[?2004h>     ys=np.clip(np.round(man.y_px.values).astype(int),0,319)
+[?2004l[?2004h>     ptmask = masks[ys,xs]
+[?2004l[?2004h>     props=regionprops(masks)
+[?2004l[?2004h>     rec=[]
+[?2004l[?2004h>     for p in props:
+[?2004l[?2004h>         has = (ptmask==p.label).sum()
+[?2004l[?2004h>         rec.append((p.minor_axis_length, p.major_axis_length, p.area, has, p.bbox))
+[?2004l[?2004h>     df=pd.DataFrame(rec, columns=['minor','major','area','npts','bbox']).sort_values('minor')
+[?2004l[?2004h>     print(f'== {w} manual={len(man)} masks={masks.max()} pts-in-mask={(ptmask>0).sum()}')
+[?2004l[?2004h>     print('  objects WITHOUT a manual point:')
+[?2004l[?2004h>     print(df[df.npts==0][['minor','major','area']].to_string(index=False, header=False))
+[?2004l[?2004h>     print('  smallest objects WITH a point:')
+[?2004l[?2004h>     print(df[df.npts>0].head(12)[['minor','major','area']].to_string(index=False, header=False))
+[?2004l[?2004h>     multi = df[df.npts>1]
+[?2004l[?2004h>     print(f'  objects with >1 point: {len(multi)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# echo ok
+[?2004lok
+[?2004hroot@3fb925ae59ab:/task# sleep 280; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[23/96] B11: 79 cells 146s
+[24/96] B12: 53 cells 130s
+24
+[?2004hroot@3fb925ae59ab:/task# sleep 300; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[31/96] C07: 126 cells 173s
+[32/96] C08: 111 cells 180s
+32
+[?2004hroot@3fb925ae59ab:/task# sleep 300; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[41/96] D07: 57 cells 17s
+[42/96] D04: 122 cells 139s
+42
+[?2004hroot@3fb925ae59ab:/task# sleep 300; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[56/96] E06: 130 cells 108s
+[57/96] E08: 121 cells 112s
+57
+[?2004hroot@3fb925ae59ab:/task# sleep 300; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[69/96] F08: 123 cells 107s
+[70/96] F10: 118 cells 96s
+70
+[?2004hroot@3fb925ae59ab:/task# sleep 300; tail -2 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[83/96] G10: 118 cells 61s
+[84/96] G11: 108 cells 61s
+84
+[?2004hroot@3fb925ae59ab:/task# python3 /task/work/analyze_objects.py 2>&1 | head -100
+[?2004l== A08 manual=69 masks=75 pts-in-mask=67
+  objects WITHOUT a manual point:
+4.131182  4.725345 15.0
+4.165532  4.837184 16.0
+4.268749  5.258738 18.0
+4.472136  4.472136 16.0
+4.538189  4.752708 17.0
+4.851514  5.752470 22.0
+7.376548 11.507667 64.0
+8.518862 14.263408 90.0
+  smallest objects WITH a point:
+8.062626 11.488732 72.0
+8.338104 12.077759 79.0
+8.606485 10.365158 69.0
+9.013495  9.380747 66.0
+9.040741 12.960925 91.0
+9.055616 12.047242 85.0
+9.250592 10.681824 77.0
+9.341978 12.267896 90.0
+9.361117 12.224812 90.0
+9.366953 11.950626 87.0
+9.372999 10.686355 78.0
+9.378465 11.825078 87.0
+  objects with >1 point: 0
+== A12 manual=63 masks=62 pts-in-mask=57
+  objects WITHOUT a manual point:
+ 5.291503  5.713046  24.0
+ 6.419734 15.084739  72.0
+ 6.919694 10.520919  55.0
+10.048517 13.822969 107.0
+10.374916 12.623176 102.0
+  smallest objects WITH a point:
+7.456780  8.521387 50.0
+7.857680  9.820871 58.0
+8.119634 11.348870 72.0
+8.682726  9.469365 64.0
+8.848905 12.196457 84.0
+9.076181 12.933561 92.0
+9.187548 13.715905 99.0
+9.213089 12.176439 88.0
+9.356925 11.861927 87.0
+9.365612 11.155587 82.0
+9.556724 12.154210 90.0
+9.607825 12.271032 91.0
+  objects with >1 point: 0
+== C10 manual=115 masks=111 pts-in-mask=106
+  objects WITHOUT a manual point:
+4.041201  5.181900 17.0
+4.338609  4.957955 17.0
+4.461918  5.076445 18.0
+4.599655  5.031134 18.0
+4.995998  5.138093 20.0
+6.561839 10.110503 50.0
+  smallest objects WITH a point:
+6.005155  9.169563 43.0
+6.301988 12.375712 59.0
+6.755527 10.334883 55.0
+6.919373 10.563170 57.0
+7.203841 11.076152 62.0
+7.696671 11.423493 69.0
+8.211825 12.061991 78.0
+8.497858 10.617918 71.0
+8.563752 11.047295 74.0
+8.666211 11.047798 74.0
+8.878569 11.129275 76.0
+9.009858 10.623248 75.0
+  objects with >1 point: 1
+== D01 manual=66 masks=60 pts-in-mask=55
+  objects WITHOUT a manual point:
+4.026578  4.618802 15.0
+4.268749  5.258738 18.0
+4.472136  4.472136 16.0
+5.097750  9.800033 38.0
+6.482771 10.809157 54.0
+  smallest objects WITH a point:
+7.704581 11.325267  60.0
+7.976277  9.129998  55.0
+8.318089 10.267912  67.0
+8.606237 18.860701 112.0
+8.841974 13.215259  91.0
+8.903619 12.298117  86.0
+9.075707 13.015266  92.0
+9.186893 12.841695  92.0
+9.188985  9.840032  70.0
+9.189016 12.233129  87.0
+9.197554 11.900247  84.0
+9.250346 11.744952  85.0
+  objects with >1 point: 0
+== D12 manual=69 masks=65 pts-in-mask=62
+  objects WITHOUT a manual point:
+4.061746 4.618802 15.0
+4.795832 5.215362 20.0
+5.537749 5.537749 24.0
+  smallest objects WITH a point:
+5.363016 11.275292 46.0
+6.636674  9.860109 50.0
+7.856371 11.325833 69.0
+8.261517 10.450241 68.0
+8.734574 11.083113 75.0
+8.739260 10.576822 72.0
+[?2004hroot@3fb925ae59ab:/task# sleep 240; tail -3 /task/work/seg.log; ls /task/work/masks | wc -l
+[?2004l[1]+  Done                    nohup python3 /task/work/seg_all.py 4 > /task/work/seg.log 2>&1
+[95/96] H10: 62 cells 47s
+[96/96] H12: 64 cells 34s
+ALL DONE
+96
+[?2004hroot@3fb925ae59ab:/task# cat > /task/work/tune.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, time
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import multiprocessing as mp
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> ann = {os.path.basename(f)[:3]: pd.read_csv(f, sep='\t') for f in glob.glob(IN+'/annotations/*.tsv')}
+[?2004l[?2004h> wells = sorted(ann)
+[?2004l[?2004h> 
+[?2004l[?2004h> def worker(wq, tq):
+[?2004l[?2004h>     import torch; torch.set_num_threads(1)
+[?2004l[?2004h>     from cellpose import models
+[?2004l[?2004h>     model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         w = wq.get()
+[?2004l[?2004h>         if w is None: break
+[?2004l[?2004h>         im = tifffile.imread(f'{IN}/images/{w}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>         c1 = (im-dark)/(fl1-dark)
+[?2004l[?2004h>         m1,_,_,d1 = model.eval(c1, channels=[0,0], diameter=None, cellprob_threshold=-1.0, flow_threshold=0.4)
+[?2004l[?2004h>         m2,_,_,d2 = model.eval(c1, channels=[0,0], diameter=None, cellprob_threshold=-2.0, flow_threshold=0.4)
+[?2004l[?2004h>         np.save(f'/task/work/masks_low1/{w}.npy', m1.astype(np.int32))
+[?2004l[?2004h>         np.save(f'/task/work/masks_low2/{w}.npy', m2.astype(np.int32))
+[?2004l[?2004h>         tq.put(w)
+[?2004l[?2004h> 
+[?2004l[?2004h> def counts(masks, minminor, edge):
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     keep=[p for p in props]
+[?2004l[?2004h>     if minminor: keep=[p for p in keep if p.minor_axis_length>=minminor]
+[?2004l[?2004h>     if edge: keep=[p for p in keep if not (p.bbox[2]==320 or p.bbox[3]==320)]
+[?2004l[?2004h>     return len(keep)
+[?2004l[?2004h> 
+[?2004l[?2004h> def report(tag, dir_):
+[?2004l[?2004h>     print(f'--- {tag}')
+[?2004l[?2004h>     for w in wells:
+[?2004l[?2004h>         m=np.load(f'{dir_}/{w}.npy')
+[?2004l[?2004h>         man=len(ann[w])
+[?2004l[?2004h>         xs=np.clip(np.round(ann[w].x_px.values).astype(int),0,319)
+[?2004l[?2004h>         ys=np.clip(np.round(ann[w].y_px.values).astype(int),0,319)
+[?2004l[?2004h>         inm=(m[ys,xs]>0).sum()
+[?2004l[?2004h>         line=f'{w} man={man} pts_in={inm}'
+[?2004l[?2004h>         for mm in [0, 7.0, 8.46]:
+[?2004l[?2004h>             for e in [False, True]:
+[?2004l[?2004h>                 c=counts(m,mm,e)
+[?2004l[?2004h>                 tol=max(3,0.1*man)
+[?2004l[?2004h>                 line+=f' | mm{mm}{"e" if e else ""}:{c}{"" if abs(c-man)<=tol else "X"}'
+[?2004l[?2004h>         print(line)
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/work/masks_low1', exist_ok=True)
+[?2004l[?2004h> os.makedirs('/task/work/masks_low2', exist_ok=True)
+[?2004l[?2004h> wq=mp.Queue(); tq=mp.Queue()
+[?2004l[?2004h> for w in wells: wq.put(w)
+[?2004l[?2004h> for _ in range(4): wq.put(None)
+[?2004l[?2004h> ps=[mp.Process(target=worker,args=(wq,tq)) for _ in range(4)]
+[?2004l[?2004h> for p in ps: p.start()
+[?2004l[?2004h> for _ in wells: print('done', tq.get(), flush=True)
+[?2004l[?2004h> for p in ps: p.join()
+[?2004l[?2004h> 
+[?2004l[?2004h> report('raw', '/task/work/masks')
+[?2004l[?2004h> report('low1 (-1.0)', '/task/work/masks_low1')
+[?2004l[?2004h> report('low2 (-2.0)', '/task/work/masks_low2')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@3fb925ae59ab:/task# nohup python3 /task/work/tune.py > /task/work/tune.log 2>&1 &
+[?2004l[1] 1913
+[?2004hroot@3fb925ae59ab:/task# echo started
+[?2004lstarted
+[?2004hroot@3fb925ae59ab:/task# sleep 240; cat /task/work/tune.log
+[?2004l[1]+  Done                    nohup python3 /task/work/tune.py > /task/work/tune.log 2>&1
+nohup: ignoring input
+done A12
+done A08
+done C10
+done D01
+done D12
+done G10
+done G03
+done H12
+--- raw
+A08 man=69 pts_in=67 | mm0:75 | mm0e:73 | mm7.0:69 | mm7.0e:67 | mm8.46:66 | mm8.46e:65
+A12 man=63 pts_in=57 | mm0:62 | mm0e:58 | mm7.0:59 | mm7.0e:57 | mm8.46:56X | mm8.46e:54X
+C10 man=115 pts_in=106 | mm0:111 | mm0e:111 | mm7.0:101X | mm7.0e:101X | mm8.46:98X | mm8.46e:98X
+D01 man=66 pts_in=55 | mm0:60 | mm0e:58X | mm7.0:55X | mm7.0e:55X | mm8.46:52X | mm8.46e:52X
+D12 man=69 pts_in=62 | mm0:65 | mm0e:65 | mm7.0:60X | mm7.0e:60X | mm8.46:58X | mm8.46e:58X
+G03 man=121 pts_in=108 | mm0:129 | mm0e:126 | mm7.0:109 | mm7.0e:107X | mm8.46:97X | mm8.46e:95X
+G10 man=123 pts_in=111 | mm0:118 | mm0e:115 | mm7.0:110X | mm7.0e:109X | mm8.46:102X | mm8.46e:102X
+H12 man=66 pts_in=59 | mm0:64 | mm0e:64 | mm7.0:57X | mm7.0e:57X | mm8.46:54X | mm8.46e:54X
+--- low1 (-1.0)
+A08 man=69 pts_in=67 | mm0:75 | mm0e:73 | mm7.0:69 | mm7.0e:67 | mm8.46:68 | mm8.46e:67
+A12 man=63 pts_in=57 | mm0:67 | mm0e:63 | mm7.0:60 | mm7.0e:57 | mm8.46:59 | mm8.46e:57
+C10 man=115 pts_in=106 | mm0:113 | mm0e:113 | mm7.0:104 | mm7.0e:104 | mm8.46:102X | mm8.46e:102X
+D01 man=66 pts_in=52 | mm0:58X | mm0e:56X | mm7.0:52X | mm7.0e:52X | mm8.46:52X | mm8.46e:52X
+D12 man=69 pts_in=62 | mm0:67 | mm0e:67 | mm7.0:61X | mm7.0e:61X | mm8.46:61X | mm8.46e:61X
+G03 man=121 pts_in=106 | mm0:133 | mm0e:130 | mm7.0:109 | mm7.0e:107X | mm8.46:108X | mm8.46e:106X
+G10 man=123 pts_in=105 | mm0:115 | mm0e:112 | mm7.0:107X | mm7.0e:104X | mm8.46:103X | mm8.46e:103X
+H12 man=66 pts_in=56 | mm0:62 | mm0e:62 | mm7.0:55X | mm7.0e:55X | mm8.46:54X | mm8.46e:54X
+--- low2 (-2.0)
+A08 man=69 pts_in=67 | mm0:74 | mm0e:73 | mm7.0:68 | mm7.0e:67 | mm8.46:68 | mm8.46e:67
+A12 man=63 pts_in=57 | mm0:66 | mm0e:62 | mm7.0:60 | mm7.0e:57 | mm8.46:59 | mm8.46e:57
+C10 man=115 pts_in=100 | mm0:107 | mm0e:107 | mm7.0:100X | mm7.0e:100X | mm8.46:99X | mm8.46e:99X
+D01 man=66 pts_in=49 | mm0:55X | mm0e:53X | mm7.0:50X | mm7.0e:49X | mm8.46:49X | mm8.46e:49X
+D12 man=69 pts_in=60 | mm0:64 | mm0e:64 | mm7.0:59X | mm7.0e:59X | mm8.46:59X | mm8.46e:59X
+G03 man=121 pts_in=102 | mm0:128 | mm0e:125 | mm7.0:104X | mm7.0e:102X | mm8.46:104X | mm8.46e:102X
+G10 man=123 pts_in=102 | mm0:112 | mm0e:109X | mm7.0:104X | mm7.0e:101X | mm8.46:100X | mm8.46e:100X
+H12 man=66 pts_in=54 | mm0:60 | mm0e:60 | mm7.0:54X | mm7.0e:54X | mm8.46:53X | mm8.46e:53X
+[?2004hroot@3fb925ae59ab:/task# sed -i 's/keep = \[p for p in props if p.minor_axis_length >= MINMINOR and not (p.bbox\[2\]==H or p.bbox\[3\]==W)\]/keep = props/' /task/work/compute.py && grep -n 'keep = ' /task/work/compute.py
+[?2004l54:    keep = props
+[?2004hroot@3fb925ae59ab:/task# python3 /task/work/compute.py > /task/work/compute.log 2>&1; tail -60 /task/work/compute.log
+[?2004l E02       45              NaN        1                  NA
+ E03       51              NaN        1                  NA
+ E04      116              NaN        1                  NA
+ E05       66              NaN        1                  NA
+ E06      130              NaN        1                  NA
+ E07       61              NaN        0                  NA
+ E08      121              NaN        1                  NA
+ E09       41              NaN        0                  NA
+ E10      121              NaN        1                  NA
+ E11      111              NaN        1                  NA
+ E12       66              NaN        1                  NA
+ F01       60              NaN        1                  NA
+ F02      119              NaN        1                  NA
+ F03      119              NaN        1                  NA
+ F04      129              NaN        1                  NA
+ F05      129              NaN        1                  NA
+ F06      122              NaN        1                  NA
+ F07       42              NaN        0                  NA
+ F08      123              NaN        1                  NA
+ F09      124              NaN        1                  NA
+ F10      118              NaN        1                  NA
+ F11      114              NaN        1                  NA
+ F12       62              NaN        1                  NA
+ G01       70              NaN        1                  NA
+ G02      125              NaN        1                  NA
+ G03      129              NaN        1                  NA
+ G04       99              NaN        1                  NA
+ G05      105              NaN        1                  NA
+ G06      120              NaN        1                  NA
+ G07      119              NaN        1                  NA
+ G08      108              NaN        1                  NA
+ G09      123              NaN        1                  NA
+ G10      118              NaN        1                  NA
+ G11      108              NaN        1                  NA
+ G12       64              NaN        1                  NA
+ H01        3              NaN        1                  NA
+ H02       56              NaN        1                  NA
+ H03        6              NaN        1                  NA
+ H04       20              NaN        1                  NA
+ H05       35              NaN        1                  NA
+ H06       65              NaN        1                  NA
+ H07       53              NaN        1                  NA
+ H08       56              NaN        1                  NA
+ H09       60              NaN        1                  NA
+ H10       62              NaN        1                  NA
+ H11       65              NaN        1                  NA
+ H12       64              NaN        1                  NA
+validation: [('A08', 69, 75, True), ('A12', 63, 62, True), ('C10', 115, 111, True), ('D01', 66, 60, True), ('D12', 69, 65, True), ('G03', 121, 129, True), ('G10', 123, 118, True), ('H12', 66, 64, True)]
+vehicle means: n= 93.91666666666667 marker= nan
+Traceback (most recent call last):
+  File "/task/work/compute.py", line 138, in <module>
+    ic50, d1 = fit_compound(sub, veh_r2, 'marker_per_cell')
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/task/work/compute.py", line 102, in fit_compound
+    cmax = c.max()
+           ^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/numpy/_core/_methods.py", line 44, in _amax
+    return umr_maximum(a, axis, None, out, keepdims, initial, where)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: zero-size array to reduction operation maximum which has no identity
+[?2004hroot@3fb925ae59ab:/task# head -30 /task/work/compute.log
+[?2004l/opt/tools/lib/python3.12/site-packages/scipy/ndimage/_measurements.py:805: RuntimeWarning: invalid value encountered in divide
+  return sum / np.asanyarray(count).astype(np.float64)
+QC failures: ['D06', 'D07', 'E07', 'E09', 'F07']
+well    mean1    grad1      zres  qc_pass
+ E09 0.081479 0.008239 -8.933662        0
+ D06 0.080390 0.008081 -8.864548        0
+ F07 0.082366 0.009507 -8.301846        0
+ E07 0.086115 0.011014 -7.956885        0
+ D07 0.084009 0.010765 -7.789804        0
+ A03 0.056473 0.014684 -1.265968        1
+ A01 0.052441 0.013878 -1.144340        1
+ H02 0.048398 0.013055 -1.031225        1
+well  n_cells  marker_per_cell  qc_pass marker_per_cell_out
+ A01       43              NaN        1                  NA
+ A02       67              NaN        1                  NA
+ A03       44              NaN        1                  NA
+ A04       68              NaN        1                  NA
+ A05       43              NaN        1                  NA
+ A06       51              NaN        1                  NA
+ A07       60              NaN        1                  NA
+ A08       75              NaN        1                  NA
+ A09       60              NaN        1                  NA
+ A10       65              NaN        1                  NA
+ A11       66              NaN        1                  NA
+ A12       62              NaN        1                  NA
+ B01       19              NaN        1                  NA
+ B02      125              NaN        1                  NA
+ B03       48              NaN        1                  NA
+ B04      107              NaN        1                  NA
+ B05       55              NaN        1                  NA
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> src = open('/task/work/compute.py').read()
+[?2004l[?2004h> old = """    if n>0:
+[?2004l[?2004h>         cyto = cyto_mask(kept>0)
+[?2004l[?2004h>         ring = (~ndi.binary_dilation(kept>0, iterations=5))
+[?2004l[?2004h>         bg = np.median(c2[ring]) if ring.sum()>50 else np.median(c2)
+[?2004l[?2004h>         vals = ndi.mean(c2, labels=cyto, index=np.arange(1,n+1))
+[?2004l[?2004h>         marker = float(np.mean(vals - bg))
+[?2004l[?2004h> """
+[?2004l[?2004h> new = """    if n>0:
+[?2004l[?2004h>         dil = ndi.grey_dilation(kept, size=(5,5))
+[?2004l[?2004h>         cyto_labels = np.where((dil>0) & (kept==0), dil, 0)
+[?2004l[?2004h>         ring = ~ndi.binary_dilation(kept>0, iterations=5)
+[?2004l[?2004h>         bg = float(np.median(c2[ring])) if ring.sum()>50 else float(np.median(c2))
+[?2004l[?2004h>         vals = np.asarray(ndi.mean(c2, labels=cyto_labels, index=np.arange(1,n+1)))
+[?2004l[?2004h>         bad = ~np.isfinite(vals)
+[?2004l[?2004h>         if bad.any():
+[?2004l[?2004h>             vn = np.asarray(ndi.mean(c2, labels=kept, index=np.arange(1,n+1)))
+[?2004l[?2004h>             vals[bad] = vn[bad]
+[?2004l[?2004h>         marker = float(np.mean(vals - bg))
+[?2004l[?2004h> """
+[?2004l[?2004h> assert old in src
+[?2004l[?2004h> open('/task/work/compute.py','w').write(src.replace(old,new))
+[?2004l[?2004h> print('patched')
+[?2004l[?2004h> EOF
+[?2004lpatched
+[?2004hroot@3fb925ae59ab:/task# python3 -c "compile(open('/task/work/compute.py').read(),'c','exec'); print('SYNTAX OK')"
+[?2004lSYNTAX OK
+[?2004hroot@3fb925ae59ab:/task# python3 /task/work/compute.py > /task/work/compute.log 2>&1; tail -45 /task/work/compute.log
+[?2004l       3.000e+01]), array([1.26708075, 1.20319432, 1.29902396, 1.34161491, 1.29902396,
+       1.2244898 , 0.69210293]), array([3.48897304e-09, 3.25311476e+01, 1.00000000e+01]))
+CPD-1985 IC50 marker: inactive GI50 count: inactive
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.62566865, 0.03375568, 0.82855075, 1.00317788, 1.10682457,
+       1.30174228, 1.41798252, 1.51761461]), array([9.94710966e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.7133984 , 1.21384206, 1.21384206, 1.34161491, 1.18189885,
+       1.33096717, 1.24578527, 0.73469388]), array([1.74536361e-02, 3.31371232e+01, 9.99999997e+00]))
+CPD-1987 IC50 marker: inactive GI50 count: inactive
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.0275722 , 0.06378967, 0.18133772, 0.44665975, 0.74641459,
+       1.03340938, 1.35600105, 1.53041967]), array([5.40964542e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.74534161, 1.33096717, 1.054126  , 1.11801242, 1.27772848,
+       1.14995563, 1.25643301, 0.68145519]), array([1.24065818e-05, 3.23704489e+01, 9.99999946e+00]))
+CPD-2467 IC50 marker: 0.003381930819471263 GI50 count: inactive
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.01071272, 0.04391129, 0.03261905, 0.13909261, 0.44493123,
+       0.55340332, 0.83695158, 1.38505376]), array([1.66948213e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.20230701, 0.51109139, 1.1393079 , 0.58562555, 0.36202307,
+       0.64951198, 0.74534161, 0.84117125]), array([4.47227228e-01, 1.00000000e-06, 5.00000000e-02]))
+CPD-3353 IC50 marker: inactive GI50 count: inactive
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.02891402, 0.81270715, 0.71467967, 0.80791138, 1.03548333,
+       1.18111258, 1.32285202, 1.58988553]), array([9.30911072e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.7133984 , 0.72404614, 0.45785271, 0.54303461, 0.7985803 ,
+       0.63886424, 0.69210293, 0.66015972]), array([4.76884752e-01, 1.00000000e-06, 5.00000000e-02]))
+CPD-5484 IC50 marker: inactive GI50 count: 3.7055922377970205
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.6447126 , 0.34569342, 0.48019195, 1.04369283, 1.05199586,
+       1.20149197, 1.26554623, 0.08069452]), array([6.49030726e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 3.333e+00,
+       1.000e+01, 3.000e+01]), array([0.59627329, 0.06388642, 0.21295475, 0.69210293, 0.56433008,
+       0.59627329, 0.66015972, 0.68145519]), array([2.65292416e-01, 1.00000000e-06, 5.00000000e-02]))
+CPD-7090 IC50 marker: inactive GI50 count: inactive
+  marker c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 1.000e+01,
+       3.000e+01]), array([0.3938828 , 0.42867825, 0.70296597, 0.65006137, 0.76700182,
+       0.05978779, 1.4694337 ]), array([4.63380572e-01, 1.00000000e-06, 5.00000000e-02]))
+  count  c,r,fit: (array([1.372e-02, 4.115e-02, 1.235e-01, 3.704e-01, 1.111e+00, 1.000e+01,
+       3.000e+01]), array([0.63886424, 1.26708075, 1.26708075, 1.37355812, 1.29902396,
+       1.32031943, 1.21384206]), array([  0.99899966, 169.76599598,   9.0034382 ]))
+DONE
+[?2004hroot@3fb925ae59ab:/task# head -35 /task/work/compute.log
+[?2004lQC failures: ['D06', 'D07', 'E07', 'E09', 'F07']
+well    mean1    grad1      zres  qc_pass
+ E09 0.081479 0.008239 -8.933662        0
+ D06 0.080390 0.008081 -8.864548        0
+ F07 0.082366 0.009507 -8.301846        0
+ E07 0.086115 0.011014 -7.956885        0
+ D07 0.084009 0.010765 -7.789804        0
+ A03 0.056473 0.014684 -1.265968        1
+ A01 0.052441 0.013878 -1.144340        1
+ H02 0.048398 0.013055 -1.031225        1
+well  n_cells  marker_per_cell  qc_pass marker_per_cell_out
+ A01       43         0.076582        1              0.0766
+ A02       67         0.004090        1              0.0041
+ A03       44         0.101791        1              0.1018
+ A04       68         0.114962        1              0.1150
+ A05       43         0.101095        1              0.1011
+ A06       51         0.114283        1              0.1143
+ A07       60         0.151127        1              0.1511
+ A08       75         0.146474        1              0.1465
+ A09       60         0.167074        1              0.1671
+ A10       65         0.187124        1              0.1871
+ A11       66         0.215004        1              0.2150
+ A12       62         0.224897        1              0.2249
+ B01       19         0.001515        1              0.0015
+ B02      125         0.084564        1              0.0846
+ B03       48         0.006211        1              0.0062
+ B04      107         0.004614        1              0.0046
+ B05       55         0.019675        1              0.0197
+ B06      120         0.130433        1              0.1304
+ B07       34         0.062938        1              0.0629
+ B08       61         0.078282        1              0.0783
+ B09       70         0.118391        1              0.1184
+ B10      121         0.183247        1              0.1832
+ B11       79         0.195923        1              0.1959
+ B12       53         0.227289        1              0.2273
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> pd.set_option('display.width', 200)
+[?2004l[?2004h> print(d[d.role=='vehicle'].to_string(index=False))
+[?2004l[?2004h> print('vehicle marker stats:', d[d.role=='vehicle'].marker_per_cell.describe())
+[?2004l[?2004h> EOF
+[?2004lwell compound  dose_uM    role  n_cells  marker_per_cell  qc_pass
+ A03     DMSO      0.0 vehicle       44           0.1018        1
+ A07     DMSO      0.0 vehicle       60           0.1511        1
+ A11     DMSO      0.0 vehicle       66           0.2150        1
+ B02     DMSO      0.0 vehicle      125           0.0846        1
+ B06     DMSO      0.0 vehicle      120           0.1304        1
+ B10     DMSO      0.0 vehicle      121           0.1832        1
+ C02     DMSO      0.0 vehicle      122           0.0883        1
+ C06     DMSO      0.0 vehicle      113           0.1284        1
+ C10     DMSO      0.0 vehicle      111           0.1809        1
+ D01     DMSO      0.0 vehicle       60           0.0751        1
+ D05     DMSO      0.0 vehicle      117           0.1143        1
+ D09     DMSO      0.0 vehicle      124           0.1704        1
+ E04     DMSO      0.0 vehicle      116           0.1109        1
+ E08     DMSO      0.0 vehicle      121           0.1581        1
+ E12     DMSO      0.0 vehicle       66           0.2152        1
+ F04     DMSO      0.0 vehicle      129           0.0784        1
+ F08     DMSO      0.0 vehicle      123           0.1540        1
+ F12     DMSO      0.0 vehicle       62           0.2283        1
+ G03     DMSO      0.0 vehicle      129           0.0945        1
+ G07     DMSO      0.0 vehicle      119           0.1407        1
+ G11     DMSO      0.0 vehicle      108           0.2007        1
+ H01     DMSO      0.0 vehicle        3           0.0801        1
+ H05     DMSO      0.0 vehicle       35           0.1304        1
+ H09     DMSO      0.0 vehicle       60           0.1799        1
+vehicle marker stats: count    24.000000
+mean      0.141446
+std       0.047597
+min       0.075100
+25%       0.099975
+50%       0.135550
+75%       0.180150
+max       0.228300
+Name: marker_per_cell, dtype: float64
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np, tifffile
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0]; d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> pd.set_option('display.width',250); pd.set_option('display.max_rows',100)
+[?2004l[?2004h> print(d[['well','compound','dose_uM','role','n_cells','marker_per_cell','qc_pass']].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004lwell compound  dose_uM      role  n_cells  marker_per_cell  qc_pass
+ A01  REF-INH 10.00000 reference       43           0.0766        1
+ A02 CPD-3353  0.01372  compound       67           0.0041        1
+ A03     DMSO  0.00000   vehicle       44           0.1018        1
+ A04 CPD-3353  0.04115  compound       68           0.1150        1
+ A05 CPD-3353  0.12350  compound       43           0.1011        1
+ A06 CPD-3353  0.37040  compound       51           0.1143        1
+ A07     DMSO  0.00000   vehicle       60           0.1511        1
+ A08 CPD-3353  1.11100  compound       75           0.1465        1
+ A09 CPD-3353  3.33300  compound       60           0.1671        1
+ A10 CPD-3353 10.00000  compound       65           0.1871        1
+ A11     DMSO  0.00000   vehicle       66           0.2150        1
+ A12 CPD-3353 30.00000  compound       62           0.2249        1
+ B01 CPD-2467  0.01372  compound       19           0.0015        1
+ B02     DMSO  0.00000   vehicle      125           0.0846        1
+ B03 CPD-2467  0.04115  compound       48           0.0062        1
+ B04 CPD-2467  0.12350  compound      107           0.0046        1
+ B05 CPD-2467  0.37040  compound       55           0.0197        1
+ B06     DMSO  0.00000   vehicle      120           0.1304        1
+ B07 CPD-2467  1.11100  compound       34           0.0629        1
+ B08 CPD-2467  3.33300  compound       61           0.0783        1
+ B09 CPD-2467 10.00000  compound       70           0.1184        1
+ B10     DMSO  0.00000   vehicle      121           0.1832        1
+ B11 CPD-2467 30.00000  compound       79           0.1959        1
+ B12  REF-INH 10.00000 reference       53           0.2273        1
+ C01 CPD-1985  0.01372  compound       67           0.0885        1
+ C02     DMSO  0.00000   vehicle      122           0.0883        1
+ C03 CPD-1985  0.04115  compound      114           0.0048        1
+ C04  REF-INH 10.00000 reference      127           0.1094        1
+ C05 CPD-1985  0.12350  compound      114           0.1172        1
+ C06     DMSO  0.00000   vehicle      113           0.1284        1
+ C07 CPD-1985  0.37040  compound      126           0.1419        1
+ C08 CPD-1985  1.11100  compound      111           0.1566        1
+ C09 CPD-1985  3.33300  compound      125           0.1841        1
+ C10     DMSO  0.00000   vehicle      111           0.1809        1
+ C11 CPD-1985 10.00000  compound      117           0.2006        1
+ C12 CPD-1985 30.00000  compound       69           0.2147        1
+ D01     DMSO  0.00000   vehicle       60           0.0751        1
+ D02 CPD-1550  0.01372  compound      119           0.0132        1
+ D03 CPD-1550  0.04115  compound      113           0.0331        1
+ D04 CPD-1550  0.12350  compound      122           0.0707        1
+ D05     DMSO  0.00000   vehicle      117           0.1143        1
+ D06 CPD-1550  0.37040  compound       37           0.0738        0
+ D07  REF-INH 10.00000 reference       57           0.1000        0
+ D08 CPD-1550  1.11100  compound      126           0.1520        1
+ D09     DMSO  0.00000   vehicle      124           0.1704        1
+ D10 CPD-1550  3.33300  compound      122           0.1943        1
+ D11 CPD-1550 10.00000  compound      115           0.0100        1
+ D12 CPD-1550 30.00000  compound       65           0.2188        1
+ E01 CPD-1142  0.01372  compound       24           0.0030        1
+ E02  REF-INH 10.00000 reference       45           0.0028        1
+ E03 CPD-1142  0.04115  compound       51           0.0041        1
+ E04     DMSO  0.00000   vehicle      116           0.1109        1
+ E05 CPD-1142  0.12350  compound       66           0.0074        1
+ E06 CPD-1142  0.37040  compound      130           0.0063        1
+ E07 CPD-1142  1.11100  compound       61           0.0160        0
+ E08     DMSO  0.00000   vehicle      121           0.1581        1
+ E09 CPD-1142  3.33300  compound       41           0.0415        0
+ E10 CPD-1142 10.00000  compound      121           0.1091        1
+ E11 CPD-1142 30.00000  compound      111           0.1821        1
+ E12     DMSO  0.00000   vehicle       66           0.2152        1
+ F01 CPD-7090  0.01372  compound       60           0.0557        1
+ F02 CPD-7090  0.04115  compound      119           0.0606        1
+ F03 CPD-7090  0.12350  compound      119           0.0994        1
+ F04     DMSO  0.00000   vehicle      129           0.0784        1
+ F05 CPD-7090  0.37040  compound      129           0.0920        1
+ F06 CPD-7090  1.11100  compound      122           0.1085        1
+ F07 CPD-7090  3.33300  compound       42           0.0982        0
+ F08     DMSO  0.00000   vehicle      123           0.1540        1
+ F09 CPD-7090 10.00000  compound      124           0.0085        1
+ F10  REF-INH 10.00000 reference      118           0.1913        1
+ F11 CPD-7090 30.00000  compound      114           0.2079        1
+ F12     DMSO  0.00000   vehicle       62           0.2283        1
+ G01 CPD-1987  0.01372  compound       70           0.0039        1
+ G02 CPD-1987  0.04115  compound      125           0.0090        1
+ G03     DMSO  0.00000   vehicle      129           0.0945        1
+ G04 CPD-1987  0.12350  compound       99           0.0257        1
+ G05 CPD-1987  0.37040  compound      105           0.0632        1
+ G06 CPD-1987  1.11100  compound      120           0.1056        1
+ G07     DMSO  0.00000   vehicle      119           0.1407        1
+ G08 CPD-1987  3.33300  compound      108           0.1462        1
+ G09  REF-INH 10.00000 reference      123           0.1669        1
+ G10 CPD-1987 10.00000  compound      118           0.1918        1
+ G11     DMSO  0.00000   vehicle      108           0.2007        1
+ G12 CPD-1987 30.00000  compound       64           0.2165        1
+ H01     DMSO  0.00000   vehicle        3           0.0801        1
+ H02 CPD-5484  0.01372  compound       56           0.0912        1
+ H03 CPD-5484  0.04115  compound        6           0.0489        1
+ H04 CPD-5484  0.12350  compound       20           0.0679        1
+ H05     DMSO  0.00000   vehicle       35           0.1304        1
+ H06 CPD-5484  0.37040  compound       65           0.1476        1
+ H07 CPD-5484  1.11100  compound       53           0.1488        1
+ H08 CPD-5484  3.33300  compound       56           0.1700        1
+ H09     DMSO  0.00000   vehicle       60           0.1799        1
+ H10 CPD-5484 10.00000  compound       62           0.1790        1
+ H11  REF-INH 10.00000 reference       65           0.2298        1
+ H12 CPD-5484 30.00000  compound       64           0.0114        1
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, pandas as pd
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> l = pd.read_csv(IN+'/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for w in l.well:
+[?2004l[?2004h>     c2 = (tifffile.imread(f'{IN}/images/{w}_ch2.tif').astype(np.float32)-dark)/(fl2-dark)
+[?2004l[?2004h>     c1 = (tifffile.imread(f'{IN}/images/{w}_ch1.tif').astype(np.float32)-dark)/(fl1-dark)
+[?2004l[?2004h>     rows.append((w, np.median(c2), np.percentile(c2,90), np.percentile(c2,99), c2.max(), np.median(c1), np.percentile(c1,99)))
+[?2004l[?2004h> df=pd.DataFrame(rows, columns=['well','c2_med','c2_p90','c2_p99','c2_max','c1_med','c1_p99'])
+[?2004l[?2004h> df['col']=df.well.str[1:].astype(int); df['row']=df.well.str[0]
+[?2004l[?2004h> print(df.to_string(index=False, float_format=lambda v:f'{v:.4f}'))
+[?2004l[?2004h> EOF
+[?2004lwell  c2_med  c2_p90  c2_p99  c2_max  c1_med  c1_p99  col row
+ A01  0.0358  0.0960  0.1469  0.2207  0.0108  0.6986    1   A
+ A02  0.0393  0.0443  0.0490  0.0593  0.0108  0.7006    2   A
+ A03  0.0548  0.1255  0.1977  0.2663  0.0108  0.7298    3   A
+ A04  0.0491  0.1371  0.2056  0.3140  0.0107  0.6957    4   A
+ A05  0.0406  0.1248  0.2101  0.3117  0.0108  0.7948    5   A
+ A06  0.0478  0.1414  0.2324  0.3198  0.0108  0.7150    6   A
+ A07  0.0545  0.1715  0.2908  0.5038  0.0108  0.7774    7   A
+ A08  0.0966  0.2156  0.3133  0.5521  0.0108  0.7129    8   A
+ A09  0.0785  0.2115  0.3370  0.4657  0.0108  0.6848    9   A
+ A10  0.0781  0.2184  0.3452  0.5104  0.0107  0.7291   10   A
+ A11  0.0818  0.2375  0.3683  0.5691  0.0108  0.7266   11   A
+ A12  0.0884  0.2620  0.4135  0.6078  0.0108  0.6984   12   A
+ B01  0.0412  0.0461  0.0504  0.0598  0.0105  0.5616    1   B
+ B02  0.0421  0.1300  0.1735  0.2264  0.0112  0.7966    2   B
+ B03  0.0525  0.0597  0.0700  0.0847  0.0107  0.6234    3   B
+ B04  0.0650  0.0716  0.0774  0.0896  0.0111  0.8122    4   B
+ B05  0.0477  0.0672  0.0975  0.1229  0.0107  0.6460    5   B
+ B06  0.0646  0.2000  0.2760  0.3909  0.0112  0.7864    6   B
+ B07  0.0533  0.0985  0.1682  0.2411  0.0107  0.6383    7   B
+ B08  0.0709  0.1510  0.2476  0.3315  0.0107  0.6576    8   B
+ B09  0.0732  0.1957  0.3112  0.5250  0.0108  0.7325    9   B
+ B10  0.1132  0.2991  0.4137  0.5599  0.0112  0.7800   10   B
+ B11  0.0928  0.2725  0.4022  0.6055  0.0109  0.7260   11   B
+ B12  0.0848  0.2261  0.4262  0.6608  0.0107  0.6662   12   B
+ C01  0.0384  0.1012  0.1650  0.2468  0.0107  0.7067    1   C
+ C02  0.0442  0.1341  0.1848  0.2659  0.0112  0.8134    2   C
+ C03  0.0483  0.0543  0.0596  0.0706  0.0111  0.8418    3   C
+ C04  0.0457  0.1558  0.2199  0.3106  0.0112  0.7648    4   C
+ C05  0.0445  0.1639  0.2375  0.3246  0.0111  0.7728    5   C
+ C06  0.0651  0.1877  0.2736  0.5149  0.0111  0.8092    6   C
+ C07  0.0699  0.2169  0.3052  0.4594  0.0112  0.8066    7   C
+ C08  0.0703  0.2217  0.3197  0.4341  0.0110  0.7691    8   C
+ C09  0.0655  0.2523  0.3698  0.4966  0.0112  0.7533    9   C
+ C10  0.0889  0.2682  0.3746  0.5056  0.0111  0.8130   10   C
+ C11  0.1317  0.3312  0.4414  0.6502  0.0111  0.8023   11   C
+ C12  0.1176  0.2859  0.4268  0.6046  0.0108  0.7295   12   C
+ D01  0.0391  0.0984  0.1612  0.2312  0.0108  0.7383    1   D
+ D02  0.0409  0.0535  0.0642  0.0873  0.0111  0.7904    2   D
+ D03  0.0592  0.0905  0.1129  0.1540  0.0111  0.8461    3   D
+ D04  0.0558  0.1251  0.1639  0.2270  0.0112  0.8564    4   D
+ D05  0.0762  0.1888  0.2479  0.3442  0.0111  0.8040    5   D
+ D06  0.0656  0.1429  0.1677  0.1979  0.0200  0.4140    6   D
+ D07  0.0663  0.1635  0.2110  0.2958  0.0153  0.5235    7   D
+ D08  0.0545  0.2097  0.3002  0.4115  0.0112  0.7655    8   D
+ D09  0.1026  0.2774  0.3790  0.5599  0.0112  0.7820    9   D
+ D10  0.0848  0.2786  0.3834  0.5243  0.0111  0.7934   10   D
+ D11  0.0883  0.0982  0.1071  0.1261  0.0111  0.8633   11   D
+ D12  0.0969  0.2558  0.4102  0.5558  0.0108  0.7236   12   D
+ E01  0.0372  0.0418  0.0460  0.0555  0.0107  0.7407    1   E
+ E02  0.0633  0.0694  0.0747  0.0880  0.0110  0.8036    2   E
+ E03  0.0617  0.0679  0.0735  0.0856  0.0110  0.7703    3   E
+ E04  0.0679  0.1801  0.2673  0.3555  0.0112  0.8381    4   E
+ E05  0.0560  0.0644  0.0720  0.0830  0.0112  0.7355    5   E
+ E06  0.0590  0.0661  0.0728  0.0863  0.0112  0.7682    6   E
+ E07  0.0691  0.0846  0.0948  0.1165  0.0206  0.4896    7   E
+ E08  0.0822  0.2367  0.3318  0.4252  0.0111  0.7789    8   E
+ E09  0.0891  0.1311  0.1486  0.1801  0.0215  0.4527    9   E
+ E10  0.0939  0.2071  0.2580  0.3543  0.0112  0.8378   10   E
+ E11  0.1154  0.2983  0.3946  0.5103  0.0112  0.8147   11   E
+ E12  0.0911  0.2621  0.4198  0.5781  0.0108  0.7516   12   E
+ F01  0.0322  0.0751  0.1145  0.1545  0.0108  0.6468    1   F
+ F02  0.0477  0.1068  0.1444  0.1953  0.0112  0.8444    2   F
+ F03  0.0304  0.1334  0.1939  0.3345  0.0111  0.8025    3   F
+ F04  0.0507  0.1314  0.1777  0.2630  0.0112  0.8273    4   F
+ F05  0.0500  0.1443  0.2021  0.2807  0.0112  0.8010    5   F
+ F06  0.0608  0.1762  0.2337  0.3501  0.0112  0.7715    6   F
+ F07  0.0907  0.1896  0.2258  0.2659  0.0152  0.4932    7   F
+ F08  0.0629  0.2235  0.3200  0.4506  0.0112  0.8272    8   F
+ F09  0.0742  0.0828  0.0910  0.1064  0.0111  0.7897    9   F
+ F10  0.0939  0.3027  0.4142  0.5828  0.0112  0.7911   10   F
+ F11  0.1042  0.3103  0.4364  0.6207  0.0111  0.8582   11   F
+ F12  0.1096  0.2903  0.4419  0.6210  0.0107  0.6951   12   F
+ G01  0.0334  0.0382  0.0427  0.0517  0.0108  0.6662    1   G
+ G02  0.5696  0.5869  0.6012  0.6255  0.0112  0.8175    2   G
+ G03  0.0471  0.1501  0.2184  0.3210  0.0112  0.8154    3   G
+ G04  0.2251  0.2492  0.2686  0.2956  0.0111  0.7874    4   G
+ G05  0.1299  0.1928  0.2301  0.3018  0.0111  0.7410    5   G
+ G06  0.0752  0.1823  0.2490  0.3583  0.0112  0.7658    6   G
+ G07  0.0895  0.2298  0.3103  0.4165  0.0111  0.8154    7   G
+ G08  0.0960  0.2468  0.3233  0.4424  0.0111  0.7787    8   G
+ G09  0.0857  0.2550  0.3561  0.4665  0.0111  0.8026    9   G
+ G10  0.0827  0.2799  0.3960  0.5759  0.0112  0.8296   10   G
+ G11  0.0753  0.2750  0.3921  0.5907  0.0111  0.8217   11   G
+ G12  0.1011  0.2660  0.4404  0.6254  0.0108  0.7150   12   G
+ H01  0.0388  0.0443  0.1572  0.2256  0.0105  0.3118    1   H
+ H02  0.0527  0.1178  0.1936  0.3126  0.0107  0.6900    2   H
+ H03  0.0553  0.0617  0.2354  0.4810  0.0105  0.4134    3   H
+ H04  0.0456  0.0534  0.2427  0.4053  0.0105  0.5094    4   H
+ H05  0.0666  0.1341  0.2971  0.4167  0.0106  0.6396    5   H
+ H06  0.0557  0.1619  0.2717  0.3686  0.0107  0.6551    6   H
+ H07  0.0648  0.1692  0.2904  0.4117  0.0107  0.6714    7   H
+ H08  0.0701  0.2007  0.3038  0.4322  0.0107  0.6953    8   H
+ H09  0.0900  0.2296  0.3755  0.7053  0.0108  0.6611    9   H
+ H10  0.0869  0.2303  0.3609  0.4877  0.0107  0.6621   10   H
+ H11  0.1010  0.2827  0.4307  0.6006  0.0108  0.7266   11   H
+ H12  0.1007  0.1103  0.1211  0.1379  0.0107  0.7282   12   H
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> print('flat1 profile (col means, 8 bins):', (fl1-dark).reshape(320,8,40).mean(axis=(0,2)).round(0))
+[?2004l[?2004h> print('flat2 profile (col means, 8 bins):', (fl2-dark).reshape(320,8,40).mean(axis=(0,2)).round(0))
+[?2004l[?2004h> print('flat1 row profile:', (fl1-dark).reshape(8,40,320).mean(axis=(1,2)).round(0))
+[?2004l[?2004h> print('flat2 row profile:', (fl2-dark).reshape(8,40,320).mean(axis=(1,2)).round(0))
+[?2004l[?2004h> def load(w,ch):
+[?2004l[?2004h>     fl = fl1 if ch==1 else fl2
+[?2004l[?2004h>     return (tifffile.imread(f'{IN}/images/{w}_ch{ch}.tif').astype(np.float32)-dark)/(fl-dark)
+[?2004l[?2004h> for w in ['A03','A11','D01','D09','H05','H09','C02','C10','F04','F12']:
+[?2004l[?2004h>     c2 = load(w,2)
+[?2004l[?2004h>     # 8x8 binned median map
+[?2004l[?2004h>     bm = np.median(c2.reshape(8,40,8,40).transpose(0,2,1,3).reshape(8,8,-1), axis=-1)
+[?2004l[?2004h>     print(w, 'bg 8x8 medians:')
+[?2004l[?2004h>     print(np.round(bm,3))
+[?2004l[?2004h> EOF
+[?2004lflat1 profile (col means, 8 bins): [2000. 2136. 2226. 2272. 2272. 2226. 2136. 2000.]
+flat2 profile (col means, 8 bins): [1797. 1900. 1968. 2003. 2003. 1968. 1900. 1797.]
+flat1 row profile: [2000. 2136. 2226. 2272. 2272. 2226. 2136. 2000.]
+flat2 row profile: [1797. 1900. 1968. 2003. 2003. 1968. 1900. 1797.]
+A03 bg 8x8 medians:
+[[0.054 0.099 0.138 0.054 0.056 0.053 0.053 0.053]
+ [0.06  0.126 0.106 0.058 0.055 0.053 0.054 0.053]
+ [0.108 0.104 0.058 0.053 0.053 0.053 0.058 0.053]
+ [0.069 0.092 0.085 0.053 0.053 0.06  0.054 0.053]
+ [0.055 0.056 0.053 0.053 0.053 0.053 0.053 0.053]
+ [0.054 0.055 0.102 0.057 0.054 0.056 0.053 0.063]
+ [0.053 0.058 0.056 0.054 0.053 0.053 0.053 0.054]
+ [0.053 0.053 0.053 0.053 0.053 0.053 0.053 0.053]]
+A11 bg 8x8 medians:
+[[0.243 0.087 0.081 0.08  0.08  0.08  0.08  0.08 ]
+ [0.081 0.081 0.085 0.149 0.08  0.08  0.08  0.08 ]
+ [0.08  0.08  0.081 0.082 0.085 0.081 0.08  0.127]
+ [0.08  0.08  0.08  0.082 0.086 0.084 0.181 0.245]
+ [0.08  0.08  0.08  0.08  0.08  0.087 0.255 0.231]
+ [0.08  0.081 0.082 0.191 0.081 0.08  0.155 0.147]
+ [0.08  0.082 0.08  0.083 0.08  0.081 0.087 0.081]
+ [0.08  0.08  0.08  0.08  0.08  0.08  0.081 0.104]]
+D01 bg 8x8 medians:
+[[0.038 0.038 0.038 0.038 0.038 0.038 0.038 0.039]
+ [0.038 0.038 0.038 0.038 0.038 0.038 0.038 0.038]
+ [0.038 0.038 0.038 0.038 0.038 0.038 0.044 0.038]
+ [0.038 0.038 0.038 0.074 0.042 0.038 0.038 0.038]
+ [0.038 0.038 0.038 0.04  0.038 0.038 0.038 0.038]
+ [0.038 0.04  0.041 0.039 0.038 0.038 0.052 0.039]
+ [0.038 0.099 0.091 0.058 0.041 0.047 0.092 0.076]
+ [0.039 0.082 0.088 0.088 0.039 0.039 0.099 0.042]]
+D09 bg 8x8 medians:
+[[0.098 0.098 0.1   0.098 0.098 0.098 0.098 0.098]
+ [0.1   0.106 0.229 0.102 0.1   0.098 0.099 0.115]
+ [0.209 0.101 0.098 0.098 0.105 0.099 0.106 0.099]
+ [0.1   0.206 0.102 0.098 0.098 0.103 0.256 0.102]
+ [0.098 0.1   0.225 0.098 0.098 0.166 0.137 0.118]
+ [0.098 0.1   0.201 0.1   0.099 0.204 0.216 0.231]
+ [0.101 0.201 0.219 0.105 0.217 0.1   0.112 0.244]
+ [0.098 0.152 0.193 0.103 0.099 0.1   0.166 0.186]]
+H05 bg 8x8 medians:
+[[0.066 0.066 0.066 0.069 0.066 0.066 0.066 0.066]
+ [0.067 0.066 0.066 0.066 0.066 0.066 0.178 0.066]
+ [0.067 0.066 0.066 0.066 0.066 0.066 0.066 0.066]
+ [0.066 0.066 0.066 0.066 0.066 0.069 0.074 0.066]
+ [0.068 0.066 0.066 0.066 0.076 0.133 0.138 0.066]
+ [0.07  0.066 0.066 0.066 0.072 0.07  0.066 0.066]
+ [0.066 0.066 0.066 0.067 0.072 0.16  0.066 0.066]
+ [0.066 0.066 0.066 0.067 0.067 0.07  0.065 0.066]]
+H09 bg 8x8 medians:
+[[0.197 0.094 0.089 0.088 0.088 0.089 0.088 0.088]
+ [0.231 0.124 0.09  0.088 0.114 0.218 0.088 0.088]
+ [0.089 0.088 0.088 0.088 0.092 0.09  0.088 0.09 ]
+ [0.091 0.089 0.088 0.088 0.204 0.153 0.089 0.221]
+ [0.088 0.088 0.088 0.088 0.198 0.21  0.092 0.09 ]
+ [0.088 0.088 0.088 0.088 0.103 0.188 0.088 0.089]
+ [0.088 0.092 0.09  0.088 0.089 0.089 0.088 0.092]
+ [0.088 0.09  0.089 0.088 0.088 0.092 0.088 0.088]]
+C02 bg 8x8 medians:
+[[0.056 0.042 0.043 0.041 0.041 0.041 0.042 0.082]
+ [0.043 0.077 0.044 0.045 0.041 0.045 0.098 0.042]
+ [0.041 0.046 0.044 0.047 0.043 0.042 0.095 0.042]
+ [0.041 0.077 0.041 0.052 0.041 0.048 0.077 0.041]
+ [0.041 0.043 0.047 0.052 0.077 0.108 0.11  0.046]
+ [0.077 0.045 0.093 0.084 0.041 0.042 0.082 0.098]
+ [0.041 0.042 0.043 0.041 0.041 0.045 0.1   0.099]
+ [0.041 0.043 0.115 0.046 0.041 0.043 0.046 0.069]]
+C10 bg 8x8 medians:
+[[0.086 0.087 0.207 0.09  0.086 0.09  0.085 0.085]
+ [0.087 0.215 0.192 0.099 0.089 0.085 0.085 0.085]
+ [0.086 0.222 0.178 0.148 0.089 0.086 0.088 0.086]
+ [0.087 0.085 0.21  0.086 0.085 0.085 0.085 0.085]
+ [0.129 0.18  0.212 0.174 0.092 0.096 0.085 0.085]
+ [0.088 0.191 0.092 0.208 0.217 0.089 0.114 0.187]
+ [0.085 0.085 0.086 0.185 0.166 0.105 0.202 0.091]
+ [0.085 0.085 0.087 0.09  0.085 0.086 0.085 0.085]]
+F04 bg 8x8 medians:
+[[0.048 0.047 0.048 0.048 0.048 0.047 0.048 0.048]
+ [0.047 0.047 0.048 0.1   0.05  0.049 0.051 0.049]
+ [0.047 0.047 0.047 0.08  0.05  0.049 0.05  0.047]
+ [0.049 0.047 0.081 0.112 0.095 0.05  0.101 0.05 ]
+ [0.051 0.051 0.11  0.11  0.108 0.099 0.052 0.051]
+ [0.104 0.048 0.121 0.057 0.1   0.048 0.047 0.049]
+ [0.107 0.113 0.069 0.054 0.094 0.082 0.051 0.048]
+ [0.077 0.102 0.049 0.048 0.047 0.048 0.048 0.049]]
+F12 bg 8x8 medians:
+[[0.108 0.108 0.108 0.108 0.11  0.15  0.109 0.108]
+ [0.108 0.107 0.108 0.107 0.109 0.112 0.11  0.108]
+ [0.108 0.108 0.108 0.122 0.202 0.108 0.108 0.108]
+ [0.108 0.109 0.111 0.271 0.279 0.242 0.11  0.11 ]
+ [0.108 0.109 0.107 0.111 0.203 0.108 0.2   0.112]
+ [0.108 0.107 0.109 0.108 0.108 0.152 0.111 0.107]
+ [0.206 0.108 0.201 0.109 0.108 0.11  0.113 0.109]
+ [0.267 0.109 0.108 0.107 0.107 0.108 0.113 0.108]]
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, pandas as pd
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def load2(w):
+[?2004l[?2004h>     return (tifffile.imread(f'{IN}/images/{w}_ch2.tif').astype(np.float32)-dark)/(fl2-dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> for w in ['A03','A11','C02','C10','F04','F12','D01','D09']:
+[?2004l[?2004h>     c2 = load2(w)
+[?2004l[?2004h>     kept = np.load(f'/task/work/masks/{w}.npy')
+[?2004l[?2004h>     nuc = kept>0
+[?2004l[?2004h>     dil5 = ndi.binary_dilation(nuc, iterations=5)
+[?2004l[?2004h>     dil2 = ndi.binary_dilation(nuc, iterations=2)
+[?2004l[?2004h>     dil10 = ndi.binary_dilation(nuc, iterations=10)
+[?2004l[?2004h>     # cyto ring labels
+[?2004l[?2004h>     dl = ndi.grey_dilation(kept, size=(5,5))
+[?2004l[?2004h>     cyto_labels = np.where((dl>0)&(~nuc), dl, 0)
+[?2004l[?2004h>     n = kept.max()
+[?2004l[?2004h>     vals = np.asarray(ndi.mean(c2, labels=cyto_labels, index=np.arange(1,n+1)))
+[?2004l[?2004h>     bg5 = np.median(c2[~dil5]); bg2 = np.median(c2[~dil2]); bg10 = np.median(c2[~dil10])
+[?2004l[?2004h>     nucmed = np.median(c2[nuc])
+[?2004l[?2004h>     print(f'{w}: n={n} cyto_mean={vals.mean():.4f} bg2={bg2:.4f} bg5={bg5:.4f} bg10={bg10:.4f} nuc_med={nucmed:.4f} -> R2(bg2)={vals.mean()-bg2:.4f} R2(bg5)={vals.mean()-bg5:.4f} R2(bg10)={vals.mean()-bg10:.4f} cover={nuc.mean():.3f}')
+[?2004l[?2004h> EOF
+[?2004lA03: n=44 cyto_mean=0.1555 bg2=0.0540 bg5=0.0537 bg10=0.0534 nuc_med=0.1027 -> R2(bg2)=0.1015 R2(bg5)=0.1018 R2(bg10)=0.1021 cover=0.079
+A11: n=66 cyto_mean=0.2957 bg2=0.0811 bg5=0.0807 bg10=0.0803 nuc_med=0.1857 -> R2(bg2)=0.2147 R2(bg5)=0.2150 R2(bg10)=0.2154 cover=0.064
+C02: n=122 cyto_mean=0.1303 bg2=0.0427 bg5=0.0420 bg10=0.0412 nuc_med=0.0870 -> R2(bg2)=0.0876 R2(bg5)=0.0883 R2(bg10)=0.0890 cover=0.111
+C10: n=111 cyto_mean=0.2672 bg2=0.0871 bg5=0.0863 bg10=0.0854 nuc_med=0.1789 -> R2(bg2)=0.1801 R2(bg5)=0.1809 R2(bg10)=0.1818 cover=0.103
+F04: n=129 cyto_mean=0.1268 bg2=0.0490 bg5=0.0483 bg10=0.0476 nuc_med=0.0897 -> R2(bg2)=0.0778 R2(bg5)=0.0784 R2(bg10)=0.0792 cover=0.118
+F12: n=62 cyto_mean=0.3367 bg2=0.1088 bg5=0.1084 bg10=0.1079 nuc_med=0.2261 -> R2(bg2)=0.2279 R2(bg5)=0.2283 R2(bg10)=0.2288 cover=0.058
+D01: n=60 cyto_mean=0.1135 bg2=0.0386 bg5=0.0383 bg10=0.0380 nuc_med=0.0767 -> R2(bg2)=0.0749 R2(bg5)=0.0751 R2(bg10)=0.0754 cover=0.057
+D09: n=124 cyto_mean=0.2699 bg2=0.1004 bg5=0.0995 bg10=0.0984 nuc_med=0.1882 -> R2(bg2)=0.1695 R2(bg5)=0.1704 R2(bg10)=0.1714 cover=0.112
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0].map(lambda r: ord(r)-65); d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> d = d[d.qc_pass==1]
+[?2004l[?2004h> veh = d[d.role=='vehicle']
+[?2004l[?2004h> print('vehicle n_cells by row:', veh.groupby('row').n_cells.mean().round(1).values)
+[?2004l[?2004h> print('vehicle n_cells by col:', veh.groupby('col').n_cells.mean().round(1).values)
+[?2004l[?2004h> print('vehicle marker by col:', veh.groupby('col').marker_per_cell.mean().round(4).values)
+[?2004l[?2004h> print('vehicle marker by row:', veh.groupby('row').marker_per_cell.mean().round(4).values)
+[?2004l[?2004h> # ratio marker high-col/low-col within same row pairs (cols 2/3 vs 11/12)
+[?2004l[?2004h> for r in 'ABCDEFGH':
+[?2004l[?2004h>     sub = d[(d.well.str[0]==r)]
+[?2004l[?2004h>     lo = sub[sub.col.isin([2,3]) & (sub.role=='vehicle')].marker_per_cell
+[?2004l[?2004h>     hi = sub[sub.col.isin([11,12]) & (sub.role=='vehicle')].marker_per_cell
+[?2004l[?2004h>     print(r, 'lo', lo.round(3).values, 'hi', hi.round(3).values)
+[?2004l[?2004h> EOF
+[?2004lvehicle n_cells by row: [ 56.7 122.  115.3 100.3 101.  104.7 118.7  32.7]
+vehicle n_cells by col: [ 31.5 123.5  86.5 122.5  76.  116.5  89.5 122.   92.  116.   87.   64. ]
+vehicle marker by col: [0.0776 0.0864 0.0982 0.0946 0.1223 0.1294 0.1459 0.156  0.1752 0.182
+ 0.2078 0.2218]
+vehicle marker by row: [0.156  0.1327 0.1325 0.1199 0.1614 0.1536 0.1453 0.1301]
+A lo [0.102] hi [0.215]
+B lo [0.085] hi []
+C lo [0.088] hi []
+D lo [] hi []
+E lo [] hi [0.215]
+F lo [] hi [0.228]
+G lo [0.094] hi [0.201]
+H lo [] hi []
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0].map(lambda r: ord(r)-65); d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> d = d[d.qc_pass==1]
+[?2004l[?2004h> veh = d[d.role=='vehicle'].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> def vehfit(colname, log=True):
+[?2004l[?2004h>     y = np.log(veh[colname]) if log else veh[colname].values
+[?2004l[?2004h>     R = pd.get_dummies(veh.row).values.astype(float)
+[?2004l[?2004h>     C = veh[['col']].values.astype(float)
+[?2004l[?2004h>     X = np.hstack([R, C/12.0])
+[?2004l[?2004h>     coef,*_ = np.linalg.lstsq(X, y, rcond=None)
+[?2004l[?2004h>     pred = X@coef
+[?2004l[?2004h>     res = y-pred
+[?2004l[?2004h>     print(colname, 'log' if log else 'lin', 'resid std:', res.std().round(4), 'range:', res.min().round(3), res.max().round(3))
+[?2004l[?2004h>     # full-plate baseline
+[?2004l[?2004h>     Rf = pd.get_dummies(d.row).values.astype(float)
+[?2004l[?2004h>     Cf = d[['col']].values.astype(float)
+[?2004l[?2004h>     Xf = np.hstack([Rf, Cf/12.0])
+[?2004l[?2004h>     base = Xf@coef
+[?2004l[?2004h>     return np.exp(base) if log else base
+[?2004l[?2004h> 
+[?2004l[?2004h> d['veh_r2'] = vehfit('marker_per_cell')
+[?2004l[?2004h> d['veh_r1'] = vehfit('n_cells')
+[?2004l[?2004h> d['resp_m'] = d.marker_per_cell / d.veh_r2
+[?2004l[?2004h> d['resp_n'] = d.n_cells / d.veh_r1
+[?2004l[?2004h> for comp in sorted(d[d.role=='compound'].compound.unique()):
+[?2004l[?2004h>     sub = d[d.compound==comp].sort_values('dose_uM')
+[?2004l[?2004h>     print(comp)
+[?2004l[?2004h>     print('  doses:', sub.dose_uM.values)
+[?2004l[?2004h>     print('  resp_m:', sub.resp_m.round(3).values)
+[?2004l[?2004h>     print('  resp_n:', sub.resp_n.round(3).values)
+[?2004l[?2004h> ref = d[d.role=='reference']
+[?2004l[?2004h> print('reference resp_m:', ref.resp_m.round(3).values, 'resp_n:', ref.resp_n.round(3).values)
+[?2004l[?2004h> print('vehicle resp_m:', d[d.role=='vehicle'].resp_m.round(3).values)
+[?2004l[?2004h> print('vehicle resp_n:', d[d.role=='vehicle'].resp_n.round(3).values)
+[?2004l[?2004h> EOF
+[?2004lmarker_per_cell log resid std: 0.0561 range: -0.184 0.094
+n_cells log resid std: 0.498 range: -1.66 1.02
+CPD-1142
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.000e+01 3.000e+01]
+  resp_m: [0.039 0.043 0.064 0.049 0.575 0.869]
+  resp_n: [0.325 0.637 0.762 1.443 1.147 1.012]
+CPD-1550
+  doses: [1.372e-02 4.115e-02 1.235e-01 1.111e+00 3.333e+00 1.000e+01 3.000e+01]
+  resp_m: [0.157 0.356 0.688 0.994 1.042 0.049 0.962]
+  resp_n: [1.403 1.281 1.329 1.172 1.049 0.95  0.516]
+CPD-1985
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  resp_m: [1.144 0.051 1.019 1.011 1.011 1.076 0.961 0.932]
+  resp_n: [0.708 1.114 1.029 1.051 0.89  0.964 0.833 0.473]
+CPD-1987
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  resp_m: [0.051 0.107 0.25  0.556 0.841 0.954 1.027 0.95 ]
+  resp_n: [0.749 1.287 0.942 0.96  1.055 0.877 0.886 0.444]
+CPD-2467
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  resp_m: [0.019 0.066 0.044 0.172 0.451 0.508 0.695 0.943]
+  resp_n: [0.19  0.443 0.949 0.469 0.268 0.462 0.51  0.532]
+CPD-3353
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  resp_m: [0.045 1.04  0.828 0.847 0.89  0.92  0.932 0.919]
+  resp_n: [1.461 1.371 0.833 0.95  1.291 0.993 1.034 0.911]
+CPD-5484
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 3.333e+00 1.000e+01
+ 3.000e+01]
+  resp_m: [0.995 0.483 0.608 1.083 0.989 1.023 0.883 0.046]
+  resp_n: [3.413 0.352 1.126 3.383 2.652 2.694 2.756 2.629]
+CPD-7090
+  doses: [1.372e-02 4.115e-02 1.235e-01 3.704e-01 1.111e+00 1.000e+01 3.000e+01]
+  resp_m: [0.796 0.784 1.164 0.884 0.944 0.055 1.101]
+  resp_n: [0.795 1.516 1.458 1.46  1.327 1.199 1.018]
+reference resp_m: [0.933 0.991 1.05  0.033 1.119 0.987 1.027] resp_n: [0.976 0.343 1.193 0.585 1.096 0.96  2.777]
+vehicle resp_m: [1.016 1.014 0.97  0.995 1.031 0.974 1.034 1.011 0.957 0.984 1.007 1.009
+ 1.059 1.016 0.929 0.832 1.098 1.095 1.013 1.014 0.973 0.965 1.057 0.98 ]
+vehicle resp_n: [0.922 1.074 1.009 1.2   0.984 0.847 1.24  0.981 0.823 0.736 1.225 1.109
+ 1.393 1.241 0.578 1.519 1.237 0.532 1.276 1.005 0.779 0.19  1.895 2.774]
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0].map(lambda r: ord(r)-65); d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> d = d[d.qc_pass==1]
+[?2004l[?2004h> veh = d[d.role=='vehicle']
+[?2004l[?2004h> mat = np.full((8,12), np.nan)
+[?2004l[?2004h> for _,r in veh.iterrows(): mat[int(r.row), int(r.col)-1] = r.n_cells
+[?2004l[?2004h> print('vehicle counts matrix (rows A-H, cols 1-12):')
+[?2004l[?2004h> print(np.nan_to_num(mat, nan=-1).astype(int))
+[?2004l[?2004h> # try models for counts
+[?2004l[?2004h> veh2 = veh.copy()
+[?2004l[?2004h> R = pd.get_dummies(veh2.row).values.astype(float)
+[?2004l[?2004h> c = veh2.col.values/12.0
+[?2004l[?2004h> y = veh2.n_cells.values.astype(float)
+[?2004l[?2004h> # model A: row + col (additive, linear space)
+[?2004l[?2004h> XA = np.hstack([R, c[:,None]])
+[?2004l[?2004h> cA,*_ = np.linalg.lstsq(XA, y, rcond=None); rA = y - XA@cA
+[?2004l[?2004h> # model B: row + col + col^2
+[?2004l[?2004h> XB = np.hstack([R, c[:,None], (c**2)[:,None]])
+[?2004l[?2004h> cB,*_ = np.linalg.lstsq(XB, y, rcond=None); rB = y - XB@cB
+[?2004l[?2004h> # model C: row only
+[?2004l[?2004h> XC = R
+[?2004l[?2004h> cC,*_ = np.linalg.lstsq(XC, y, rcond=None); rC = y - XC@cC
+[?2004l[?2004h> print('resid std: additive+col', rA.std().round(2), ' +col^2', rB.std().round(2), ' row-only', rC.std().round(2))
+[?2004l[?2004h> print('coef col (A):', cA[-1].round(2), ' (B):', cB[-2].round(2), cB[-1].round(2))
+[?2004l[?2004h> print('resid additive+col per well:')
+[?2004l[?2004h> for (_,rr),res in zip(veh2.iterrows(), rA): print(rr.well, int(rr.n_cells), round(res,1))
+[?2004l[?2004h> EOF
+[?2004lvehicle counts matrix (rows A-H, cols 1-12):
+[[ -1  -1  44  -1  -1  -1  60  -1  -1  -1  66  -1]
+ [ -1 125  -1  -1  -1 120  -1  -1  -1 121  -1  -1]
+ [ -1 122  -1  -1  -1 113  -1  -1  -1 111  -1  -1]
+ [ 60  -1  -1  -1 117  -1  -1  -1 124  -1  -1  -1]
+ [ -1  -1  -1 116  -1  -1  -1 121  -1  -1  -1  66]
+ [ -1  -1  -1 129  -1  -1  -1 123  -1  -1  -1  62]
+ [ -1  -1 129  -1  -1  -1 119  -1  -1  -1 108  -1]
+ [  3  -1  -1  -1  35  -1  -1  -1  60  -1  -1  -1]]
+resid std: additive+col 19.63  +col^2 13.04  row-only 19.64
+coef col (A): -1.87  (B): 216.24 -201.34
+resid additive+col per well:
+A03 44 -13.3
+A07 60 3.3
+A11 66 10.0
+B02 125 2.4
+B06 120 -2.0
+B10 121 -0.4
+C02 122 6.0
+C06 113 -2.3
+C10 111 -3.7
+D01 60 -41.0
+D05 117 16.7
+D09 124 24.3
+E04 116 14.4
+E08 121 20.0
+E12 66 -34.4
+F04 129 23.7
+F08 123 18.3
+F12 62 -42.0
+G03 129 9.7
+G07 119 0.3
+G11 108 -10.0
+H01 3 -30.3
+H05 35 2.3
+H09 60 28.0
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0].map(lambda r: ord(r)-65); d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> d = d[d.qc_pass==1].copy()
+[?2004l[?2004h> 
+[?2004l[?2004h> # vehicle baseline models
+[?2004l[?2004h> veh = d[d.role=='vehicle']
+[?2004l[?2004h> def base_model(df, veh, col, log):
+[?2004l[?2004h>     y = np.log(veh[col]) if log else veh[col].values.astype(float)
+[?2004l[?2004h>     R = pd.get_dummies(veh.row)
+[?2004l[?2004h>     Rf = pd.get_dummies(df.row).reindex(columns=R.columns, fill_value=0).values.astype(float)
+[?2004l[?2004h>     R = R.values.astype(float)
+[?2004l[?2004h>     c = (veh.col.values/12.0); cf = df.col.values/12.0
+[?2004l[?2004h>     X = np.hstack([R, c[:,None], (c**2)[:,None]])
+[?2004l[?2004h>     Xf = np.hstack([Rf, cf[:,None], (cf**2)[:,None]])
+[?2004l[?2004h>     coef,*_ = np.linalg.lstsq(X, y, rcond=None)
+[?2004l[?2004h>     b = Xf@coef
+[?2004l[?2004h>     return np.exp(b) if log else b
+[?2004l[?2004h> 
+[?2004l[?2004h> d['veh_m'] = base_model(d, veh, 'marker_per_cell', True)
+[?2004l[?2004h> d['veh_n'] = base_model(d, veh, 'n_cells', False)
+[?2004l[?2004h> d['resp_m'] = d.marker_per_cell/d.veh_m
+[?2004l[?2004h> d['resp_n'] = d.n_cells/d.veh_n
+[?2004l[?2004h> 
+[?2004l[?2004h> ser = sorted([0.01372,0.04115,0.1235,0.3704,1.111,3.333,10.0,30.0], reverse=True)
+[?2004l[?2004h> print('Testing REVERSED assignment: k-th compound well in row gets dose', ser)
+[?2004l[?2004h> for comp in sorted(d[d.role=='compound'].compound.unique()):
+[?2004l[?2004h>     sub = d[d.compound==comp].sort_values('well')  # well order along row
+[?2004l[?2004h>     eff = ser[:len(sub)]
+[?2004l[?2004h>     print(comp)
+[?2004l[?2004h>     print('  eff dose:', [round(v,4) for v in eff])
+[?2004l[?2004h>     print('  resp_m  :', sub.resp_m.round(3).values)
+[?2004l[?2004h>     print('  resp_n  :', sub.resp_n.round(3).values)
+[?2004l[?2004h> EOF
+[?2004lTesting REVERSED assignment: k-th compound well in row gets dose [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.04115, 0.01372]
+CPD-1142
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235]
+  resp_m  : [0.039 0.043 0.063 0.049 0.574 0.875]
+  resp_n  : [0.308 0.497 0.567 1.092 1.191 1.23 ]
+CPD-1550
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411]
+  resp_m  : [0.158 0.355 0.683 0.984 1.041 0.049 0.979]
+  resp_n  : [1.314 1.112 1.111 1.098 1.214 1.29  0.867]
+CPD-1985
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411, 0.0137]
+  resp_m  : [1.166 0.051 1.01  1.001 1.002 1.071 0.97  0.949]
+  resp_n  : [0.752 1.001 0.893 0.969 0.873 1.03  1.153 0.79 ]
+CPD-1987
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411, 0.0137]
+  resp_m  : [0.052 0.108 0.248 0.551 0.832 0.946 1.028 0.968]
+  resp_n  : [0.756 1.175 0.788 0.801 0.897 0.827 1.014 0.704]
+CPD-2467
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411, 0.0137]
+  resp_m  : [0.02  0.066 0.044 0.171 0.446 0.504 0.692 0.952]
+  resp_n  : [0.198 0.398 0.831 0.41  0.249 0.456 0.547 0.73 ]
+CPD-3353
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411, 0.0137]
+  resp_m  : [0.046 1.035 0.821 0.838 0.883 0.916 0.934 0.937]
+  resp_n  : [1.509 1.068 0.622 0.711 1.093 0.954 1.196 2.149]
+CPD-5484
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411, 0.0137]
+  resp_m  : [1.002 0.483 0.604 1.07  0.977 1.012 0.883 0.047]
+  resp_n  : [2.447 0.177 0.475 1.294 1.059 1.189 1.889 8.722]
+CPD-7090
+  eff dose: [30.0, 10.0, 3.333, 1.111, 0.3704, 0.1235, 0.0411]
+  resp_m  : [0.809 0.79  1.164 0.875 0.932 0.055 1.109]
+  resp_n  : [0.736 1.248 1.119 1.075 0.994 1.089 1.213]
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> def load2(w):
+[?2004l[?2004h>     return (tifffile.imread(f'{IN}/images/{w}_ch2.tif').astype(np.float32)-dark)/(fl2-dark)
+[?2004l[?2004h> def cellvals(w):
+[?2004l[?2004h>     c2 = load2(w)
+[?2004l[?2004h>     kept = np.load(f'/task/work/masks/{w}.npy')
+[?2004l[?2004h>     nuc = kept>0
+[?2004l[?2004h>     dl = ndi.grey_dilation(kept, size=(5,5))
+[?2004l[?2004h>     cyto = np.where((dl>0)&(~nuc), dl, 0)
+[?2004l[?2004h>     n=kept.max()
+[?2004l[?2004h>     vals = np.asarray(ndi.mean(c2, labels=cyto, index=np.arange(1,n+1)))
+[?2004l[?2004h>     bg = np.median(c2[~ndi.binary_dilation(nuc, iterations=5)])
+[?2004l[?2004h>     return vals-bg
+[?2004l[?2004h> for w in ['A02','A03','B01','B02','C01','C03','C02','D02','D11','D12','D09','E01','E03','E05','E04','F09','F08','G01','G02','G03','H12','H09','A01','B12','E02']:
+[?2004l[?2004h>     v = cellvals(w)
+[?2004l[?2004h>     print(f'{w}: n={len(v)} med={np.median(v):.4f} mean={v.mean():.4f} p10={np.percentile(v,10):.4f} p90={np.percentile(v,90):.4f}')
+[?2004l[?2004h> EOF
+[?2004lA02: n=67 med=0.0041 mean=0.0041 p10=0.0030 p90=0.0055
+A03: n=44 med=0.1067 mean=0.1018 p10=0.0748 p90=0.1350
+B01: n=19 med=0.0002 mean=0.0015 p10=-0.0005 p90=0.0049
+B02: n=125 med=0.0869 mean=0.0846 p10=0.0641 p90=0.1163
+C01: n=67 med=0.0861 mean=0.0885 p10=0.0647 p90=0.1158
+C03: n=114 med=0.0048 mean=0.0048 p10=0.0030 p90=0.0064
+C02: n=122 med=0.0865 mean=0.0883 p10=0.0627 p90=0.1215
+D02: n=119 med=0.0135 mean=0.0132 p10=0.0088 p90=0.0179
+D11: n=115 med=0.0100 mean=0.0100 p10=0.0067 p90=0.0132
+D12: n=65 med=0.2233 mean=0.2188 p10=0.1483 p90=0.2926
+D09: n=124 med=0.1705 mean=0.1704 p10=0.1164 p90=0.2350
+E01: n=24 med=0.0032 mean=0.0030 p10=0.0008 p90=0.0044
+E03: n=51 med=0.0047 mean=0.0041 p10=-0.0001 p90=0.0061
+E05: n=66 med=0.0079 mean=0.0074 p10=-0.0006 p90=0.0124
+E04: n=116 med=0.1077 mean=0.1109 p10=0.0705 p90=0.1488
+F09: n=124 med=0.0086 mean=0.0085 p10=0.0058 p90=0.0115
+F08: n=123 med=0.1591 mean=0.1540 p10=0.0948 p90=0.2126
+G01: n=70 med=0.0040 mean=0.0039 p10=0.0027 p90=0.0054
+G02: n=125 med=0.0091 mean=0.0090 p10=0.0047 p90=0.0140
+G03: n=129 med=0.0943 mean=0.0945 p10=0.0543 p90=0.1398
+H12: n=64 med=0.0113 mean=0.0114 p10=0.0081 p90=0.0154
+H09: n=60 med=0.1823 mean=0.1799 p10=0.1135 p90=0.2620
+A01: n=43 med=0.0805 mean=0.0766 p10=0.0527 p90=0.1038
+B12: n=53 med=0.2259 mean=0.2273 p10=0.1558 p90=0.3235
+E02: n=45 med=0.0034 mean=0.0028 p10=-0.0007 p90=0.0050
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(IN+'/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> fl1 = tifffile.imread(IN+'/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> fl2 = tifffile.imread(IN+'/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> def load(w,ch):
+[?2004l[?2004h>     fl = fl1 if ch==1 else fl2
+[?2004l[?2004h>     return (tifffile.imread(f'{IN}/images/{w}_ch{ch}.tif').astype(np.float32)-dark)/(fl-dark)
+[?2004l[?2004h> CHARS=' .:-=+*#%@'
+[?2004l[?2004h> def show(w,ch,lo,hi):
+[?2004l[?2004h>     im = load(w,ch)
+[?2004l[?2004h>     b = im.reshape(16,20,16,20).mean(axis=(1,3))
+[?2004l[?2004h>     b = np.clip((b-lo)/(hi-lo),0,0.999)
+[?2004l[?2004h>     idx = (b*10).astype(int)
+[?2004l[?2004h>     print(f'--- {w} ch{ch}')
+[?2004l[?2004h>     for r in idx:
+[?2004l[?2004h>         print(''.join(CHARS[i] for i in r))
+[?2004l[?2004h> for w in ['D02','D12','H03','H12']:
+[?2004l[?2004h>     show(w,1,0.01,0.5)
+[?2004l[?2004h>     show(w,2,0.03,0.3)
+[?2004l[?2004h> EOF
+[?2004l--- D02 ch1
+     .: .     : 
+     =+         
+              : 
+    .: :#+      
+    *  =+:   --.
+   .+: =.   .%# 
+        -  .##@.
+           .+*+:
+         . .+%*-
+         - .#%= 
+         =: -#+ 
+  .=   =     ++ 
+    -  .:    .: 
+    :-  : +=    
+    -.-+-:#+.   
+    .   #=:     
+--- D02 ch2
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+--- D12 ch1
+ .:             
+ =.             
+    .         : 
+  ..+#--        
+ .**@%@.  -     
+  *@#*+-    :   
+  -++%#:  +     
+  ::-.=      .- 
+    .        += 
+                
+  .             
+-:-             
+  :             
+.               
+                
+                
+--- D12 ch2
+:==:::::::::::::
+:**:::::::::::::
+:::=*:::::::::%-
+:+#%@@%%::::::-:
+:+@@#%%#::%=::::
+::#%#@@%::::*=::
+::%@%%@+::#+=--:
+::+@@@@=::=--*%=
+::::+-::::::-@@:
+:::::::::::::-#:
+--+-::::::::::::
+#+**::::::::::::
+-:+=::::::::::::
+=:::::::::::::::
+::::::::::::::::
+::::::::::::::::
+--- H03 ch1
+                
+  :             
+                
+                
+                
+       :        
+    =  :        
+    .   -       
+                
+      ..        
+  ..         :. 
+  :-        .   
+         .      
+                
+                
+                
+--- H03 ch2
+                
+  -.            
+  .             
+                
+                
+      .=:       
+   .= .=:       
+   .=  .=.      
+                
+      --    ... 
+  ::  ..    =%+.
+  ==         .  
+  .             
+                
+                
+                
+--- H12 ch1
+                
+            :   
+      =.        
+    . =         
+ -. **=         
+    .=.    -:   
+          =%@-  
+          +%#+= 
+          :#-:: 
+             :  
+                
+                
+   . :  =:      
+   -=@: *-      
+ :  =:   .      
+             -- 
+--- H12 ch2
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::-:
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::::::::::::::
+::::-:::-:::::::
+::::-:::::::::::
+::::::::::::::::
+[?2004hroot@3fb925ae59ab:/task# python3 - << 'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from scipy.stats import spearmanr
+[?2004l[?2004h> m = pd.read_csv('/task/output/well_measurements.tsv', sep='\t')
+[?2004l[?2004h> l = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> d = l.merge(m, on='well')
+[?2004l[?2004h> d['row'] = d.well.str[0].map(lambda r: ord(r)-65); d['col'] = d.well.str[1:].astype(int)
+[?2004l[?2004h> d = d[d.qc_pass==1].copy()
+[?2004l[?2004h> veh = d[d.role=='vehicle']
+[?2004l[?2004h> def base(df, veh, col, log):
+[?2004l[?2004h>     y = np.log(veh[col]) if log else veh[col].values.astype(float)
+[?2004l[?2004h>     R = pd.get_dummies(veh.row); Rf = pd.get_dummies(df.row).reindex(columns=R.columns, fill_value=0).values.astype(float)
+[?2004l[?2004h>     R = R.values.astype(float)
+[?2004l[?2004h>     c = veh.col.values/12.0; cf = df.col.values/12.0
+[?2004l[?2004h>     X = np.hstack([R, c[:,None], (c**2)[:,None]]); Xf = np.hstack([Rf, cf[:,None], (cf**2)[:,None]])
+[?2004l[?2004h>     coef,*_ = np.linalg.lstsq(X, y, rcond=None)
+[?2004l[?2004h>     b = Xf@coef
+[?2004l[?2004h>     return np.exp(b) if log else b
+[?2004l[?2004h> d['veh_m'] = base(d, veh, 'marker_per_cell', True)
+[?2004l[?2004h> d['veh_n'] = base(d, veh, 'n_cells', False)
+[?2004l[?2004h> d['resp_m'] = d.marker_per_cell/d.veh_m; d['resp_n'] = d.n_cells/d.veh_n
+[?2004l[?2004h> ser = sorted([0.01372,0.04115,0.1235,0.3704,1.111,3.333,10.0,30.0], reverse=True)
+[?2004l[?2004h> print('compound  | file: rho_m rho_n | reversed: rho_m rho_n')
+[?2004l[?2004h> for comp in sorted(d[d.role=='compound'].compound.unique()):
+[?2004l[?2004h>     sub = d[d.compound==comp].sort_values('well')
+[?2004l[?2004h>     rho_file_m = spearmanr(sub.dose_uM, sub.resp_m).statistic
+[?2004l[?2004h>     rho_file_n = spearmanr(sub.dose_uM, sub.resp_n).statistic
+[?2004l[?2004h>     rho_rev_m = spearmanr(ser[:len(sub)], sub.resp_m).statistic
+[?2004l[?2004h>     rho_rev_n = spearmanr(ser[:len(sub)], sub.resp_n).statistic
+[?2004l[?2004h>     print(f'{comp} | {rho_file_m:+.2f} {rho_file_n:+.2f} | {rho_rev_m:+.2f} {rho_rev_n:+.2f}')
+[?2004l[?2004h> EOF
+[?2004lcompound  | file: rho_m rho_n | reversed: rho_m rho_n
+CPD-1142 | +0.94 +1.00 | -0.94 -1.00
+CPD-1550 | +0.29 -0.43 | -0.29 +0.43
+CPD-1985 | -0.33 +0.29 | +0.33 -0.29
+CPD-1987 | +0.98 -0.05 | -0.98 +0.05
+CPD-2467 | +0.98 +0.55 | -0.98 -0.55
+CPD-3353 | +0.50 +0.31 | -0.50 -0.31
+CPD-5484 | -0.19 +0.43 | +0.19 -0.43
+CPD-7090 | +0.18 +0.21 | -0.18 -0.21
+[?2004hroot@3fb925ae59ab:/task# 

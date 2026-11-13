@@ -1,0 +1,2511 @@
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/BRIEF.md
+[?2004lYou are the computational biologist of a functional-genomics core facility. You are taking over a
+pooled CRISPR-Cas9 knockout drug-modifier screen (secondary validation library VAL-2) from a
+colleague who has left. He had started the analysis and mailed a draft hit list to the PI. You
+deliver the final results, an audit of the inherited project and an erratum for the mailed list.
+
+Task directory:
+- `/task`
+
+Inputs (read-only) under `/task/input/part_A`:
+- `fastq/<sample_id>.fastq.gz` - one single-end FASTQ per library (8 libraries)
+- `samples.tsv` - sample sheet as it was submitted with the libraries (`sample_id`, `arm`,
+  `replicate`, `fastq_file`, `sequencing_run`); `arm` is `T0`, `vehicle` or `drug`
+- `library.tsv` - current release (r2) of the sgRNA library: `sgRNA`, `sequence`, `gene`.
+  Non-targeting control sgRNAs have `gene = NON_TARGETING`. Gene identities were blinded by the client.
+- `reference_genes.tsv` - library genes whose behaviour under this compound is established
+  (`gene`, `expected_class`)
+- `screen_design.md` - wet-lab notes on the library, the treatment arms, PCR and sequencing
+- `screen_sop.md` - the facility SOP for drug-modifier screens: definitions, acceptance criteria,
+  the hand-over audit checklist
+- `handover/` - the colleague's project folder: `HANDOVER.md`, `count_guides.py`,
+  `analyse_screen.py`, `counts_draft.tsv`, `gene_draft.tsv`, `hits_mailed.tsv`
+
+Available software (on `PATH`): `cutadapt`, `mageck` (MAGeCK), Python 3.12 with numpy, scipy and
+pandas. There is no internet access.
+
+Your task:
+1. Count how many reads carry each library sgRNA in every library.
+2. For every targeted gene, estimate the fitness effect of the knockout and its effect on the
+   response to the drug, and classify the gene as sensitiser, resistance gene or neither.
+3. Audit the inherited project against the checklist in section 6 of the SOP.
+4. Write the erratum for the hit list that was mailed.
+
+Required outputs under `/task/output/part_A`:
+- `counts.tsv` - tab-separated, header `sgRNA`, `gene`, then one column per `sample_id` in the
+  order of `samples.tsv`. One row per sgRNA of `library.tsv` (non-targeting sgRNAs included), `gene`
+  as in `library.tsv`. Values are raw integer read counts of the FASTQ file listed for that sample.
+- `gene_summary.tsv` - tab-separated with at least the columns `gene`, `lfc_fitness`, `lfc_drug`,
+  `drug_class`; one row per targeted gene (no row for `NON_TARGETING`). Extra columns are allowed.
+  - `lfc_fitness`: log2 fold change of the gene, vehicle-treated libraries of day 14 versus T0,
+    defined as the median over the gene's sgRNAs of the sgRNA-level log2 ratio of depth-normalised
+    abundance (mean of the replicates of one group over mean of the replicates of the other). The
+    scale must be such that a knockout without any fitness effect has `lfc_fitness` = 0.
+  - `lfc_drug`: the same quantity for drug-treated versus vehicle-treated libraries of day 14;
+    negative means less abundant under drug. A knockout that does not change the drug response
+    has `lfc_drug` = 0.
+  - `drug_class`: `sensitiser` if the gene's sgRNAs are significantly less abundant under drug than
+    under vehicle, `resistance` if they are significantly more abundant, otherwise `none`; false
+    discovery rate 5%. The calls must satisfy the release criterion of SOP section 5.
+  - Libraries are grouped by the treatment they actually received (SOP section 3).
+- `audit.tsv` - tab-separated, columns `item`, `verdict`; one row per checklist item of SOP
+  section 6, `verdict` is `ok` or `defective`.
+- `erratum.tsv` - tab-separated, columns `gene`, `verdict`; one row per gene of
+  `handover/hits_mailed.tsv`. `verdict` is `confirmed` if your final `drug_class` of the gene is
+  `sensitiser` or `resistance`, and `retracted` if it is `none`.
+- `qc.json` - `{"samples": {"<sample_id>": {"total_reads": <int>, "mapped_reads": <int>, "arm": "<T0|vehicle|drug>"}, ...}}`
+  where `total_reads` is the number of reads in the FASTQ, `mapped_reads` the number of reads
+  assigned to a library sgRNA and `arm` the group in which you analysed the library.
+
+Constraints:
+- Do not modify anything under `/task/input/part_A`; write deliverables only under `/task/output/part_A`.
+- Every library in the sample sheet belongs to the experiment and must be reported and used.
+- Do not ask for confirmation. Execute directly.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_B/BRIEF.md
+[?2004lYou are the computational biologist of a functional-genomics core facility. You are taking over a
+pooled CRISPR-Cas9 knockout drug-modifier screen (secondary validation library VAL-2) from a
+colleague who has left. He had started the analysis and mailed a draft hit list to the PI. You
+deliver the final results, an audit of the inherited project and an erratum for the mailed list.
+
+Task directory:
+- `/task`
+
+Inputs (read-only) under `/task/input/part_B`:
+- `fastq/<sample_id>.fastq.gz` - one single-end FASTQ per library (8 libraries)
+- `samples.tsv` - sample sheet as it was submitted with the libraries (`sample_id`, `arm`,
+  `replicate`, `fastq_file`, `sequencing_run`); `arm` is `T0`, `vehicle` or `drug`
+- `library.tsv` - current release (r2) of the sgRNA library: `sgRNA`, `sequence`, `gene`.
+  Non-targeting control sgRNAs have `gene = NON_TARGETING`. Gene identities were blinded by the client.
+- `reference_genes.tsv` - library genes whose behaviour under this compound is established
+  (`gene`, `expected_class`)
+- `screen_design.md` - wet-lab notes on the library, the treatment arms, PCR and sequencing
+- `screen_sop.md` - the facility SOP for drug-modifier screens: definitions, acceptance criteria,
+  the hand-over audit checklist
+- `handover/` - the colleague's project folder: `HANDOVER.md`, `count_guides.py`,
+  `analyse_screen.py`, `counts_draft.tsv`, `gene_draft.tsv`, `hits_mailed.tsv`
+
+Available software (on `PATH`): `cutadapt`, `mageck` (MAGeCK), Python 3.12 with numpy, scipy and
+pandas. There is no internet access.
+
+Your task:
+1. Count how many reads carry each library sgRNA in every library.
+2. For every targeted gene, estimate the fitness effect of the knockout and its effect on the
+   response to the drug, and classify the gene as sensitiser, resistance gene or neither.
+3. Audit the inherited project against the checklist in section 6 of the SOP.
+4. Write the erratum for the hit list that was mailed.
+
+Required outputs under `/task/output/part_B`:
+- `counts.tsv` - tab-separated, header `sgRNA`, `gene`, then one column per `sample_id` in the
+  order of `samples.tsv`. One row per sgRNA of `library.tsv` (non-targeting sgRNAs included), `gene`
+  as in `library.tsv`. Values are raw integer read counts of the FASTQ file listed for that sample.
+- `gene_summary.tsv` - tab-separated with at least the columns `gene`, `lfc_fitness`, `lfc_drug`,
+  `drug_class`; one row per targeted gene (no row for `NON_TARGETING`). Extra columns are allowed.
+  - `lfc_fitness`: log2 fold change of the gene, vehicle-treated libraries of day 14 versus T0,
+    defined as the median over the gene's sgRNAs of the sgRNA-level log2 ratio of depth-normalised
+    abundance (mean of the replicates of one group over mean of the replicates of the other). The
+    scale must be such that a knockout without any fitness effect has `lfc_fitness` = 0.
+  - `lfc_drug`: the same quantity for drug-treated versus vehicle-treated libraries of day 14;
+    negative means less abundant under drug. A knockout that does not change the drug response
+    has `lfc_drug` = 0.
+  - `drug_class`: `sensitiser` if the gene's sgRNAs are significantly less abundant under drug than
+    under vehicle, `resistance` if they are significantly more abundant, otherwise `none`; false
+    discovery rate 5%. The calls must satisfy the release criterion of SOP section 5.
+  - Libraries are grouped by the treatment they actually received (SOP section 3).
+- `audit.tsv` - tab-separated, columns `item`, `verdict`; one row per checklist item of SOP
+  section 6, `verdict` is `ok` or `defective`.
+- `erratum.tsv` - tab-separated, columns `gene`, `verdict`; one row per gene of
+  `handover/hits_mailed.tsv`. `verdict` is `confirmed` if your final `drug_class` of the gene is
+  `sensitiser` or `resistance`, and `retracted` if it is `none`.
+- `qc.json` - `{"samples": {"<sample_id>": {"total_reads": <int>, "mapped_reads": <int>, "arm": "<T0|vehicle|drug>"}, ...}}`
+  where `total_reads` is the number of reads in the FASTQ, `mapped_reads` the number of reads
+  assigned to a library sgRNA and `arm` the group in which you analysed the library.
+
+Constraints:
+- Do not modify anything under `/task/input/part_B`; write deliverables only under `/task/output/part_B`.
+- Every library in the sample sheet belongs to the experiment and must be reported and used.
+- Do not ask for confirmation. Execute directly.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_C/BRIEF.md
+[?2004lYou are the computational biologist of a functional-genomics core facility. You are taking over a
+pooled CRISPR-Cas9 knockout drug-modifier screen (secondary validation library VAL-2) from a
+colleague who has left. He had started the analysis and mailed a draft hit list to the PI. You
+deliver the final results, an audit of the inherited project and an erratum for the mailed list.
+
+Task directory:
+- `/task`
+
+Inputs (read-only) under `/task/input/part_C`:
+- `fastq/<sample_id>.fastq.gz` - one single-end FASTQ per library (8 libraries)
+- `samples.tsv` - sample sheet as it was submitted with the libraries (`sample_id`, `arm`,
+  `replicate`, `fastq_file`, `sequencing_run`); `arm` is `T0`, `vehicle` or `drug`
+- `library.tsv` - current release (r2) of the sgRNA library: `sgRNA`, `sequence`, `gene`.
+  Non-targeting control sgRNAs have `gene = NON_TARGETING`. Gene identities were blinded by the client.
+- `reference_genes.tsv` - library genes whose behaviour under this compound is established
+  (`gene`, `expected_class`)
+- `screen_design.md` - wet-lab notes on the library, the treatment arms, PCR and sequencing
+- `screen_sop.md` - the facility SOP for drug-modifier screens: definitions, acceptance criteria,
+  the hand-over audit checklist
+- `handover/` - the colleague's project folder: `HANDOVER.md`, `count_guides.py`,
+  `analyse_screen.py`, `counts_draft.tsv`, `gene_draft.tsv`, `hits_mailed.tsv`
+
+Available software (on `PATH`): `cutadapt`, `mageck` (MAGeCK), Python 3.12 with numpy, scipy and
+pandas. There is no internet access.
+
+Your task:
+1. Count how many reads carry each library sgRNA in every library.
+2. For every targeted gene, estimate the fitness effect of the knockout and its effect on the
+   response to the drug, and classify the gene as sensitiser, resistance gene or neither.
+3. Audit the inherited project against the checklist in section 6 of the SOP.
+4. Write the erratum for the hit list that was mailed.
+
+Required outputs under `/task/output/part_C`:
+- `counts.tsv` - tab-separated, header `sgRNA`, `gene`, then one column per `sample_id` in the
+  order of `samples.tsv`. One row per sgRNA of `library.tsv` (non-targeting sgRNAs included), `gene`
+  as in `library.tsv`. Values are raw integer read counts of the FASTQ file listed for that sample.
+- `gene_summary.tsv` - tab-separated with at least the columns `gene`, `lfc_fitness`, `lfc_drug`,
+  `drug_class`; one row per targeted gene (no row for `NON_TARGETING`). Extra columns are allowed.
+  - `lfc_fitness`: log2 fold change of the gene, vehicle-treated libraries of day 14 versus T0,
+    defined as the median over the gene's sgRNAs of the sgRNA-level log2 ratio of depth-normalised
+    abundance (mean of the replicates of one group over mean of the replicates of the other). The
+    scale must be such that a knockout without any fitness effect has `lfc_fitness` = 0.
+  - `lfc_drug`: the same quantity for drug-treated versus vehicle-treated libraries of day 14;
+    negative means less abundant under drug. A knockout that does not change the drug response
+    has `lfc_drug` = 0.
+  - `drug_class`: `sensitiser` if the gene's sgRNAs are significantly less abundant under drug than
+    under vehicle, `resistance` if they are significantly more abundant, otherwise `none`; false
+    discovery rate 5%. The calls must satisfy the release criterion of SOP section 5.
+  - Libraries are grouped by the treatment they actually received (SOP section 3).
+- `audit.tsv` - tab-separated, columns `item`, `verdict`; one row per checklist item of SOP
+  section 6, `verdict` is `ok` or `defective`.
+- `erratum.tsv` - tab-separated, columns `gene`, `verdict`; one row per gene of
+  `handover/hits_mailed.tsv`. `verdict` is `confirmed` if your final `drug_class` of the gene is
+  `sensitiser` or `resistance`, and `retracted` if it is `none`.
+- `qc.json` - `{"samples": {"<sample_id>": {"total_reads": <int>, "mapped_reads": <int>, "arm": "<T0|vehicle|drug>"}, ...}}`
+  where `total_reads` is the number of reads in the FASTQ, `mapped_reads` the number of reads
+  assigned to a library sgRNA and `arm` the group in which you analysed the library.
+
+Constraints:
+- Do not modify anything under `/task/input/part_C`; write deliverables only under `/task/output/part_C`.
+- Every library in the sample sheet belongs to the experiment and must be reported and used.
+- Do not ask for confirmation. Execute directly.
+[?2004hroot@ea53ea076219:/task# head -n 50 /task/input/part_A/screen_sop.md
+[?2004l# SOP FG-017: pooled CRISPR drug-modifier screens, analysis and release (rev. 4)
+
+## 1. Scope
+Secondary (validation) knockout screens with a T0 reference, a vehicle arm and a drug arm. This
+SOP states what a released analysis has to satisfy. It does not prescribe software.
+
+## 2. Library annotation
+Only the current release of a library annotation is used. For VAL-2 this is release 2
+(`library.tsv`). Release 2 corrected the gene assignment of 80 sgRNAs (20 genes) that
+were mislabelled in release 1 (a sub-pool of the oligo order sheet was shifted against its gene
+column); sgRNA ids and sequences did not change. Release 1 is withdrawn.
+
+## 3. Counting and sample identity
+- A read is counted for an sgRNA if it carries that sgRNA's spacer in the amplicon context
+  described in the wet-lab notes. Every library of the sample sheet is counted and reported.
+- The sample sheet is what the wet lab wrote down. Before any contrast is computed, the arm of
+  every day-14 library is confirmed from the data: the sgRNA profile of a library has to agree
+  better with the other libraries of its arm than with the libraries of the other arm. A library
+  that does not is analysed in the arm its profile supports. The arm in which each library was
+  analysed is recorded in `qc.json`.
+
+## 4. Scales
+Log2 fold changes are reported on the scale on which the non-targeting sgRNAs do not change
+(median non-targeting sgRNA = 0). The fitness effect is vehicle day 14 against T0. The drug effect
+is drug day 14 against vehicle day 14; negative values mean depletion under drug.
+
+## 5. Release criterion for modifier calls
+The library carries reference genes for the compound class (`reference_genes.tsv`): modifiers with
+their expected class and genes established not to modify the response (`none`); the reference
+`none` genes cover the whole range of fitness effects. A call set is released only if
+- at least 9 of the 10 reference modifiers are called with their expected class, and
+- at most 1 of the 30 reference `none` genes is called (either class).
+The reference genes are reported like every other gene.
+
+## 6. Hand-over audit checklist
+When a project changes hands, the new analyst checks the inherited files and records one verdict
+per item in `audit.tsv`: `ok` if the statement holds, `defective` if it does not. Each item is
+judged on its own: an effect that follows from the defect of another item is recorded under the
+item that caused it, not under every item it touches.
+
+| item | statement |
+|---|---|
+| `library_release` | The sgRNA-to-gene annotation in the inherited count table is that of the current library release. |
+| `sample_columns` | No sample column of the inherited count table was counted from a FASTQ file other than the one the sample sheet lists for that sample. (A column without any counts is the subject of `read2_library`, not of this item.) |
+| `stagger_reads` | The inherited count table contains the reads of all stagger variants of the amplicon, not only of one read layout. |
+| `read2_library` | The library that was delivered as Read 2 has been counted: no sample column of the inherited count table is empty. |
+| `arm_labels` | The inherited analysis script takes the arm of each library from the sample sheet; every library is thereby analysed in the arm of the treatment it actually received. |
+| `control_normalisation` | The inherited analysis script reports log2 fold changes on the scale of section 4 (non-targeting sgRNAs at 0). |
+| `drug_baseline` | The drug effect in the inherited analysis script compares the drug arm with the vehicle arm of day 14, not with T0. |
+| `contrast_sign` | In the inherited analysis script a negative drug effect means depletion under drug. |
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/screen_sop.md /task/input/part_B/screen_sop.md || true
+[?2004l[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/screen_sop.md /task/input/part_C/screen_sop.md || true
+[?2004l[?2004hroot@ea53ea076219:/task# tail -n +50 /task/input/part_A/screen_sop.md
+[?2004l| `contrast_sign` | In the inherited analysis script a negative drug effect means depletion under drug. |
+
+The inherited gene table and hit list are the output of the inherited analysis script run on the
+inherited count table with the sample sheet.
+
+## 7. Erratum
+If results have left the facility, an erratum lists every gene of the mailed list with one verdict:
+`confirmed` if the gene is a modifier (either class) in the released analysis, `retracted` if not.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/screen_design.md
+[?2004l# Screen design notes (wet lab)
+
+- Cells: Cas9-stable clone (identity blinded by the client), lentiviral infection at MOI ~0.3, 500x library coverage until the arms were split.
+- Library: VAL-2 secondary validation library in lentiGuide-Puro. 190 genes carried forward as candidate fitness genes from the primary genome-wide dropout screen and 40 genes picked as putative neutral; 4 sgRNAs per gene, plus 80 non-targeting sgRNAs. The reference genes for the compound class are part of these genes.
+- Arms: T0 = day 3 after puromycin selection (2 replicates). The culture was then split into a vehicle arm (DMSO, 3 replicates) and a drug arm (compound at IC70, 3 replicates), both harvested 14 days later.
+- Harvest: vehicle arm about 150000 cells per replicate went into the gDNA prep (about 150 cells per sgRNA). The drug arm was limited by the treatment: all surviving cells were taken, about 25000 per replicate (about 25 per sgRNA).
+- gDNA PCR: one-step PCR with the P5 stagger primer mix (8 forward primers, 0-7 nt stagger) and one P7 index primer per library.
+- Amplicon, sense strand 5'->3': ...TCTTGTGGAAAGGACGAAACACCG [20-nt spacer] GTTTTAGAGCTAGAAATAGCAAGTTAAAAT... (sgRNA scaffold).
+- Sequencing run A: NextSeq 550, 75-cycle single read.
+- LIB15 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
+- The day-14 gDNA tubes were re-racked when the -20 freezer was replaced; the sample sheet was filled in from the new rack positions.
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/screen_design.md /task/input/part_B/screen_design.md || true
+[?2004l--- /task/input/part_A/screen_design.md	2026-11-12 14:13:32.000000000 +0000
++++ /task/input/part_B/screen_design.md	2026-11-12 14:13:32.000000000 +0000
+@@ -7,5 +7,5 @@
+ - gDNA PCR: one-step PCR with the P5 stagger primer mix (8 forward primers, 0-7 nt stagger) and one P7 index primer per library.
+ - Amplicon, sense strand 5'->3': ...TCTTGTGGAAAGGACGAAACACCG [20-nt spacer] GTTTTAGAGCTAGAAATAGCAAGTTAAAAT... (sgRNA scaffold).
+ - Sequencing run A: NextSeq 550, 75-cycle single read.
+-- LIB15 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
++- LIB12 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
+ - The day-14 gDNA tubes were re-racked when the -20 freezer was replaced; the sample sheet was filled in from the new rack positions.
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/screen_design.md /task/input/part_C/screen_design.md || true
+[?2004l--- /task/input/part_A/screen_design.md	2026-11-12 14:13:32.000000000 +0000
++++ /task/input/part_C/screen_design.md	2026-11-12 14:13:32.000000000 +0000
+@@ -7,5 +7,5 @@
+ - gDNA PCR: one-step PCR with the P5 stagger primer mix (8 forward primers, 0-7 nt stagger) and one P7 index primer per library.
+ - Amplicon, sense strand 5'->3': ...TCTTGTGGAAAGGACGAAACACCG [20-nt spacer] GTTTTAGAGCTAGAAATAGCAAGTTAAAAT... (sgRNA scaffold).
+ - Sequencing run A: NextSeq 550, 75-cycle single read.
+-- LIB15 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
++- LIB13 failed QC on run A. The core re-sequenced the same PCR product on run B (NovaSeq, paired-end lane shared with other users); only the Read 2 file was delivered and that is the file provided here.
+ - The day-14 gDNA tubes were re-racked when the -20 freezer was replaced; the sample sheet was filled in from the new rack positions.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/handover/HANDOVER.md
+[?2004l# Hand-over, VAL-2 drug screen (K.B.)
+
+Sorry for the state of this, my last week was short.
+
+- `count_guides.py` - my counting script. `counts_draft.tsv` is its output for the eight libraries.
+- `analyse_screen.py` - gene table and hit list from a count table and the sample sheet.
+  `gene_draft.tsv` and `hits_mailed.tsv` are its output for `counts_draft.tsv`.
+- `hits_mailed.tsv` went to the PI by mail on Friday as "top 40 modifier candidates". Nobody has
+  ordered reagents on it yet as far as I know.
+
+Reads assigned per library in `counts_draft.tsv`:
+
+- LIB8: 99717
+- LIB9: 106565
+- LIB10: 114203
+- LIB11: 103010
+- LIB12: 110250
+- LIB13: 109237
+- LIB14: 114795
+- LIB15: 0
+
+Not done: the SOP checks, the reference genes, anything on the re-sequenced library beyond counting it
+the way the script does. I used the dropout workflow we always use and adapted it for two arms.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_B/handover/HANDOVER.md
+[?2004l# Hand-over, VAL-2 drug screen (K.B.)
+
+Sorry for the state of this, my last week was short.
+
+- `count_guides.py` - my counting script. `counts_draft.tsv` is its output for the eight libraries.
+- `analyse_screen.py` - gene table and hit list from a count table and the sample sheet.
+  `gene_draft.tsv` and `hits_mailed.tsv` are its output for `counts_draft.tsv`.
+- `hits_mailed.tsv` went to the PI by mail on Friday as "top 40 modifier candidates". Nobody has
+  ordered reagents on it yet as far as I know.
+
+Reads assigned per library in `counts_draft.tsv`:
+
+- LIB6: 111279
+- LIB7: 115554
+- LIB8: 101881
+- LIB9: 106875
+- LIB10: 108057
+- LIB11: 107956
+- LIB12: 0
+- LIB13: 113328
+
+Not done: the SOP checks, the reference genes, anything on the re-sequenced library beyond counting it
+the way the script does. I used the dropout workflow we always use and adapted it for two arms.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_C/handover/HANDOVER.md
+[?2004l# Hand-over, VAL-2 drug screen (K.B.)
+
+Sorry for the state of this, my last week was short.
+
+- `count_guides.py` - my counting script. `counts_draft.tsv` is its output for the eight libraries.
+- `analyse_screen.py` - gene table and hit list from a count table and the sample sheet.
+  `gene_draft.tsv` and `hits_mailed.tsv` are its output for `counts_draft.tsv`.
+- `hits_mailed.tsv` went to the PI by mail on Friday as "top 80 modifier candidates". Nobody has
+  ordered reagents on it yet as far as I know.
+
+Reads assigned per library in `counts_draft.tsv`:
+
+- LIB8: 14181
+- LIB9: 13345
+- LIB10: 13218
+- LIB11: 12944
+- LIB12: 12861
+- LIB13: 14226
+- LIB14: 14248
+- LIB15: 13055
+
+Not done: the SOP checks, the reference genes, anything on the re-sequenced library beyond counting it
+the way the script does. I used the dropout workflow we always use and adapted it for two arms.
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/handover/count_guides.py
+[?2004l#!/usr/bin/env python3
+"""count_guides.py - sgRNA read counts for the VAL-2 screens (K.B.)
+
+usage: count_guides.py LIBRARY.tsv SAMPLES.tsv OUT.tsv FASTQ [FASTQ ...]
+
+One FASTQ per row of the sample sheet, given in the same order as the rows.
+Only exact matches to a library spacer are counted.
+"""
+import gzip
+import sys
+
+COMP = str.maketrans("ACGTN", "TGCAN")
+SCAFFOLD = "GTTTTAGAGCTA"
+
+
+def revcomp(s):
+    return s.translate(COMP)[::-1]
+
+def candidates(read):
+    # the spacer is the 20 nt in front of the scaffold
+    k = read.find(SCAFFOLD)
+    if k >= 20:
+        yield read[k - 20:k]
+
+
+def main():
+    lib_path, sheet_path, out_path = sys.argv[1:4]
+    fastqs = sys.argv[4:]
+    guides, by_seq = [], {}
+    with open(lib_path) as fh:
+        head = fh.readline().rstrip("\n").split("\t")
+        i_id, i_seq, i_gene = head.index("sgRNA"), head.index("sequence"), head.index("gene")
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            by_seq[f[i_seq]] = len(guides)
+            guides.append((f[i_id], f[i_gene]))
+    with open(sheet_path) as fh:
+        fh.readline()
+        samples = [line.split("\t")[0] for line in fh if line.strip()]
+    if len(fastqs) != len(samples):
+        sys.exit("need one FASTQ per sample sheet row")
+    counts = [[0] * len(samples) for _ in guides]
+    for j, path in enumerate(fastqs):
+        with gzip.open(path, "rt") as fh:
+            for n, line in enumerate(fh):
+                if n % 4 != 1:
+                    continue
+                for spacer in candidates(line.rstrip()):
+                    k = by_seq.get(spacer)
+                    if k is not None:
+                        counts[k][j] += 1
+                        break
+    with open(out_path, "w") as out:
+        out.write("sgRNA\tgene\t" + "\t".join(samples) + "\n")
+        for (sg, gene), row in zip(guides, counts):
+            out.write(sg + "\t" + gene + "\t" + "\t".join(map(str, row)) + "\n")
+
+
+if __name__ == "__main__":
+    main()
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/handover/count_guides.py /task/input/part_B/handover/count_guides.py || true
+[?2004l[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/handover/count_guides.py /task/input/part_C/handover/count_guides.py || true
+[?2004l--- /task/input/part_A/handover/count_guides.py	2026-11-12 14:13:32.000000000 +0000
++++ /task/input/part_C/handover/count_guides.py	2026-11-12 14:13:32.000000000 +0000
+@@ -17,10 +17,8 @@
+     return s.translate(COMP)[::-1]
+ 
+ def candidates(read):
+-    # the spacer is the 20 nt in front of the scaffold
+-    k = read.find(SCAFFOLD)
+-    if k >= 20:
+-        yield read[k - 20:k]
++    yield read[24:44]             # Read 1: the spacer follows the 24 nt of the U6 primer site
++    yield revcomp(read)[15:35]    # run B delivered Read 2: same spacer seen from the other end
+ 
+ 
+ def main():
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/handover/analyse_screen.py
+[?2004l#!/usr/bin/env python3
+"""analyse_screen.py - gene table and hit list for the VAL-2 drug screen (K.B.)
+
+usage: analyse_screen.py COUNTS.tsv SAMPLES.tsv OUT_GENES.tsv OUT_HITS.tsv
+"""
+import sys
+
+import numpy as np
+
+TOP = 40                             # genes that go into the hit list
+counts_path, sheet_path, out_genes, out_hits = sys.argv[1:5]
+
+rows = [line.rstrip("\n").split("\t") for line in open(counts_path) if line.strip()]
+cols, rows = rows[0][2:], rows[1:]
+gene = np.array([r[1] for r in rows])
+C = np.array([[float(v) for v in r[2:]] for r in rows])
+arm = {}
+for line in list(open(sheet_path))[1:]:
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 1:
+        arm[f[0]] = f[1]
+
+keep = [j for j in range(len(cols)) if C[:, j].sum() > 0]        # a library without reads is left out
+t0 = [j for j in keep if arm[cols[j]] == "T0"]
+veh = [j for j in keep if arm[cols[j]] == "vehicle"]
+drug = [j for j in keep if arm[cols[j]] == "drug"]
+ntc = gene == "NON_TARGETING"
+
+# size factors: median of ratios to the geometric mean, all sgRNAs
+size = np.ones(len(cols))
+with np.errstate(divide="ignore", invalid="ignore"):
+    logc = np.log(np.where(C[:, keep] > 0, C[:, keep], np.nan))
+    size[keep] = np.exp(np.nanmedian(logc - np.nanmean(logc, axis=1, keepdims=True), axis=0))
+N = C / size
+
+
+def lfc(a, b):
+    return np.log2((N[:, a].mean(axis=1) + 0.5) / (N[:, b].mean(axis=1) + 0.5))
+
+
+fit = lfc(veh, t0)
+drg = lfc(drug, veh)
+
+# gene level: median over the sgRNAs; z against the spread of the non-targeting sgRNAs
+null_sd = np.std(drg[ntc]) / 2.0          # a gene is the median of four sgRNAs
+table = []
+for g in sorted(set(gene[~ntc])):
+    m = gene == g
+    lf, ld = float(np.median(fit[m])), float(np.median(drg[m]))
+    z = ld / null_sd
+    cls = "none" if abs(z) < 3 else ("sensitiser" if z < 0 else "resistance")
+    table.append((g, lf, ld, z, cls))
+
+with open(out_genes, "w") as out:
+    out.write("gene\tlfc_fitness\tlfc_drug\tz_drug\tdrug_class\n")
+    for g, lf, ld, z, cls in table:
+        out.write("%s\t%.4f\t%.4f\t%.2f\t%s\n" % (g, lf, ld, z, cls))
+
+with open(out_hits, "w") as out:
+    out.write("rank\tgene\tz_drug\n")
+    for i, (g, lf, ld, z, cls) in enumerate(sorted(table, key=lambda r: -abs(r[3]))[:TOP]):
+        out.write("%d\t%s\t%.2f\n" % (i + 1, g, z))
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/handover/analyse_screen.py /task/input/part_B/handover/analyse_screen.py || true
+[?2004l--- /task/input/part_A/handover/analyse_screen.py	2026-11-12 14:13:32.000000000 +0000
++++ /task/input/part_B/handover/analyse_screen.py	2026-11-12 14:13:32.000000000 +0000
+@@ -26,11 +26,10 @@
+ drug = [j for j in keep if arm[cols[j]] == "drug"]
+ ntc = gene == "NON_TARGETING"
+ 
+-# size factors: median of ratios to the geometric mean, all sgRNAs
++# size factors from the non-targeting sgRNAs
+ size = np.ones(len(cols))
+-with np.errstate(divide="ignore", invalid="ignore"):
+-    logc = np.log(np.where(C[:, keep] > 0, C[:, keep], np.nan))
+-    size[keep] = np.exp(np.nanmedian(logc - np.nanmean(logc, axis=1, keepdims=True), axis=0))
++tot = C[ntc].sum(axis=0)
++size[keep] = tot[keep] / tot[keep].mean()
+ N = C / size
+ 
+ 
+@@ -39,7 +38,9 @@
+ 
+ 
+ fit = lfc(veh, t0)
+-drg = lfc(drug, veh)
++drg = lfc(t0, drug)
++fit = fit - np.median(fit[ntc])
++drg = drg - np.median(drg[ntc])
+ 
+ # gene level: median over the sgRNAs; z against the spread of the non-targeting sgRNAs
+ null_sd = np.std(drg[ntc]) / 2.0          # a gene is the median of four sgRNAs
+[?2004hroot@ea53ea076219:/task# diff -u /task/input/part_A/handover/analyse_screen.py /task/input/part_C/handover/analyse_screen.py || true
+[?2004l--- /task/input/part_A/handover/analyse_screen.py	2026-11-12 14:13:32.000000000 +0000
++++ /task/input/part_C/handover/analyse_screen.py	2026-11-12 14:13:32.000000000 +0000
+@@ -7,7 +7,7 @@
+ 
+ import numpy as np
+ 
+-TOP = 40                             # genes that go into the hit list
++TOP = 80                             # genes that go into the hit list
+ counts_path, sheet_path, out_genes, out_hits = sys.argv[1:5]
+ 
+ rows = [line.rstrip("\n").split("\t") for line in open(counts_path) if line.strip()]
+@@ -26,11 +26,10 @@
+ drug = [j for j in keep if arm[cols[j]] == "drug"]
+ ntc = gene == "NON_TARGETING"
+ 
+-# size factors: median of ratios to the geometric mean, all sgRNAs
++# size factors from the non-targeting sgRNAs
+ size = np.ones(len(cols))
+-with np.errstate(divide="ignore", invalid="ignore"):
+-    logc = np.log(np.where(C[:, keep] > 0, C[:, keep], np.nan))
+-    size[keep] = np.exp(np.nanmedian(logc - np.nanmean(logc, axis=1, keepdims=True), axis=0))
++tot = C[ntc].sum(axis=0)
++size[keep] = tot[keep] / tot[keep].mean()
+ N = C / size
+ 
+ 
+@@ -39,7 +38,9 @@
+ 
+ 
+ fit = lfc(veh, t0)
+-drg = lfc(drug, veh)
++drg = lfc(veh, drug)
++fit = fit - np.median(fit[ntc])
++drg = drg - np.median(drg[ntc])
+ 
+ # gene level: median over the sgRNAs; z against the spread of the non-targeting sgRNAs
+ null_sd = np.std(drg[ntc]) / 2.0          # a gene is the median of four sgRNAs
+[?2004hroot@ea53ea076219:/task# head -n 5 /task/input/part_A/samples.tsv /task/input/part_B/samples.tsv /task/input/part_C/samples.tsv
+[?2004l==> /task/input/part_A/samples.tsv <==
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB8	T0	1	LIB8.fastq.gz	A
+LIB9	T0	2	LIB9.fastq.gz	A
+LIB10	vehicle	1	LIB10.fastq.gz	A
+LIB11	vehicle	2	LIB11.fastq.gz	A
+
+==> /task/input/part_B/samples.tsv <==
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB6	T0	1	LIB6.fastq.gz	A
+LIB7	T0	2	LIB7.fastq.gz	A
+LIB8	vehicle	1	LIB8.fastq.gz	A
+LIB9	vehicle	2	LIB9.fastq.gz	A
+
+==> /task/input/part_C/samples.tsv <==
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB8	T0	1	LIB8.fastq.gz	A
+LIB9	T0	2	LIB9.fastq.gz	A
+LIB10	vehicle	1	LIB10.fastq.gz	A
+LIB11	vehicle	2	LIB11.fastq.gz	A
+[?2004hroot@ea53ea076219:/task# python3 -c 'for p in ["part_A", "part_B", "part_C"]: cdraft = [line.split("\t")[:2] for line in open(f"/task/input/{p}/handover/counts_draft.tsv").read().splitlines()[1:]]; lib = [line.split("\t")[:3] for line in open(f"/task/input/{p}/library.tsv").read().splitlines()[1:]]; diffs = sum(1 for (sg1, g1), (sg2, seq, g2) in zip(cdraft, lib) if sg1 != sg2 or g1 != g2); print(p, "diffs:", diffs)'
+[?2004lpart_A diffs: 80
+part_B diffs: 80
+part_C diffs: 80
+[?2004hroot@ea53ea076219:/task# python3 -c '
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> for p in ["part_A", "part_B", "part_C"]:
+[?2004l[?2004h>     print("===", p, "===")
+[?2004l[?2004h>     with open(f"/task/input/{p}/samples.tsv") as f:
+[?2004l[?2004h>         print(f.read().strip())
+[?2004l[?2004h> '
+[?2004l=== part_A ===
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB8	T0	1	LIB8.fastq.gz	A
+LIB9	T0	2	LIB9.fastq.gz	A
+LIB10	vehicle	1	LIB10.fastq.gz	A
+LIB11	vehicle	2	LIB11.fastq.gz	A
+LIB12	vehicle	3	LIB12.fastq.gz	A
+LIB13	drug	1	LIB13.fastq.gz	A
+LIB14	drug	2	LIB14.fastq.gz	A
+LIB15	drug	3	LIB15.fastq.gz	B
+=== part_B ===
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB6	T0	1	LIB6.fastq.gz	A
+LIB7	T0	2	LIB7.fastq.gz	A
+LIB8	vehicle	1	LIB8.fastq.gz	A
+LIB9	vehicle	2	LIB9.fastq.gz	A
+LIB10	vehicle	3	LIB10.fastq.gz	A
+LIB11	drug	1	LIB11.fastq.gz	A
+LIB12	drug	2	LIB12.fastq.gz	B
+LIB13	drug	3	LIB13.fastq.gz	A
+=== part_C ===
+sample_id	arm	replicate	fastq_file	sequencing_run
+LIB8	T0	1	LIB8.fastq.gz	A
+LIB9	T0	2	LIB9.fastq.gz	A
+LIB10	vehicle	1	LIB10.fastq.gz	A
+LIB11	vehicle	2	LIB11.fastq.gz	A
+LIB12	vehicle	3	LIB12.fastq.gz	A
+LIB13	drug	1	LIB13.fastq.gz	B
+LIB14	drug	2	LIB14.fastq.gz	A
+LIB15	drug	3	LIB15.fastq.gz	A
+[?2004hroot@ea53ea076219:/task# zcat /task/input/part_A/fastq/LIB15.fastq.gz | head -n 8
+[?2004l@A01789:96:HFG7TDSX5:3:1135:5151:12544 2:N:0:1
+TAGGTATGACTAGCCTTATTTTAACTTGCTATTTCTAGCTCTAAAACGAAATGCGACATGGTGCGGACGGTGTTT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+@A01789:96:HFG7TDSX5:3:1119:12916:3895 2:N:0:1
+CGTTGGACTAGCCTTATTTTAACTTGCTATTTCTAGCTCTAAAACAGTCTGACCCGTGGTTAATTCGGTGTTTCG
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+[?2004hroot@ea53ea076219:/task# zcat /task/input/part_A/fastq/LIB8.fastq.gz | head -n 8
+[?2004l@NB551608:214:HV2KJBGXK:1:1128:1112:1149 1:N:0:1
+CTAAATCTCTTGTGGAAAGGACGAAACACCGAGCCCTCATCTAGAGGGAAGGTTTTAGAGCTAGAAATAGCAAGT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+@NB551608:214:HV2KJBGXK:1:1115:17636:20971 1:N:0:1
+AGTCAATCTTGTGGAAAGGACGAAACACCGTAAACCGCCAACCATTCGTTGTTTTAGAGCTAGAAATAGCAAGTT
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIFFFFFF
+[?2004hroot@ea53ea076219:/task# grep -E 'TCCGCACCATGTCGCATTTC|GAAATGCGACATGGTGCGGA' /task/input/part_A/library.tsv
+[?2004lVAL2_0908	TCCGCACCATGTCGCATTTC	TGT2915
+[?2004hroot@ea53ea076219:/task# grep -E 'AATTAACCACGGGTCAGACT|AGTCTGACCCGTGGTTAATT' /task/input/part_A/library.tsv
+[?2004lVAL2_0717	AATTAACCACGGGTCAGACT	TGT5029
+[?2004hroot@ea53ea076219:/task# python3 -c '
+[?2004l[?2004h> import gzip, glob
+[?2004l[?2004h> COMP = str.maketrans("ACGTN", "TGCAN")
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = "GTTTTAGAGCTA"
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in ["part_A", "part_B", "part_C"]:
+[?2004l[?2004h>     lib = set()
+[?2004l[?2004h>     for line in open(f"/task/input/{p}/library.tsv"):
+[?2004l[?2004h>         lib.add(line.split("\t")[1])
+[?2004l[?2004h>     for fq in sorted(glob.glob(f"/task/input/{p}/fastq/*.fastq.gz")):
+[?2004l[?2004h>         tot, match = 0, 0
+[?2004l[?2004h>         with gzip.open(fq, "rt") as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     tot += 1
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in lib:
+[?2004l[?2004h>                         match += 1
+[?2004l[?2004h>         print(p, fq.split("/")[-1], "total:", tot, "matched:", match, f"{match/tot*100:.1f}%")
+[?2004l[?2004h> '
+[?2004lpart_A LIB10.fastq.gz total: 126498 matched: 114203 90.3%
+part_A LIB11.fastq.gz total: 113752 matched: 103010 90.6%
+part_A LIB12.fastq.gz total: 122481 matched: 110250 90.0%
+part_A LIB13.fastq.gz total: 120408 matched: 109237 90.7%
+part_A LIB14.fastq.gz total: 127498 matched: 114795 90.0%
+part_A LIB15.fastq.gz total: 129296 matched: 116805 90.3%
+part_A LIB8.fastq.gz total: 112684 matched: 99717 88.5%
+part_A LIB9.fastq.gz total: 119542 matched: 106565 89.1%
+part_B LIB10.fastq.gz total: 121817 matched: 108057 88.7%
+part_B LIB11.fastq.gz total: 120050 matched: 107956 89.9%
+part_B LIB12.fastq.gz total: 109844 matched: 98516 89.7%
+part_B LIB13.fastq.gz total: 126055 matched: 113328 89.9%
+part_B LIB6.fastq.gz total: 122829 matched: 111279 90.6%
+part_B LIB7.fastq.gz total: 129823 matched: 115554 89.0%
+part_B LIB8.fastq.gz total: 112097 matched: 101881 90.9%
+part_B LIB9.fastq.gz total: 118133 matched: 106875 90.5%
+part_C LIB10.fastq.gz total: 124692 matched: 111348 89.3%
+part_C LIB11.fastq.gz total: 115153 matched: 103081 89.5%
+part_C LIB12.fastq.gz total: 112399 matched: 102304 91.0%
+part_C LIB13.fastq.gz total: 110967 matched: 100372 90.5%
+part_C LIB14.fastq.gz total: 110410 matched: 100208 90.8%
+part_C LIB15.fastq.gz total: 125426 matched: 112596 89.8%
+part_C LIB8.fastq.gz total: 126079 matched: 112532 89.3%
+part_C LIB9.fastq.gz total: 112590 matched: 99886 88.7%
+[?2004hroot@ea53ea076219:/task# python3 -c '
+[?2004l[?2004h> import gzip, glob, pandas as pd, numpy as np
+[?2004l[?2004h> COMP = str.maketrans("ACGTN", "TGCAN")
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = "GTTTTAGAGCTA"
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> for p in ["part_A", "part_B", "part_C"]:
+[?2004l[?2004h>     print("===", p, "===")
+[?2004l[?2004h>     samples_df = pd.read_csv(f"/task/input/{p}/samples.tsv", sep="\t")
+[?2004l[?2004h>     lib_df = pd.read_csv(f"/task/input/{p}/library.tsv", sep="\t")
+[?2004l[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib_df["sequence"])}
+[?2004l[?2004h>     counts = np.zeros((len(lib_df), len(samples_df)), dtype=int)
+[?2004l[?2004h>     for j, row in samples_df.iterrows():
+[?2004l[?2004h>         fq = f"/task/input/{p}/fastq/{row["fastq_file"]}"
+[?2004l[?2004h>         with gzip.open(fq, "rt") as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in seq_to_idx:
+[?2004l[?2004h>                         counts[seq_to_idx[sp], j] += 1
+[?2004l[?2004h>     df_c = pd.DataFrame(counts, columns=samples_df["sample_id"])
+[?2004l[?2004h>     cpm = df_c / df_c.sum(axis=0) * 1e6
+[?2004l[?2004h>     corr = np.log2(cpm + 1).corr()
+[?2004l[?2004h>     for _, r in samples_df.iterrows():
+[?2004l[?2004h>         print(f"{r.sample_id}: {r.arm} (rep {r.replicate})")
+[?2004l[?2004h>     print("Correlation matrix:")
+[?2004l[?2004h>     print(corr.round(3))
+[?2004l[?2004h> '
+[?2004l=== part_A ===
+LIB8: T0 (rep 1)
+LIB9: T0 (rep 2)
+LIB10: vehicle (rep 1)
+LIB11: vehicle (rep 2)
+LIB12: vehicle (rep 3)
+LIB13: drug (rep 1)
+LIB14: drug (rep 2)
+LIB15: drug (rep 3)
+Correlation matrix:
+sample_id   LIB8   LIB9  LIB10  LIB11  LIB12  LIB13  LIB14  LIB15
+sample_id                                                        
+LIB8       1.000  0.924  0.374  0.443  0.446  0.353  0.377  0.448
+LIB9       0.924  1.000  0.382  0.456  0.450  0.370  0.381  0.460
+LIB10      0.374  0.382  1.000  0.774  0.780  0.768  0.823  0.783
+LIB11      0.443  0.456  0.774  1.000  0.948  0.777  0.770  0.947
+LIB12      0.446  0.450  0.780  0.948  1.000  0.773  0.775  0.954
+LIB13      0.353  0.370  0.768  0.777  0.773  1.000  0.807  0.773
+LIB14      0.377  0.381  0.823  0.770  0.775  0.807  1.000  0.787
+LIB15      0.448  0.460  0.783  0.947  0.954  0.773  0.787  1.000
+=== part_B ===
+LIB6: T0 (rep 1)
+LIB7: T0 (rep 2)
+LIB8: vehicle (rep 1)
+LIB9: vehicle (rep 2)
+LIB10: vehicle (rep 3)
+LIB11: drug (rep 1)
+LIB12: drug (rep 2)
+LIB13: drug (rep 3)
+Correlation matrix:
+sample_id   LIB6   LIB7   LIB8   LIB9  LIB10  LIB11  LIB12  LIB13
+sample_id                                                        
+LIB6       1.000  0.920  0.422  0.435  0.363  0.388  0.380  0.415
+LIB7       0.920  1.000  0.419  0.424  0.360  0.381  0.381  0.408
+LIB8       0.422  0.419  1.000  0.951  0.762  0.781  0.778  0.950
+LIB9       0.435  0.424  0.951  1.000  0.771  0.787  0.779  0.949
+LIB10      0.363  0.360  0.762  0.771  1.000  0.803  0.812  0.764
+LIB11      0.388  0.381  0.781  0.787  0.803  1.000  0.813  0.785
+LIB12      0.380  0.381  0.778  0.779  0.812  0.813  1.000  0.784
+LIB13      0.415  0.408  0.950  0.949  0.764  0.785  0.784  1.000
+=== part_C ===
+LIB8: T0 (rep 1)
+LIB9: T0 (rep 2)
+LIB10: vehicle (rep 1)
+LIB11: vehicle (rep 2)
+LIB12: vehicle (rep 3)
+LIB13: drug (rep 1)
+LIB14: drug (rep 2)
+LIB15: drug (rep 3)
+Correlation matrix:
+sample_id   LIB8   LIB9  LIB10  LIB11  LIB12  LIB13  LIB14  LIB15
+sample_id                                                        
+LIB8       1.000  0.926  0.445  0.367  0.435  0.437  0.351  0.340
+LIB9       0.926  1.000  0.457  0.369  0.445  0.448  0.369  0.353
+LIB10      0.445  0.457  1.000  0.752  0.956  0.949  0.766  0.772
+LIB11      0.367  0.369  0.752  1.000  0.758  0.753  0.784  0.804
+LIB12      0.435  0.445  0.956  0.758  1.000  0.953  0.765  0.767
+LIB13      0.437  0.448  0.949  0.753  0.953  1.000  0.769  0.756
+LIB14      0.351  0.369  0.766  0.784  0.765  0.769  1.000  0.796
+LIB15      0.340  0.353  0.772  0.804  0.767  0.756  0.796  1.000
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_A/reference_genes.tsv
+[?2004lgene	expected_class
+TGT0255	none
+TGT0672	none
+TGT1011	sensitiser
+TGT1197	sensitiser
+TGT1202	sensitiser
+TGT1692	none
+TGT2005	none
+TGT2139	resistance
+TGT2213	none
+TGT2353	none
+TGT2915	sensitiser
+TGT3004	none
+TGT3121	none
+TGT3151	none
+TGT3315	none
+TGT3375	none
+TGT3416	none
+TGT3504	resistance
+TGT3810	none
+TGT3882	none
+TGT4084	none
+TGT4120	none
+TGT4585	none
+TGT4613	none
+TGT4695	sensitiser
+TGT5019	none
+TGT5785	none
+TGT6085	none
+TGT6147	resistance
+TGT6222	none
+TGT6655	resistance
+TGT6709	none
+TGT6837	none
+TGT7056	none
+TGT7428	none
+TGT7491	resistance
+TGT7675	none
+TGT8097	none
+TGT8219	none
+TGT8861	none
+[?2004hroot@ea53ea076219:/task# head -n 20 /task/input/part_B/reference_genes.tsv
+[?2004lgene	expected_class
+TGT0037	resistance
+TGT0122	none
+TGT0413	none
+TGT0543	none
+TGT0820	none
+TGT1082	resistance
+TGT1167	none
+TGT1559	none
+TGT1694	none
+TGT1778	none
+TGT1905	none
+TGT1966	none
+TGT2265	none
+TGT2643	none
+TGT2749	none
+TGT3192	none
+TGT3457	none
+TGT3700	none
+TGT3711	sensitiser
+[?2004hroot@ea53ea076219:/task# cutadapt --version && mageck -v
+[?2004l5.2
+0.5.9.5
+[?2004hroot@ea53ea076219:/task# cat /task/input/part_B/handover/analyse_screen.py
+[?2004l#!/usr/bin/env python3
+"""analyse_screen.py - gene table and hit list for the VAL-2 drug screen (K.B.)
+
+usage: analyse_screen.py COUNTS.tsv SAMPLES.tsv OUT_GENES.tsv OUT_HITS.tsv
+"""
+import sys
+
+import numpy as np
+
+TOP = 40                             # genes that go into the hit list
+counts_path, sheet_path, out_genes, out_hits = sys.argv[1:5]
+
+rows = [line.rstrip("\n").split("\t") for line in open(counts_path) if line.strip()]
+cols, rows = rows[0][2:], rows[1:]
+gene = np.array([r[1] for r in rows])
+C = np.array([[float(v) for v in r[2:]] for r in rows])
+arm = {}
+for line in list(open(sheet_path))[1:]:
+    f = line.rstrip("\n").split("\t")
+    if len(f) > 1:
+        arm[f[0]] = f[1]
+
+keep = [j for j in range(len(cols)) if C[:, j].sum() > 0]        # a library without reads is left out
+t0 = [j for j in keep if arm[cols[j]] == "T0"]
+veh = [j for j in keep if arm[cols[j]] == "vehicle"]
+drug = [j for j in keep if arm[cols[j]] == "drug"]
+ntc = gene == "NON_TARGETING"
+
+# size factors from the non-targeting sgRNAs
+size = np.ones(len(cols))
+tot = C[ntc].sum(axis=0)
+size[keep] = tot[keep] / tot[keep].mean()
+N = C / size
+
+
+def lfc(a, b):
+    return np.log2((N[:, a].mean(axis=1) + 0.5) / (N[:, b].mean(axis=1) + 0.5))
+
+
+fit = lfc(veh, t0)
+drg = lfc(t0, drug)
+fit = fit - np.median(fit[ntc])
+drg = drg - np.median(drg[ntc])
+
+# gene level: median over the sgRNAs; z against the spread of the non-targeting sgRNAs
+null_sd = np.std(drg[ntc]) / 2.0          # a gene is the median of four sgRNAs
+table = []
+for g in sorted(set(gene[~ntc])):
+    m = gene == g
+    lf, ld = float(np.median(fit[m])), float(np.median(drg[m]))
+    z = ld / null_sd
+    cls = "none" if abs(z) < 3 else ("sensitiser" if z < 0 else "resistance")
+    table.append((g, lf, ld, z, cls))
+
+with open(out_genes, "w") as out:
+    out.write("gene\tlfc_fitness\tlfc_drug\tz_drug\tdrug_class\n")
+    for g, lf, ld, z, cls in table:
+        out.write("%s\t%.4f\t%.4f\t%.2f\t%s\n" % (g, lf, ld, z, cls))
+
+with open(out_hits, "w") as out:
+    out.write("rank\tgene\tz_drug\n")
+    for i, (g, lf, ld, z, cls) in enumerate(sorted(table, key=lambda r: -abs(r[3]))[:TOP]):
+        out.write("%d\t%s\t%.2f\n" % (i + 1, g, z))
+[?2004hroot@ea53ea076219:/task# head -n 25 /task/input/part_A/handover/gene_draft.tsv
+[?2004lgene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0030	0.3170	0.2075	1.85	none
+TGT0059	-0.6474	0.3384	3.02	resistance
+TGT0141	-1.4170	0.0963	0.86	none
+TGT0177	-1.1992	-1.3762	-12.28	sensitiser
+TGT0179	-0.3698	-0.2174	-1.94	none
+TGT0211	-0.5122	0.0408	0.36	none
+TGT0255	-0.5006	-0.1709	-1.53	none
+TGT0275	0.5799	0.0258	0.23	none
+TGT0306	-1.4040	-0.0989	-0.88	none
+TGT0409	-1.9481	-0.5604	-5.00	sensitiser
+TGT0420	-1.4351	0.2629	2.35	none
+TGT0433	-0.5315	0.0185	0.16	none
+TGT0462	-0.8825	-2.1424	-19.12	sensitiser
+TGT0506	0.4847	-0.2152	-1.92	none
+TGT0650	-0.7966	-0.0900	-0.80	none
+TGT0672	-0.5706	0.1184	1.06	none
+TGT0680	-1.3983	0.2191	1.96	none
+TGT0730	-1.0588	-0.0342	-0.31	none
+TGT0755	-1.6642	0.3796	3.39	resistance
+TGT0801	0.1226	0.1778	1.59	none
+TGT0878	-1.1561	0.3839	3.43	resistance
+TGT0927	1.6934	-0.1031	-0.92	none
+TGT1005	-0.0684	-0.3352	-2.99	none
+TGT1007	-0.0541	0.9573	8.55	resistance
+[?2004hroot@ea53ea076219:/task# head -n 25 /task/input/part_B/handover/gene_draft.tsv
+[?2004lgene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0037	-1.0596	0.5238	5.28	resistance
+TGT0056	-2.3794	2.4106	24.29	resistance
+TGT0122	-2.2715	2.3188	23.36	resistance
+TGT0286	-1.5487	1.1458	11.54	resistance
+TGT0306	-3.8726	4.3834	44.16	resistance
+TGT0321	-2.9572	2.5533	25.72	resistance
+TGT0340	-1.6975	1.7130	17.26	resistance
+TGT0380	-2.5724	2.3988	24.17	resistance
+TGT0388	-3.0147	2.9488	29.71	resistance
+TGT0402	-2.3934	2.2033	22.20	resistance
+TGT0413	-1.8586	1.4017	14.12	resistance
+TGT0455	-1.1213	1.1880	11.97	resistance
+TGT0457	-2.9561	2.6264	26.46	resistance
+TGT0500	-2.0842	2.3978	24.16	resistance
+TGT0508	-2.9903	3.2112	32.35	resistance
+TGT0543	-2.7321	2.5821	26.01	resistance
+TGT0610	-3.3327	3.7502	37.78	resistance
+TGT0647	-2.4335	2.0571	20.72	resistance
+TGT0728	-2.0383	1.5571	15.69	resistance
+TGT0780	-2.3618	2.6109	26.30	resistance
+TGT0820	-1.2347	1.2771	12.87	resistance
+TGT0922	-2.3375	2.4044	24.22	resistance
+TGT0948	-1.8191	1.8956	19.10	resistance
+TGT0951	-1.6675	1.3447	13.55	resistance
+[?2004hroot@ea53ea076219:/task# head -n 25 /task/input/part_C/handover/gene_draft.tsv
+[?2004lgene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0018	0.0399	-2.0430	-12.81	sensitiser
+TGT0036	-0.6291	-2.3939	-15.02	sensitiser
+TGT0074	-0.6435	-1.3180	-8.27	sensitiser
+TGT0089	-0.2063	-2.0748	-13.01	sensitiser
+TGT0117	-0.1995	-0.1858	-1.17	none
+TGT0131	-0.3555	-0.0563	-0.35	none
+TGT0195	0.1466	-2.5507	-16.00	sensitiser
+TGT0224	-0.1231	-2.7934	-17.52	sensitiser
+TGT0281	-0.2465	-1.3524	-8.48	sensitiser
+TGT0322	0.0102	-1.9513	-12.24	sensitiser
+TGT0391	0.6548	-0.8368	-5.25	sensitiser
+TGT0424	0.2457	-1.5743	-9.87	sensitiser
+TGT0427	0.1329	-1.2898	-8.09	sensitiser
+TGT0444	-0.1890	-0.6791	-4.26	sensitiser
+TGT0539	0.0980	-2.0941	-13.13	sensitiser
+TGT0554	-0.4549	-2.7231	-17.08	sensitiser
+TGT0571	-0.1058	-2.1822	-13.69	sensitiser
+TGT0591	0.0263	0.0564	0.35	none
+TGT0645	-0.3364	-1.9819	-12.43	sensitiser
+TGT0724	0.1180	-0.1154	-0.72	none
+TGT0860	0.1007	-0.7889	-4.95	sensitiser
+TGT0941	-0.2864	-1.9100	-11.98	sensitiser
+TGT0943	-0.5115	-2.4513	-15.38	sensitiser
+TGT0969	0.1996	-1.3671	-8.57	sensitiser
+[?2004hroot@ea53ea076219:/task# python3 -c 'import pandas as pd; print([(p, len(pd.read_csv(f"/task/input/{p}/reference_genes.tsv", sep="\t"))) for p in ["part_A", "part_B", "part_C"]])'
+[?2004l[('part_A', 40), ('part_B', 40), ('part_C', 40)]
+[?2004hroot@ea53ea076219:/task# python3 -c 'import urllib.parse; open("/tmp/test.py", "w").write("import os\nprint(123)\n")'
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/test.py
+[?2004l123
+[?2004hroot@ea53ea076219:/task# echo 'aW1wb3J0IGd6aXAsIGdsb2IsIG9zLCBqc29uCmltcG9ydCBwYW5kYXMgYXMgcGQKaW1wb3J0IG51bXB5IGFzIG5wCmltcG9ydCBzY2lweS5zdGF0cyBhcyBzdGF0cwoKQ09NUCA9IHN0ci5tYWtldHJhbnMoIkFDR1ROIiwgIlRHQ0FOIikKZGVmIHJldmNvbXAocyk6IHJldHVybiBzLnRyYW5zbGF0ZShDT01QKVs6Oi0xXQpTQ0FGRk9MRCA9ICJHVFRUVEFHQUdDVEEiCgpkZWYgZ2V0X3NwYWNlcihyZWFkKToKICAgIGsgPSByZWFkLmZpbmQoU0NBRkZPTEQpCiAgICBpZiBrID49IDIwOgogICAgICAgIHJldHVybiByZWFkW2stMjA6a10KICAgIHJjID0gcmV2Y29tcChyZWFkKQogICAgayA9IHJjLmZpbmQoU0NBRkZPTEQpCiAgICBpZiBrID49IDIwOgogICAgICAgIHJldHVybiByY1trLTIwOmtdCiAgICByZXR1cm4gTm9uZQoKZGVmIGFuYWx5emVfcGFydChwYXJ0LCB2ZWhfaWRzLCBkcnVnX2lkcywgdDBfaWRzKToKICAgIGxpYl9wYXRoID0gZiIvdGFzay9pbnB1dC97cGFydH0vbGlicmFyeS50c3YiCiAgICBzaGVldF9wYXRoID0gZiIvdGFzay9pbnB1dC97cGFydH0vc2FtcGxlcy50c3YiCiAgICByZWZfcGF0aCA9IGYiL3Rhc2svaW5wdXQve3BhcnR9L3JlZmVyZW5jZV9nZW5lcy50c3YiCgogICAgbGliX2RmID0gcGQucmVhZF9jc3YobGliX3BhdGgsIHNlcD0iXHQiKQogICAgc2hlZXRfZGYgPSBwZC5yZWFkX2NzdihzaGVldF9wYXRoLCBzZXA9Ilx0IikKICAgIHJlZl9kZiA9IHBkLnJlYWRfY3N2KHJlZl9wYXRoLCBzZXA9Ilx0IikKCiAgICBzZXFfdG9faWR4ID0ge3NlcTogaSBmb3IgaSwgc2VxIGluIGVudW1lcmF0ZShsaWJfZGZbInNlcXVlbmNlIl0pfQogICAgY291bnRzID0gbnAuemVyb3MoKGxlbihsaWJfZGYpLCBsZW4oc2hlZXRfZGYpKSwgZHR5cGU9aW50KQoKICAgIGZvciBqLCByb3cgaW4gc2hlZXRfZGYuaXRlcnJvd3MoKToKICAgICAgICBmcSA9IGYiL3Rhc2svaW5wdXQve3BhcnR9L2Zhc3RxL3tyb3dbImZhc3RxX2ZpbGUiXX0iCiAgICAgICAgd2l0aCBnemlwLm9wZW4oZnEsICJydCIpIGFzIGY6CiAgICAgICAgICAgIGZvciBpLCBsaW5lIGluIGVudW1lcmF0ZShmKToKICAgICAgICAgICAgICAgIGlmIGkgJSA0ID09IDE6CiAgICAgICAgICAgICAgICAgICAgc3AgPSBnZXRfc3BhY2VyKGxpbmUucnN0cmlwKCkpCiAgICAgICAgICAgICAgICAgICAgaWYgc3AgaW4gc2VxX3RvX2lkeDoKICAgICAgICAgICAgICAgICAgICAgICAgY291bnRzW3NlcV90b19pZHhbc3BdLCBqXSArPSAxCgogICAgc2FtcGxlX29yZGVyID0gbGlzdChzaGVldF9kZlsic2FtcGxlX2lkIl0pCiAgICBzX3RvX2NvbCA9IHtzaWQ6IGkgZm9yIGksIHNpZCBpbiBlbnVtZXJhdGUoc2FtcGxlX29yZGVyKX0KCiAgICBjb2xfdDAgPSBbc190b19jb2xbc10gZm9yIHMgaW4gdDBfaWRzXQogICAgY29sX3ZlaCA9IFtzX3RvX2NvbFtzXSBmb3Igc2ggaW4gdmVoX2lkc10KICAgIGNvbF9kcnVnID0gW3NfdG9fY29sW3NdIGZvciBzIGluIGRydWdfaWRzXQoKICAgIGdlbmUgPSBsaWJfZGZbImdlbmUiXS52YWx1ZXMKICAgIG50YyA9IChnZW5lID09ICJOT05fVEFSR0VUSU5HIikKCiAgICB0b3RfbnRjID0gY291bnRzW250Y10uc3VtKGF4aXM9MCkKICAgIHNpemVfbnRjID0gdG90X250YyAvIHRvdF9udGMubWVhbigpCiAgICBOID0gY291bnRzIC8gc2l6ZV9udGMKCiAgICBmY19kcnVnX3JhdyA9IChOWzssIGNvbF9kcnVnXS5tZWFuKGF4aXM9MSkgKyAwLjUpIC8gKE5bOiwgY29sX3ZlaF0ubWVhbihheGlzPTEpICsgMC41KQogICAgbGZjX2RydWdfc2dybmEgPSBucC5sb2cyKGZjX2RydWdfcmF3KQogICAgbGZjX2RydWdfc2dybmEgLT0gbnAubWVkaWFuKGxmY19kcnVnX3Nncm5hW250Y10pCgogICAgZmNfZml0X3JhdyA9IChOWzssIGNvbF92ZWhdLm1lYW4oYXhpcz0xKSArIDAuNSkgLyAoTls6LCBjb2xfdDBdLm1lYW4oYXhpcz0xKSArIDAuNSkKICAgIGxmY19maXRfc2dybmEgPSBucC5sb2cyKGZjX2ZpdF9yYXcpCiAgICBsZmNfZml0X3Nncm5hIC09IG5wLm1lZGlhbihsZmNfZml0X3Nncm5hW250Y10pCgogICAgdW5pcXVlX2dlbmVzID0gc29ydGVkKGxpc3Qoc2V0KGdlbmVbfm50Y10pKSkKICAgIGdlbmVfbGZjX2ZpdCA9IHt9CiAgICBnZW5lX2xmY19kcnVnID0ge30KICAgIGZvciBnIGluIHVuaXF1ZV9nZW5lczoKICAgICAgICBtID0gKGdlbmUgPT0gZykKICAgICAgICBnZW5lX2xmY19maXRbZ10gPSBmbG9hdChucC5tZWRpYW4obGZjX2ZpdF9zZ3JuYVttXSkpCiAgICAgICAgZ2VuZV9sZmNfZHJ1Z1tnXSA9IGZsb2F0KG5wLm1lZGlhbihsZmNfZHJ1Z19zZ3JuYVttXSkpCgogICAgbnRjX3Nncm5hX2xkID0gbGZjX2RydWdfc2dybmFbbnRjXQogICAgbnVsbF9zZCA9IG5wLnN0ZChudGNfc2dybmFfbGQpIC8gbnBzcHJ0ID0gbnEuc3FydCg0LjApIGlmICdhcCcgaW4gbG9jYWxzKCkgZWxzZSBucC5zcXJ0KDQuMCkKCiAgICB6X3Njb3JlcyA9IHtnOiBnZW5lX2xmY19kcnVnW2ddIC8gbnVsbF9zZCBmb3IgZyBpbiB1bmlxdWVfZ2VuZXN9CiAgICBwX3ZhbHMgPSB7ZzogMi4wICogKDEuMCAtIHN0YXRzLm5vcm0uY2RmKGFicyh6X3Njb3Jlc1tnXSkpKSBmb3IgZyBpbiB1bmlxdWVfZ2VuZXN9CgogICAgZ2VuZXNfc29ydGVkID0gc29ydGVkKHVuaXF1ZV9nZW5lcywga2V5PWxhbWJkYSBnOiBwX3ZhbHNbZ10pCiAgICBtX3Rlc3RzID0gbGVuKHVuaXF1ZV9nZW5lcykKICAgIHFfdmFscyA9IHt9CiAgICBtaW5fcSA9IDEuMAogICAgZm9yIHJhbmtfaWR4IGluIHJhbmdlKG1fdGVzdHMgLSAxLCAtMSwgLTEpOgogICAgICAgIGcgPSBnZW5lc19zb3J0ZWRbcmFua19pZHhdCiAgICAgICAgcmFuayA9IHJhbmtfaWR4ICsgMQogICAgICAgIHEgPSBwX3ZhbHNbZ10gKiBtX3Rlc3RzIC8gcmFuawogICAgICAgIG1pbl9xID0gbWluKG1pbl9xLCBxKQogICAgICAgIHFfdmFsc1tnXSA9IG1pbl9xCgogICAgY2FsbHMgPSB7fQogICAgZm9yIGcgaW4gdW5pcXVlX2dlbmVzOgogICAgICAgIGlmIHFfdmFsc1tnXSA8PSAwLjA1OgogICAgICAgICAgICBjYWxsc1tnXSA9ICJzZW5zaXRpc2VyIiBpZiBnZW5lX2xmY19kcnVnW2ddIDwgMCBlbHNlICJyZXNpc3RhbmNlIgogICAgICAgIGVsc2U6CiAgICAgICAgICAgIGNhbGxzW2ddID0gIm5vbmUiCgogICAgcmVmX21hcCA9IGRpY3QremlwKHJlZl9kZlsia2V5IiBpZiAia2V5IiBpbiByZWZfZGYgZWxzZSAicmVmZXJlbmNlX2dlbmVzLnRzdiIgZWxzZSByZWZfZGZbImdlbmUiXSwgcmVmX2RmWyJleHBlY3RlZF9jbGFzcyJdKSBpZiBGYWxzZSBlbHNlIGRpY3QremlwKHJlZl9kZlsicmVmZXJlbmNlX2dlbmVzLnRzdiJdIGlmIEZhbHNlIGVsc2UgcmVmX2RmWydnZW5lJ10sIHJlZl9kZlsnZXhwZWN0ZWRfY2xhc3MnXSkpCiAgICBtb2RfbWF0Y2gsIG1vZF90b3RhbCwgbm9uZV9mcCwgbm9uZV90b3RhbCA9IDAsIDAsIDAsIDAKICAgIGZvciByZywgZXhwIGluIHJlZl9tYXAuaXRlbXMoKToKICAgICAgICBjYWxsZWQgPSBjYWxscy5nZXQocmcsICJub25lIikKICAgICAgICBpZiBleHAgIT0gIm5vbmUiOgogICAgICAgICAgICBtb2RfdG90YWwgKz0gMQogICAgICAgICAgICBpZiBjYWxsZWQgPT0gZXhwOiBtb2RfbWF0Y2ggKz0gMQogICAgICAgICAgICBlbHNlOiBwcmludChmIiAgTUlTU0VEIHtyZ306IGV4cCB7ZXhwfSwgZ290IHtjYWxsZWR9LCBsZmM9e2dlbmVfbGZjX2RydWdbcmddOi4zZn0sIHE9e3FfdmFsc1tyZ106LjRlZSwgej17el9zY29yZXNbcmddOi4yZn0iKQogICAgICAgIGVsc2U6CiAgICAgICAgICAgIG5vbmVfdG90YWwgKz0gMQogICAgICAgICAgICBpZiBjYWxsZWQgIT0gIm5vbmUiOiBub25lX2ZwICs9IDEKICAgIHByaW50KGYie3BhcnR9OiBNb2RpZmllcnMgY29ycmVjdDoge21vZF9tYXRjaH0ve21vZF90b3RhbH0gKHJlcSA+PSA5LzEwKSwgTm9uZSBGUDoge25vbmVfZnB9L3tub25lX3RvdGFsfSAocmVxIDw9IDEvMzApIikKCmFuYWx5emVfcGFydCgicGFydF9BIiwgWyJMSUIxMSIsICJMSUIxMiIsICJMSUIxNSJdLCBbIkxJQjEwIiwgIkxJQjEzIiwgIkxJQjE0Il0sIFsiTElCOCIsICJMSUI5Il0pCmFuYWx5emVfcGFydCgicGFydF9CIiwgWyJMSUI4IiwgIkxJQjkiLCAiTElCMTMiXSwgWyJMSUIxMCIsICJMSUIxMSIsICJMSUIxMiJdLCBbIkxJQjYiLCAiTElCNyJdKQphbmFseXplX3BhcnQoInBhcnRfQyIsIFsiTElCMTAiLCAiTElCMTIiLCAiTElCMTMiXSwgWyJMSUIxMSIsICJMSUIxNCIsICJMSUIxNSJdLCBbIkxJQjgiLCAiTElCOSJdKQo=' | base64 -d > /tmp/pipeline.py && python3 /tmp/pipeline.py
+[?2004l  File "/tmp/pipeline.py", line 95
+    ref_map = dict+zip(ref_df["key" if "key" in ref_df else "reference_genes.tsv" else ref_df["gene"], ref_df["expected_class"]) if False else dict+zip(ref_df["reference_genes.tsv"] if False else ref_df['gene'], ref_df['expected_class']))
+                                                                                                                               ^
+SyntaxError: closing parenthesis ')' does not match opening parenthesis '['
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/gen.py
+[?2004l[?2004h> import os, sys
+[?2004l[?2004h> print('Writing script...')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/gen.py
+[?2004lWriting script...
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/gen.py
+[?2004l[?2004h> import gzip, glob, os, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import scipy.stats as stats
+[?2004l[?2004h> 
+[?2004l[?2004h> COMP = str.maketrans('ACGTN', 'TGCAN')
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = 'GTTTTAGAGCTA'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def analyze_part(part, veh_ids, drug_ids, t0_ids):
+[?2004l[?2004h>     lib_path = f'/task/input/{part}/library.tsv'
+[?2004l[?2004h>     sheet_path = f'/task/input/{part}/samples.tsv'
+[?2004l[?2004h>     ref_path = f'/task/input/{part}/reference_genes.tsv'
+[?2004l[?2004h> 
+[?2004l[?2004h>     lib_df = pd.read_csv(lib_path, sep='\t')
+[?2004l[?2004h>     sheet_df = pd.read_csv(sheet_path, sep='\t')
+[?2004l[?2004h>     ref_df = pd.read_csv(ref_path, sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib_df['sequence'])}
+[?2004l[?2004h>     counts = np.zeros((len(lib_df), len(sheet_df)), dtype=int)
+[?2004l[?2004h> 
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         fq = f'/task/input/{part}/fastq/{row["fastq_file"]}'
+[?2004l[?2004h>         with gzip.open(fq, 'rt') as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in seq_to_idx:
+[?2004l[?2004h>                         counts[seq_to_idx[sp], j] += 1
+[?2004l[?2004h> 
+[?2004l[?2004h>     sample_order = list(sheet_df['sample_id'])
+[?2004l[?2004h>     s_to_col = {sid: i for i, sid in enumerate(sample_order)}
+[?2004l[?2004h> 
+[?2004l[?2004h>     col_t0 = [s_to_col[s] for s in t0_ids]
+[?2004l[?2004h>     col_veh = [s_to_col[s] for s in veh_ids]
+[?2004l[?2004h>     col_drug = [s_to_col[s] for s in drug_ids]
+[?2004l[?2004h> 
+[?2004l[?2004h>     gene = lib_df['gene'].values
+[?2004l[?2004h>     ntc = (gene == 'NON_TARGETING')
+[?2004l[?2004h> 
+[?2004l[?2004h>     tot_ntc = counts[ntc].sum(axis=0)
+[?2004l[?2004h>     size_ntc = tot_ntc / tot_ntc.mean()
+[?2004l[?2004h>     N = counts / size_ntc
+[?2004l[?2004h> 
+[?2004l[?2004h>     fc_drug_raw = (N[:, col_drug].mean(axis=1) + 0.5) / (N[:, col_veh].mean(axis=1) + 0.5)
+[?2004l[?2004h>     lfc_drug_sgrna = np.log2(fc_drug_raw)
+[?2004l[?2004h>     lfc_drug_sgrna -= np.median(lfc_drug_sgrna[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h>     fc_fit_raw = (N[:, col_veh].mean(axis=1) + 0.5) / (N[:, col_t0].mean(axis=1) + 0.5)
+[?2004l[?2004h>     lfc_fit_sgrna = np.log2(fc_fit_raw)
+[?2004l[?2004h>     lfc_fit_sgrna -= np.median(lfc_fit_sgrna[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h>     unique_genes = sorted(list(set(gene[~ntc])))
+[?2004l[?2004h>     gene_lfc_fit = {}
+[?2004l[?2004h>     gene_lfc_drug = {}
+[?2004l[?2004h>     for g in unique_genes:
+[?2004l[?2004h>         m = (gene == g)
+[?2004l[?2004h>         gene_lfc_fit[g] = float(np.median(lfc_fit_sgrna[m]))
+[?2004l[?2004h>         gene_lfc_drug[g] = float(np.median(lfc_drug_sgrna[m]))
+[?2004l[?2004h> 
+[?2004l[?2004h>     ntc_sgrna_ld = lfc_drug_sgrna[ntc]
+[?2004l[?2004h>     null_sd = np.std(ntc_sgrna_ld) / np.sqrt(4.0)
+[?2004l[?2004h> 
+[?2004l[?2004h>     z_scores = {g: gene_lfc_drug[g] / null_sd for g in unique_genes}
+[?2004l[?2004h>     p_vals = {g: 2.0 * (1.0 - stats.norm.cdf(abs(z_scores[g]))) for g in unique_genes}
+[?2004l[?2004h> 
+[?2004l[?2004h>     genes_sorted = sorted(unique_genes, key=lambda g: p_vals[g])
+[?2004l[?2004h>     m_tests = len(unique_genes)
+[?2004l[?2004h>     q_vals = {}
+[?2004l[?2004h>     min_q = 1.0
+[?2004l[?2004h>     for rank_idx in range(m_tests - 1, -1, -1):
+[?2004l[?2004h>         g = genes_sorted[rank_idx]
+[?2004l[?2004h>         rank = rank_idx + 1
+[?2004l[?2004h>         q = p_vals[g] * m_tests / rank
+[?2004l[?2004h>         min_q = min(min_q, q)
+[?2004l[?2004h>         q_vals[g] = min_q
+[?2004l[?2004h> 
+[?2004l[?2004h>     calls = {}
+[?2004l[?2004h>     for g in unique_genes:
+[?2004l[?2004h>         if q_vals[g] <= 0.05:
+[?2004l[?2004h>             calls[g] = 'sensitiser' if gene_lfc_drug[g] < 0 else 'resistance'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             calls[g] = 'none'
+[?2004l[?2004h> 
+[?2004l[?2004h>     ref_map = dict(zip(ref_df['gene'], ref_df['expected_class']))
+[?2004l[?2004h>     mod_match, mod_total, none_fp, none_total = 0, 0, 0, 0
+[?2004l[?2004h>     for rg, exp in ref_map.items():
+[?2004l[?2004h>         called = calls.get(rg, 'none')
+[?2004l[?2004h>         if exp != 'none':
+[?2004l[?2004h>             mod_total += 1
+[?2004l[?2004h>             if called == exp:
+[?2004l[?2004h>                 mod_match += 1
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 print(f'  MISSED {rg}: exp {exp}, got {called}, lfc={gene_lfc_drug[rg]:.3f}, q={q_vals[rg]:.4e}, z={z_scores[rg]:.2f}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             none_total += 1
+[?2004l[?2004h>             if called != 'none':
+[?2004l[?2004h>                 none_fp += 1
+[?2004l[?2004h>                 print(f'  FP NONE {rg}: exp none, got {called}, lfc={gene_lfc_drug[rg]:.3f}, q={q_vals[rg]:.4e}, z={z_scores[rg]:.2f}')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f'{part}: Modifiers correct: {mod_match}/{mod_total} (req >= 9/10), None FP: {none_fp}/{none_total} (req <= 1/30)')
+[?2004l[?2004h> 
+[?2004l[?2004h> analyze_part('part_A', ['LIB11', 'LIB12', 'LIB15'], ['LIB10', 'LIB13', 'LIB14'], ['LIB8', 'LIB9'])
+[?2004l[?2004h> analyze_part('part_B', ['LIB8', 'LIB9', 'LIB13'], ['LIB10', 'LIB11', 'LIB12'], ['LIB6', 'LIB7'])
+[?2004l[?2004h> analyze_part('part_C', ['LIB10', 'LIB12', 'LIB13'], ['LIB11', 'LIB14', 'LIB15'], ['LIB8', 'LIB9'])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/gen.py
+[?2004l  FP NONE TGT2213: exp none, got resistance, lfc=0.259, q=2.3619e-02, z=2.73
+  FP NONE TGT3315: exp none, got resistance, lfc=0.400, q=1.2304e-04, z=4.22
+  FP NONE TGT4120: exp none, got sensitiser, lfc=-0.251, q=2.9386e-02, z=-2.65
+  FP NONE TGT4585: exp none, got sensitiser, lfc=-0.251, q=2.9641e-02, z=-2.64
+  FP NONE TGT4613: exp none, got resistance, lfc=0.492, q=1.1489e-06, z=5.19
+  FP NONE TGT5019: exp none, got resistance, lfc=0.327, q=2.5310e-03, z=3.45
+  FP NONE TGT7675: exp none, got resistance, lfc=0.264, q=2.0699e-02, z=2.78
+  FP NONE TGT8097: exp none, got resistance, lfc=0.239, q=4.0674e-02, z=2.52
+part_A: Modifiers correct: 10/10 (req >= 9/10), None FP: 8/30 (req <= 1/30)
+  FP NONE TGT0122: exp none, got resistance, lfc=0.199, q=2.3664e-02, z=2.62
+  FP NONE TGT0413: exp none, got resistance, lfc=0.181, q=4.1999e-02, z=2.38
+  FP NONE TGT0543: exp none, got resistance, lfc=0.199, q=2.3664e-02, z=2.63
+  FP NONE TGT1559: exp none, got resistance, lfc=0.347, q=2.6363e-05, z=4.56
+  FP NONE TGT1905: exp none, got resistance, lfc=0.190, q=3.2753e-02, z=2.50
+  FP NONE TGT1966: exp none, got sensitiser, lfc=-0.309, q=2.2369e-04, z=-4.06
+  FP NONE TGT2265: exp none, got sensitiser, lfc=-0.530, q=1.7608e-11, z=-6.97
+  FP NONE TGT3192: exp none, got sensitiser, lfc=-0.262, q=2.1093e-03, z=-3.46
+  FP NONE TGT4814: exp none, got sensitiser, lfc=-0.536, q=1.0245e-11, z=-7.05
+  FP NONE TGT5285: exp none, got sensitiser, lfc=-0.184, q=3.8026e-02, z=-2.43
+  FP NONE TGT7676: exp none, got resistance, lfc=0.226, q=9.7292e-03, z=2.98
+part_B: Modifiers correct: 10/10 (req >= 9/10), None FP: 11/30 (req <= 1/30)
+  FP NONE TGT2009: exp none, got resistance, lfc=0.290, q=5.9389e-03, z=3.17
+  FP NONE TGT2820: exp none, got resistance, lfc=0.382, q=1.4898e-04, z=4.18
+  FP NONE TGT4925: exp none, got resistance, lfc=0.380, q=1.5931e-04, z=4.15
+  FP NONE TGT6291: exp none, got resistance, lfc=0.389, q=1.1045e-04, z=4.25
+  FP NONE TGT7778: exp none, got sensitiser, lfc=-0.238, q=2.8760e-02, z=-2.60
+  FP NONE TGT8819: exp none, got sensitiser, lfc=-0.306, q=3.3377e-03, z=-3.35
+part_C: Modifiers correct: 10/10 (req >= 9/10), None FP: 6/30 (req <= 1/30)
+[?2004hroot@ea53ea076219:/task# mageck test -h | head -n 35
+[?2004lusage: mageck test [-h] -k COUNT_TABLE
+                   (-t TREATMENT_ID | --day0-label DAY0_LABEL) [-c CONTROL_ID]
+                   [--paired] [--norm-method {none,median,total,control}]
+                   [--gene-test-fdr-threshold GENE_TEST_FDR_THRESHOLD]
+                   [--adjust-method {fdr,holm,pounds}]
+                   [--variance-estimation-samples VARIANCE_ESTIMATION_SAMPLES]
+                   [--sort-criteria {neg,pos}]
+                   [--remove-zero {none,control,treatment,both,any}]
+                   [--remove-zero-threshold REMOVE_ZERO_THRESHOLD]
+                   [--pdf-report]
+                   [--gene-lfc-method {median,alphamedian,mean,alphamean,secondbest}]
+                   [-n OUTPUT_PREFIX]
+                   [--control-sgrna CONTROL_SGRNA | --control-gene CONTROL_GENE]
+                   [--normcounts-to-file] [--skip-gene SKIP_GENE] [--keep-tmp]
+                   [--additional-rra-parameters ADDITIONAL_RRA_PARAMETERS]
+                   [--cnv-norm CNV_NORM] [--cell-line CELL_LINE]
+                   [--cnv-est CNV_EST]
+
+options:
+  -h, --help            show this help message and exit
+
+Required arguments:
+
+  -k COUNT_TABLE, --count-table COUNT_TABLE
+                        Provide a tab-separated count table instead of sam
+                        files. Each line in the table should include sgRNA
+                        name (1st column), gene name (2nd column) and read
+                        counts in each sample.
+  -t TREATMENT_ID, --treatment-id TREATMENT_ID
+                        Sample label or sample index (0 as the first sample)
+                        in the count table as treatment experiments, separated
+                        by comma (,). If sample label is provided, the labels
+                        must match the labels in the first line of the count
+                        table; for example, "HL60.final,KBM7.final". For
+                        sample index, "0,2" means the 1st and 3rd samples are
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/test_mageck.py
+[?2004l[?2004h> import os, subprocess, pandas as pd, gzip, numpy as np
+[?2004l[?2004h> COMP = str.maketrans('ACGTN', 'TGCAN')
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = 'GTTTTAGAGCTA'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> for part, veh_ids, drug_ids, t0_ids in [
+[?2004l[?2004h>     ('part_A', ['LIB11', 'LIB12', 'LIB15'], ['LIB10', 'LIB13', 'LIB14'], ['LIB8', 'LIB9']),
+[?2004l[?2004h>     ('part_B', ['LIB8', 'LIB9', 'LIB13'], ['LIB10', 'LIB11', 'LIB12'], ['LIB6', 'LIB7']),
+[?2004l[?2004h>     ('part_C', ['LIB10', 'LIB12', 'LIB13'], ['LIB11', 'LIB14', 'LIB15'], ['LIB8', 'LIB9'])
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     lib_df = pd.read_csv(f'/task/input/{part}/library.tsv', sep='\t')
+[?2004l[?2004h>     sheet_df = pd.read_csv(f'/task/input/{part}/samples.tsv', sep='\t')
+[?2004l[?2004h>     ref_df = pd.read_csv(f'/task/input/{part}/reference_genes.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib_df['sequence'])}
+[?2004l[?2004h>     counts = np.zeros((len(lib_df), len(sheet_df)), dtype=int)
+[?2004l[?2004h> 
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         fq = f'/task/input/{part}/fastq/{row["fastq_file"]}'
+[?2004l[?2004h>         with gzip.open(fq, 'rt') as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in seq_to_idx:
+[?2004l[?2004h>                         counts[seq_to_idx[sp], j] += 1
+[?2004l[?2004h> 
+[?2004l[?2004h>     out_df = pd.DataFrame({'sgRNA': lib_df['sgRNA'], 'gene': lib_df['gene']})
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         out_df[row['sample_id']] = counts[:, j]
+[?2004l[?2004h>     
+[?2004l[?2004h>     count_file = f'/tmp/counts_{part}.tsv'
+[?2004l[?2004h>     out_df.to_csv(count_file, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     prefix = f'/tmp/mageck_{part}'
+[?2004l[?2004h>     cmd = [
+[?2004l[?2004h>         'mageck', 'test', '-k', count_file,
+[?2004l[?2004h>         '-t', ','.join(drug_ids),
+[?2004l[?2004h>         '-c', ','.join(veh_ids),
+[?2004l[?2004h>         '--norm-method', 'control',
+[?2004l[?2004h>         '--control-gene', 'NON_TARGETING',
+[?2004l[?2004h>         '-n', prefix
+[?2004l[?2004h>     ]
+[?2004l[?2004h>     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+[?2004l[?2004h> 
+[?2004l[?2004h>     m_res = pd.read_csv(f'{prefix}.gene_summary.txt', sep='\t')
+[?2004l[?2004h>     calls = {}
+[?2004l[?2004h>     for _, r in m_res.iterrows():
+[?2004l[?2004h>         g = r['id']
+[?2004l[?2004h>         if g == 'NON_TARGETING': continue
+[?2004l[?2004h>         neg_fdr = r['neg|fdr']
+[?2004l[?2004h>         pos_fdr = r['pos|fdr']
+[?2004l[?2004h>         if neg_fdr <= 0.05 and neg_fdr < pos_fdr:
+[?2004l[?2004h>             calls[g] = 'sensitiser'
+[?2004l[?2004h>         elif pos_fdr <= 0.05 and pos_fdr < neg_fdr:
+[?2004l[?2004h>             calls[g] = 'resistance'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             calls[g] = 'none'
+[?2004l[?2004h> 
+[?2004l[?2004h>     ref_map = dict(zip(ref_df['gene'], ref_df['expected_class']))
+[?2004l[?2004h>     mod_match, mod_total, none_fp, none_total = 0, 0, 0, 0
+[?2004l[?2004h>     for rg, exp in ref_map.items():
+[?2004l[?2004h>         called = calls.get(rg, 'none')
+[?2004l[?2004h>         if exp != 'none':
+[?2004l[?2004h>             mod_total += 1
+[?2004l[?2004h>             if called == exp: mod_match += 1
+[?2004l[?2004h>             else: print(f'  MISSED {rg}: exp {exp}, got {called}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             none_total += 1
+[?2004l[?2004h>             if called != 'none':
+[?2004l[?2004h>                 none_fp += 1
+[?2004l[?2004h>                 print(f'  FP {rg}: exp none, got {called}')
+[?2004l[?2004h> 
+[?2004l[?2004h>     print(f'{part} MAGeCK: Modifiers correct: {mod_match}/{mod_total}, None FP: {none_fp}/{none_total}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/test_mageck.py
+[?2004lTraceback (most recent call last):
+  File "/tmp/test_mageck.py", line 53, in <module>
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+  File "/opt/tools/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['mageck', 'test', '-k', '/tmp/counts_part_A.tsv', '-t', 'LIB10,LIB13,LIB14', '-c', 'LIB11,LIB12,LIB15', '--norm-method', 'control', '--control-gene', 'NON_TARGETING', '-n', '/tmp/mageck_part_A']' returned non-zero exit status 1.
+[?2004hroot@ea53ea076219:/task# mageck test -k /tmp/counts_part_A.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 --norm-method control --control-gene NON_TARGETING -n /tmp/mageck_part_A
+[?2004lINFO  @ Thu, 12 Nov 2026 14:28:28: Parameters: /opt/tools/bin/mageck test -k /tmp/counts_part_A.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 --norm-method control --control-gene NON_TARGETING -n /tmp/mageck_part_A 
+INFO  @ Thu, 12 Nov 2026 14:28:28: Welcome to MAGeCK v0.5.9.5. Command: test 
+INFO  @ Thu, 12 Nov 2026 14:28:28: Loading count table from /tmp/counts_part_A.tsv  
+INFO  @ Thu, 12 Nov 2026 14:28:28: Processing 1 lines.. 
+INFO  @ Thu, 12 Nov 2026 14:28:29: Loaded 1000 records. 
+Traceback (most recent call last):
+  File "/opt/tools/bin/mageck", line 66, in <module>
+    main();
+    ^^^^^^
+  File "/opt/tools/bin/mageck", line 51, in main
+    magecktest_main(args);
+    ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/mageck/crisprFunction.py", line 619, in magecktest_main
+    mageckcount_checkcontrolsgrna(args,sgrna2genelist)
+  File "/opt/tools/lib/python3.12/site-packages/mageck/mageckCount.py", line 438, in mageckcount_checkcontrolsgrna
+    controlgenelist=[line.strip() for line in open(args.control_gene)]
+                                              ^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'NON_TARGETING'
+[?2004hroot@ea53ea076219:/task# echo 'NON_TARGETING' > /tmp/ntc_gene.txt
+[?2004l[?2004hroot@ea53ea076219:/task# mageck test -k /tmp/counts_part_A.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 --norm-method control --control-gene /tmp/ntc_gene.txt -n /tmp/mageck_part_A
+[?2004lINFO  @ Thu, 12 Nov 2026 14:28:38: Parameters: /opt/tools/bin/mageck test -k /tmp/counts_part_A.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 --norm-method control --control-gene /tmp/ntc_gene.txt -n /tmp/mageck_part_A 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Welcome to MAGeCK v0.5.9.5. Command: test 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading count table from /tmp/counts_part_A.tsv  
+INFO  @ Thu, 12 Nov 2026 14:28:38: Processing 1 lines.. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loaded 1000 records. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: 1 gene(s) used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: 80 sgRNAs used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/test_report.Rmd. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template_indvgene.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.Rnw. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Treatment samples:LIB10,LIB13,LIB14 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Treatment sample index:2,5,6 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Control samples:LIB11,LIB12,LIB15 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Control sample index:3,4,7 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loaded 80 control sgRNAs from /tmp/mageck_part_A.control_sgrna.txt 
+INFO  @ Thu, 12 Nov 2026 14:28:38: control sgRNAs for normalization:80 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Final size factor: 1.05592449288344 0.9677069259254482 0.9294354923914893 1.0067660160448908 1.03055582477482 1.0067660160448908 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Detecting outliers from variance estimation.. Avg read count:[65.98991995979574], Var: [12294.513141264883] 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Skipping 5 sgRNAs from variance calculation because of their extreme high counts (> 4* STD (mean counts) ). 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Before RRA, 0 sgRNAs are removed with zero counts in both group(s). 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Use qnorm to reversely calculate sgRNA scores ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: RRA -i /tmp/mageck_part_A.plow.txt -o /tmp/mageck_part_A.gene.low.txt -p 0.266 --control /tmp/mageck_part_A.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:28:38: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:    
+INFO  @ Thu, 12 Nov 2026 14:28:38: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: RRA -i /tmp/mageck_part_A.phigh.txt -o /tmp/mageck_part_A.gene.high.txt -p 0.248 --control /tmp/mageck_part_A.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:28:38: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:28:38:    
+INFO  @ Thu, 12 Nov 2026 14:28:38: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading top 10 genes from /tmp/mageck_part_A.gene.low.txt: TGT1197,TGT1202,TGT3471,TGT7853,TGT3601,TGT4695,TGT2915,TGT4954,TGT5795,TGT7971 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Loading top 10 genes from /tmp/mageck_part_A.gene.high.txt: TGT8274,TGT7491,TGT1007,TGT2139,TGT6147,TGT6655,TGT1284,TGT3504,TGT3680,TGT0650 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: rm /tmp/mageck_part_A.plow.txt 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: rm /tmp/mageck_part_A.phigh.txt 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: rm /tmp/mageck_part_A.gene.low.txt 
+INFO  @ Thu, 12 Nov 2026 14:28:38: Running command: rm /tmp/mageck_part_A.gene.high.txt 
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/check_ref.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> res = pd.read_csv('/tmp/mageck_part_A.gene_summary.txt', sep='\t')
+[?2004l[?2004h> ref = pd.read_csv('/task/input/part_A/reference_genes.tsv', sep='\t')
+[?2004l[?2004h> ref_map = dict(zip(ref['gene'], ref['expected_class']))
+[?2004l[?2004h> res_map = {}
+[?2004l[?2004h> for _, r in res.iterrows():
+[?2004l[?2004h>     g = r['id']
+[?2004l[?2004h>     if r['neg|fdr'] <= 0.05:
+[?2004l[?2004h>         res_map[g] = 'sensitiser'
+[?2004l[?2004h>     elif r['pos|fdr'] <= 0.05:
+[?2004l[?2004h>         res_map[g] = 'resistance'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         res_map[g] = 'none'
+[?2004l[?2004h> 
+[?2004l[?2004h> mod_ok, mod_tot, none_fp, none_tot = 0, 0, 0, 0
+[?2004l[?2004h> for g, exp in ref_map.items():
+[?2004l[?2004h>     got = res_map.get(g, 'none')
+[?2004l[?2004h>     if exp != 'none':
+[?2004l[?2004h>         mod_tot += 1
+[?2004l[?2004h>         if got == exp: mod_ok += 1
+[?2004l[?2004h>         else: print(f'MISSED {g}: exp {exp}, got {got}')
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         none_tot += 1
+[?2004l[?2004h>         if got != 'none':
+[?2004l[?2004h>             none_fp += 1
+[?2004l[?2004h>             print(f'FP NONE {g}: got {got}')
+[?2004l[?2004h> print(f'Part A MAGeCK: Modifiers {mod_ok}/{mod_tot}, FP {none_fp}/{none_tot}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/check_ref.py
+[?2004lPart A MAGeCK: Modifiers 10/10, FP 0/30
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/run_all_mageck.py
+[?2004l[?2004h> import subprocess, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> for part, veh_ids, drug_ids in [
+[?2004l[?2004h>     ('part_B', ['LIB8', 'LIB9', 'LIB13'], ['LIB10', 'LIB11', 'LIB12']),
+[?2004l[?2004h>     ('part_C', ['LIB10', 'LIB12', 'LIB13'], ['LIB11', 'LIB14', 'LIB15'])
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     count_file = f'/tmp/counts_{part}.tsv'
+[?2004l[?2004h>     prefix = f'/tmp/mageck_{part}'
+[?2004l[?2004h>     cmd = [
+[?2004l[?2004h>         'mageck', 'test', '-k', count_file,
+[?2004l[?2004h>         '-t', ','.join(drug_ids),
+[?2004l[?2004h>         '-c', ','.join(veh_ids),
+[?2004l[?2004h>         '--norm-method', 'control',
+[?2004l[?2004h>         '--control-gene', '/tmp/ntc_gene.txt',
+[?2004l[?2004h>         '-n', prefix
+[?2004l[?2004h>     ]
+[?2004l[?2004h>     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+[?2004l[?2004h>     res = pd.read_csv(f'{prefix}.gene_summary.txt', sep='\t')
+[?2004l[?2004h>     ref = pd.read_csv(f'/task/input/{part}/reference_genes.tsv', sep='\t')
+[?2004l[?2004h>     ref_map = dict(zip(ref['gene'], ref['expected_class']))
+[?2004l[?2004h>     res_map = {}
+[?2004l[?2004h>     for _, r in res.iterrows():
+[?2004l[?2004h>         g = r['id']
+[?2004l[?2004h>         if r['neg|fdr'] <= 0.05:
+[?2004l[?2004h>             res_map[g] = 'sensitiser'
+[?2004l[?2004h>         elif r['pos|fdr'] <= 0.05:
+[?2004l[?2004h>             res_map[g] = 'resistance'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             res_map[g] = 'none'
+[?2004l[?2004h>     mod_ok, mod_tot, none_fp, none_tot = 0, 0, 0, 0
+[?2004l[?2004h>     for g, exp in ref_map.items():
+[?2004l[?2004h>         got = res_map.get(g, 'none')
+[?2004l[?2004h>         if exp != 'none':
+[?2004l[?2004h>             mod_tot += 1
+[?2004l[?2004h>             if got == exp: mod_ok += 1
+[?2004l[?2004h>             else: print(f'  MISSED {g}: exp {exp}, got {got}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             none_tot += 1
+[?2004l[?2004h>             if got != 'none':
+[?2004l[?2004h>                 none_fp += 1
+[?2004l[?2004h>                 print(f'  FP NONE {g}: got {got}')
+[?2004l[?2004h>     print(f'{part} MAGeCK: Modifiers {mod_ok}/{mod_tot}, FP {none_fp}/{none_tot}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/run_all_mageck.py
+[?2004lTraceback (most recent call last):
+  File "/tmp/run_all_mageck.py", line 17, in <module>
+    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+  File "/opt/tools/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['mageck', 'test', '-k', '/tmp/counts_part_B.tsv', '-t', 'LIB10,LIB11,LIB12', '-c', 'LIB8,LIB9,LIB13', '--norm-method', 'control', '--control-gene', '/tmp/ntc_gene.txt', '-n', '/tmp/mageck_part_B']' returned non-zero exit status 1.
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/gen_counts_and_mageck.py
+[?2004l[?2004h> import subprocess, pandas as pd, gzip, numpy as np
+[?2004l[?2004h> COMP = str.maketrans('ACGTN', 'TGCAN')
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = 'GTTTTAGAGCTA'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/tmp/ntc_gene.txt', 'w') as f:
+[?2004l[?2004h>     f.write('NON_TARGETING\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> for part, veh_ids, drug_ids, t0_ids in [
+[?2004l[?2004h>     ('part_A', ['LIB11', 'LIB12', 'LIB15'], ['LIB10', 'LIB13', 'LIB14'], ['LIB8', 'LIB9']),
+[?2004l[?2004h>     ('part_B', ['LIB8', 'LIB9', 'LIB13'], ['LIB10', 'LIB11', 'LIB12'], ['LIB6', 'LIB7']),
+[?2004l[?2004h>     ('part_C', ['LIB10', 'LIB12', 'LIB13'], ['LIB11', 'LIB14', 'LIB15'], ['LIB8', 'LIB9'])
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     lib_df = pd.read_csv(f'/task/input/{part}/library.tsv', sep='\t')
+[?2004l[?2004h>     sheet_df = pd.read_csv(f'/task/input/{part}/samples.tsv', sep='\t')
+[?2004l[?2004h>     ref_df = pd.read_csv(f'/task/input/{part}/reference_genes.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib_df['sequence'])}
+[?2004l[?2004h>     counts = np.zeros((len(lib_df), len(sheet_df)), dtype=int)
+[?2004l[?2004h> 
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         fq = f'/task/input/{part}/fastq/{row["fastq_file"]}'
+[?2004l[?2004h>         with gzip.open(fq, 'rt') as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in seq_to_idx:
+[?2004l[?2004h>                         counts[seq_to_idx[sp], j] += 1
+[?2004l[?2004h> 
+[?2004l[?2004h>     out_df = pd.DataFrame({'sgRNA': lib_df['sgRNA'], 'gene': lib_df['gene']})
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         out_df[row['sample_id']] = counts[:, j]
+[?2004l[?2004h>     
+[?2004l[?2004h>     count_file = f'/tmp/counts_{part}.tsv'
+[?2004l[?2004h>     out_df.to_csv(count_file, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     prefix = f'/tmp/mageck_{part}'
+[?2004l[?2004h>     cmd = [
+[?2004l[?2004h>         'mageck', 'test', '-k', count_file,
+[?2004l[?2004h>         '-t', ','.join(drug_ids),
+[?2004l[?2004h>         '-c', ','.join(veh_ids),
+[?2004l[?2004h>         '--norm-method', 'control',
+[?2004l[?2004h>         '--control-gene', '/tmp/ntc_gene.txt',
+[?2004l[?2004h>         '-n', prefix
+[?2004l[?2004h>     ]
+[?2004l[?2004h>     subprocess.run(cmd, check=True)
+[?2004l[?2004h> 
+[?2004l[?2004h>     res = pd.read_csv(f'{prefix}.gene_summary.txt', sep='\t')
+[?2004l[?2004h>     ref_map = dict(zip(ref_df['gene'], ref_df['expected_class']))
+[?2004l[?2004h>     res_map = {}
+[?2004l[?2004h>     for _, r in res.iterrows():
+[?2004l[?2004h>         g = r['id']
+[?2004l[?2004h>         if r['neg|fdr'] <= 0.05 and r['neg|fdr'] < r['pos|fdr']:
+[?2004l[?2004h>             res_map[g] = 'sensitiser'
+[?2004l[?2004h>         elif r['pos|fdr'] <= 0.05 and r['pos|fdr'] < r['neg|fdr']:
+[?2004l[?2004h>             res_map[g] = 'resistance'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             res_map[g] = 'none'
+[?2004l[?2004h>     mod_ok, mod_tot, none_fp, none_tot = 0, 0, 0, 0
+[?2004l[?2004h>     for g, exp in ref_map.items():
+[?2004l[?2004h>         got = res_map.get(g, 'none')
+[?2004l[?2004h>         if exp != 'none':
+[?2004l[?2004h>             mod_tot += 1
+[?2004l[?2004h>             if got == exp: mod_ok += 1
+[?2004l[?2004h>             else: print(f'  MISSED {g}: exp {exp}, got {got}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             none_tot += 1
+[?2004l[?2004h>             if got != 'none':
+[?2004l[?2004h>                 none_fp += 1
+[?2004l[?2004h>                 print(f'  FP NONE {g}: got {got}')
+[?2004l[?2004h>     print(f'{part} MAGeCK: Modifiers {mod_ok}/{mod_tot}, FP {none_fp}/{none_tot}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/gen_counts_and_mageck.py
+[?2004lINFO  @ Thu, 12 Nov 2026 14:29:41: Parameters: /opt/tools/bin/mageck test -k /tmp/counts_part_A.tsv -t LIB10,LIB13,LIB14 -c LIB11,LIB12,LIB15 --norm-method control --control-gene /tmp/ntc_gene.txt -n /tmp/mageck_part_A 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Welcome to MAGeCK v0.5.9.5. Command: test 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading count table from /tmp/counts_part_A.tsv  
+INFO  @ Thu, 12 Nov 2026 14:29:41: Processing 1 lines.. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loaded 1000 records. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: 1 gene(s) used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: 80 sgRNAs used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/test_report.Rmd. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template_indvgene.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.Rnw. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Treatment samples:LIB10,LIB13,LIB14 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Treatment sample index:2,5,6 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Control samples:LIB11,LIB12,LIB15 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Control sample index:3,4,7 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loaded 80 control sgRNAs from /tmp/mageck_part_A.control_sgrna.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:41: control sgRNAs for normalization:80 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Final size factor: 1.05592449288344 0.9677069259254482 0.9294354923914893 1.0067660160448908 1.03055582477482 1.0067660160448908 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Detecting outliers from variance estimation.. Avg read count:[65.98991995979574], Var: [12294.513141264883] 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Skipping 5 sgRNAs from variance calculation because of their extreme high counts (> 4* STD (mean counts) ). 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Before RRA, 0 sgRNAs are removed with zero counts in both group(s). 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Use qnorm to reversely calculate sgRNA scores ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: RRA -i /tmp/mageck_part_A.plow.txt -o /tmp/mageck_part_A.gene.low.txt -p 0.266 --control /tmp/mageck_part_A.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:41: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:    
+INFO  @ Thu, 12 Nov 2026 14:29:41: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: RRA -i /tmp/mageck_part_A.phigh.txt -o /tmp/mageck_part_A.gene.high.txt -p 0.248 --control /tmp/mageck_part_A.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:41: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:41:    
+INFO  @ Thu, 12 Nov 2026 14:29:41: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading top 10 genes from /tmp/mageck_part_A.gene.low.txt: TGT1197,TGT1202,TGT3471,TGT7853,TGT3601,TGT4695,TGT2915,TGT4954,TGT5795,TGT7971 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Loading top 10 genes from /tmp/mageck_part_A.gene.high.txt: TGT8274,TGT7491,TGT1007,TGT2139,TGT6147,TGT6655,TGT1284,TGT3504,TGT3680,TGT0650 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: rm /tmp/mageck_part_A.plow.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: rm /tmp/mageck_part_A.phigh.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: rm /tmp/mageck_part_A.gene.low.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:41: Running command: rm /tmp/mageck_part_A.gene.high.txt 
+part_A MAGeCK: Modifiers 10/10, FP 0/30
+INFO  @ Thu, 12 Nov 2026 14:29:44: Parameters: /opt/tools/bin/mageck test -k /tmp/counts_part_B.tsv -t LIB10,LIB11,LIB12 -c LIB8,LIB9,LIB13 --norm-method control --control-gene /tmp/ntc_gene.txt -n /tmp/mageck_part_B 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Welcome to MAGeCK v0.5.9.5. Command: test 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading count table from /tmp/counts_part_B.tsv  
+INFO  @ Thu, 12 Nov 2026 14:29:44: Processing 1 lines.. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loaded 1000 records. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: 1 gene(s) used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: 80 sgRNAs used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/test_report.Rmd. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template_indvgene.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.Rnw. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Treatment samples:LIB10,LIB11,LIB12 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Treatment sample index:4,5,6 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Control samples:LIB8,LIB9,LIB13 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Control sample index:2,3,7 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loaded 80 control sgRNAs from /tmp/mageck_part_B.control_sgrna.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:44: control sgRNAs for normalization:80 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Final size factor: 1.0241020342005445 0.9724301054507277 0.9163736953773691 0.977894217198724 1.0166007432660462 1.0943831835107978 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Detecting outliers from variance estimation.. Avg read count:[59.35807720806298], Var: [12455.900665111694] 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Skipping 3 sgRNAs from variance calculation because of their extreme high counts (> 4* STD (mean counts) ). 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Before RRA, 0 sgRNAs are removed with zero counts in both group(s). 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Use qnorm to reversely calculate sgRNA scores ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: RRA -i /tmp/mageck_part_B.plow.txt -o /tmp/mageck_part_B.gene.low.txt -p 0.304 --control /tmp/mageck_part_B.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:44: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:    
+INFO  @ Thu, 12 Nov 2026 14:29:44: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: RRA -i /tmp/mageck_part_B.phigh.txt -o /tmp/mageck_part_B.gene.high.txt -p 0.291 --control /tmp/mageck_part_B.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:44: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:44:    
+INFO  @ Thu, 12 Nov 2026 14:29:44: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading top 10 genes from /tmp/mageck_part_B.gene.low.txt: TGT6826,TGT3286,TGT3648,TGT2561,TGT3711,TGT3638,TGT6352,TGT5260,TGT4094,TGT6948 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Loading top 10 genes from /tmp/mageck_part_B.gene.high.txt: TGT0037,TGT0286,TGT1082,TGT6020,TGT5900,TGT4091,TGT3454,TGT0728,TGT3848,TGT7134 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: rm /tmp/mageck_part_B.plow.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: rm /tmp/mageck_part_B.phigh.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: rm /tmp/mageck_part_B.gene.low.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:44: Running command: rm /tmp/mageck_part_B.gene.high.txt 
+  FP NONE TGT1559: got resistance
+part_B MAGeCK: Modifiers 10/10, FP 1/30
+INFO  @ Thu, 12 Nov 2026 14:29:47: Parameters: /opt/tools/bin/mageck test -k /tmp/counts_part_C.tsv -t LIB11,LIB14,LIB15 -c LIB10,LIB12,LIB13 --norm-method control --control-gene /tmp/ntc_gene.txt -n /tmp/mageck_part_C 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Welcome to MAGeCK v0.5.9.5. Command: test 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading count table from /tmp/counts_part_C.tsv  
+INFO  @ Thu, 12 Nov 2026 14:29:47: Processing 1 lines.. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loaded 1000 records. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: 1 gene(s) used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: 80 sgRNAs used as negative controls. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/test_report.Rmd. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading R template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template_indvgene.RTemplate. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading Rnw template file: /opt/tools/lib/python3.12/site-packages/mageck/plot_template.Rnw. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Treatment samples:LIB11,LIB14,LIB15 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Treatment sample index:3,6,7 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Control samples:LIB10,LIB12,LIB13 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Control sample index:2,4,5 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loaded 80 control sgRNAs from /tmp/mageck_part_C.control_sgrna.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:47: control sgRNAs for normalization:80 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Final size factor: 0.8725561001778811 0.9679442655059519 1.0028210596905949 1.0353425070314906 1.1062774288865396 0.9863852937362741 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Detecting outliers from variance estimation.. Avg read count:[58.07665593035711], Var: [11679.33222775355] 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Skipping 6 sgRNAs from variance calculation because of their extreme high counts (> 4* STD (mean counts) ). 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Before RRA, 0 sgRNAs are removed with zero counts in both group(s). 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Use qnorm to reversely calculate sgRNA scores ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: RRA -i /tmp/mageck_part_C.plow.txt -o /tmp/mageck_part_C.gene.low.txt -p 0.301 --control /tmp/mageck_part_C.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:47: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:    
+INFO  @ Thu, 12 Nov 2026 14:29:47: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: RRA -i /tmp/mageck_part_C.phigh.txt -o /tmp/mageck_part_C.gene.high.txt -p 0.302 --control /tmp/mageck_part_C.control_sgrna.txt --skip-gene NA --skip-gene na  
+INFO  @ Thu, 12 Nov 2026 14:29:47: Command message: 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Welcome to RRA v 0.5.9. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   81 control sequences loaded. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene NA for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene na for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Reading input file... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Summary: 1000 sgRNAs, 231 genes, 1 lists; skipped sgRNAs:0 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Computing lo-values for each group... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Skipping gene NON_TARGETING for permutation ... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Warning: sgRNA  not found in the ranked list.  
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Computing false discovery rate... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Increase the number of permutations to 433 to get precise p values. To avoid this, use the --permutation option. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Total # control sgRNAs: 80 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Permuting genes with 4 sgRNAs... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Number of genes under FDR adjustment: 231 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Saving to output file... 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Suppressing the output of gene NON_TARGETING since it is negative ontrol genes. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   RRA completed. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Groups deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   Lists deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:   ControlSeqPercentile deletion complete. 
+INFO  @ Thu, 12 Nov 2026 14:29:47:    
+INFO  @ Thu, 12 Nov 2026 14:29:47: End command message. 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading top 10 genes from /tmp/mageck_part_C.gene.low.txt: TGT7113,TGT6346,TGT2099,TGT6042,TGT3105,TGT8454,TGT5641,TGT1903,TGT7955,TGT7592 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Loading top 10 genes from /tmp/mageck_part_C.gene.high.txt: TGT0131,TGT0117,TGT4575,TGT8045,TGT0089,TGT6156,TGT3991,TGT2470,TGT4668,TGT3002 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: rm /tmp/mageck_part_C.plow.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: rm /tmp/mageck_part_C.phigh.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: rm /tmp/mageck_part_C.gene.low.txt 
+INFO  @ Thu, 12 Nov 2026 14:29:47: Running command: rm /tmp/mageck_part_C.gene.high.txt 
+part_C MAGeCK: Modifiers 10/10, FP 0/30
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/check_b.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> res = pd.read_csv('/tmp/mageck_part_B.gene_summary.txt', sep='\t')
+[?2004l[?2004h> ref = pd.read_csv('/task/input/part_B/reference_genes.tsv', sep='\t')
+[?2004l[?2004h> ref_map = dict(zip(ref['gene'], ref['expected_class']))
+[?2004l[?2004h> res_map = {}
+[?2004l[?2004h> for _, r in res.iterrows():
+[?2004l[?2004h>     g = r['id']
+[?2004l[?2004h>     if r['neg|fdr'] <= 0.05 and r['neg|fdr'] < r['pos|fdr']:
+[?2004l[?2004h>         res_map[g] = 'sensitiser'
+[?2004l[?2004h>     elif r['pos|fdr'] <= 0.05 and r['pos|fdr'] < r['neg|fdr']:
+[?2004l[?2004h>         res_map[g] = 'resistance'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         res_map[g] = 'none'
+[?2004l[?2004h> mod_ok, mod_tot, none_fp, none_tot = 0, 0, 0, 0
+[?2004l[?2004h> for g, exp in ref_map.items():
+[?2004l[?2004h>     got = res_map.get(g, 'none')
+[?2004l[?2004h>     if exp != 'none':
+[?2004l[?2004h>         mod_tot += 1
+[?2004l[?2004h>         if got == exp: mod_ok += 1
+[?2004l[?2004h>         else: print(f'  MISSED {g}: exp {exp}, got {got}')
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         none_tot += 1
+[?2004l[?2004h>         if got != 'none':
+[?2004l[?2004h>             none_fp += 1
+[?2004l[?2004h>             print(f'  FP NONE {g}: got {got}')
+[?2004l[?2004h> print(f'Part B MAGeCK: Modifiers {mod_ok}/{mod_tot}, FP {none_fp}/{none_tot}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/check_b.py
+[?2004l  FP NONE TGT1559: got resistance
+Part B MAGeCK: Modifiers 10/10, FP 1/30
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/audit_notes.txt
+[?2004l[?2004h> Items:
+[?2004l[?2004h> 1. library_release
+[?2004l[?2004h> 2. sample_columns
+[?2004l[?2004h> 3. stagger_reads
+[?2004l[?2004h> 4. read2_library
+[?2004l[?2004h> 5. arm_labels
+[?2004l[?2004h> 6. control_normalisation
+[?2004l[?2004h> 7. drug_baseline
+[?2004l[?2004h> 8. contrast_sign
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# cat /tmp/audit_notes.txt
+[?2004lItems:
+1. library_release
+2. sample_columns
+3. stagger_reads
+4. read2_library
+5. arm_labels
+6. control_normalisation
+7. drug_baseline
+8. contrast_sign
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/check_sample_columns.py
+[?2004l[?2004h> import gzip, glob, pandas as pd, numpy as np
+[?2004l[?2004h> COMP = str.maketrans('ACGTN', 'TGCAN')
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = 'GTTTTAGAGCTA'
+[?2004l[?2004h> 
+[?2004l[?2004h> def candidates_A_B(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         yield read[k - 20:k]
+[?2004l[?2004h> 
+[?2004l[?2004h> def candidates_C(read):
+[?2004l[?2004h>     yield read[24:44]
+[?2004l[?2004h>     yield revcomp(read)[15:35]
+[?2004l[?2004h> 
+[?2004l[?2004h> for part, cand_fn in [('part_A', candidates_A_B), ('part_B', candidates_A_B), ('part_C', candidates_C)]:
+[?2004l[?2004h>     print(f'Checking {part} sample_columns:')
+[?2004l[?2004h>     draft = pd.read_csv(f'/task/input/{part}/handover/counts_draft.tsv', sep='\t')
+[?2004l[?2004h>     sheet = pd.read_csv(f'/task/input/{part}/samples.tsv', sep='\t')
+[?2004l[?2004h>     lib = pd.read_csv(f'/task/input/{part}/library.tsv', sep='\t')
+[?2004l[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib['sequence'])}
+[?2004l[?2004h>     
+[?2004l[?2004h>     for idx, row in sheet.iterrows():
+[?2004l[?2004h>         sid = row['sample_id']
+[?2004l[?2004h>         fq = f'/task/input/{part}/fastq/{row["fastq_file"]}'
+[?2004l[?2004h>         c = np.zeros(len(lib), dtype=int)
+[?2004l[?2004h>         with gzip.open(fq, 'rt') as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     for sp in cand_fn(line.rstrip()):
+[?2004l[?2004h>                         k = seq_to_idx.get(sp)
+[?2004l[?2004h>                         if k is not None:
+[?2004l[?2004h>                             c[k] += 1
+[?2004l[?2004h>                             break
+[?2004l[?2004h>         draft_c = draft[sid].values
+[?2004l[?2004h>         diff = np.abs(draft_c - c).sum()
+[?2004l[?2004h>         print(f'  {sid} ({row["fastq_file"]}): sum={c.sum()}, draft_sum={draft_c.sum()}, diff={diff}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/check_sample_columns.py
+[?2004lChecking part_A sample_columns:
+  LIB8 (LIB8.fastq.gz): sum=99717, draft_sum=99717, diff=0
+  LIB9 (LIB9.fastq.gz): sum=106565, draft_sum=106565, diff=0
+  LIB10 (LIB10.fastq.gz): sum=114203, draft_sum=114203, diff=0
+  LIB11 (LIB11.fastq.gz): sum=103010, draft_sum=103010, diff=0
+  LIB12 (LIB12.fastq.gz): sum=110250, draft_sum=110250, diff=0
+  LIB13 (LIB13.fastq.gz): sum=109237, draft_sum=109237, diff=0
+  LIB14 (LIB14.fastq.gz): sum=114795, draft_sum=114795, diff=0
+  LIB15 (LIB15.fastq.gz): sum=0, draft_sum=0, diff=0
+Checking part_B sample_columns:
+  LIB6 (LIB6.fastq.gz): sum=111279, draft_sum=111279, diff=0
+  LIB7 (LIB7.fastq.gz): sum=115554, draft_sum=115554, diff=0
+  LIB8 (LIB8.fastq.gz): sum=101881, draft_sum=101881, diff=0
+  LIB9 (LIB9.fastq.gz): sum=106875, draft_sum=106875, diff=0
+  LIB10 (LIB10.fastq.gz): sum=108057, draft_sum=108057, diff=0
+  LIB11 (LIB11.fastq.gz): sum=107956, draft_sum=107956, diff=0
+  LIB12 (LIB12.fastq.gz): sum=0, draft_sum=0, diff=0
+  LIB13 (LIB13.fastq.gz): sum=113328, draft_sum=113328, diff=0
+Checking part_C sample_columns:
+  LIB8 (LIB8.fastq.gz): sum=14248, draft_sum=14181, diff=10471
+  LIB9 (LIB9.fastq.gz): sum=13055, draft_sum=13345, diff=10660
+  LIB10 (LIB10.fastq.gz): sum=14181, draft_sum=13218, diff=4023
+  LIB11 (LIB11.fastq.gz): sum=13345, draft_sum=12944, diff=6073
+  LIB12 (LIB12.fastq.gz): sum=13218, draft_sum=12861, diff=6075
+  LIB13 (LIB13.fastq.gz): sum=12944, draft_sum=14226, diff=6336
+  LIB14 (LIB14.fastq.gz): sum=12861, draft_sum=14248, diff=11007
+  LIB15 (LIB15.fastq.gz): sum=14226, draft_sum=13055, diff=11361
+[?2004hroot@ea53ea076219:/task# head -n 10 /task/input/part_B/handover/gene_draft.tsv
+[?2004lgene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0037	-1.0596	0.5238	5.28	resistance
+TGT0056	-2.3794	2.4106	24.29	resistance
+TGT0122	-2.2715	2.3188	23.36	resistance
+TGT0286	-1.5487	1.1458	11.54	resistance
+TGT0306	-3.8726	4.3834	44.16	resistance
+TGT0321	-2.9572	2.5533	25.72	resistance
+TGT0340	-1.6975	1.7130	17.26	resistance
+TGT0380	-2.5724	2.3988	24.17	resistance
+TGT0388	-3.0147	2.9488	29.71	resistance
+[?2004hroot@ea53ea076219:/task# head -n 10 /task/input/part_C/handover/gene_draft.tsv
+[?2004lgene	lfc_fitness	lfc_drug	z_drug	drug_class
+TGT0018	0.0399	-2.0430	-12.81	sensitiser
+TGT0036	-0.6291	-2.3939	-15.02	sensitiser
+TGT0074	-0.6435	-1.3180	-8.27	sensitiser
+TGT0089	-0.2063	-2.0748	-13.01	sensitiser
+TGT0117	-0.1995	-0.1858	-1.17	none
+TGT0131	-0.3555	-0.0563	-0.35	none
+TGT0195	0.1466	-2.5507	-16.00	sensitiser
+TGT0224	-0.1231	-2.7934	-17.52	sensitiser
+TGT0281	-0.2465	-1.3524	-8.48	sensitiser
+[?2004hroot@ea53ea076219:/task# head -n 5 /task/input/part_A/handover/hits_mailed.tsv /task/input/part_B/handover/hits_mailed.tsv /task/input/part_C/handover/hits_mailed.tsv
+[?2004l==> /task/input/part_A/handover/hits_mailed.tsv <==
+rank	gene	z_drug
+1	TGT4344	-19.75
+2	TGT0462	-19.12
+3	TGT3601	-17.59
+4	TGT3362	-16.54
+
+==> /task/input/part_B/handover/hits_mailed.tsv <==
+rank	gene	z_drug
+1	TGT8817	45.41
+2	TGT0306	44.16
+3	TGT0610	37.78
+4	TGT7495	35.86
+
+==> /task/input/part_C/handover/hits_mailed.tsv <==
+rank	gene	z_drug
+1	TGT2812	-19.96
+2	TGT6440	-19.79
+3	TGT5095	-19.12
+4	TGT5184	-18.55
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/compare_norm.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> df = pd.read_csv('/tmp/counts_part_A.tsv', sep='\t')
+[?2004l[?2004h> samples = [c for c in df.columns if c not in ['sgRNA', 'gene']]
+[?2004l[?2004h> gene = df['gene'].values
+[?2004l[?2004h> ntc = (gene == 'NON_TARGETING')
+[?2004l[?2004h> C = df[samples].values
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_idx = [samples.index('LIB11'), samples.index('LIB12'), samples.index('LIB15')]
+[?2004l[?2004h> drug_idx = [samples.index('LIB10'), samples.index('LIB13'), samples.index('LIB14')]
+[?2004l[?2004h> 
+[?2004l[?2004h> tot_ntc = C[ntc].sum(axis=0)
+[?2004l[?2004h> s1 = tot_ntc / tot_ntc.mean()
+[?2004l[?2004h> N1 = C / s1
+[?2004l[?2004h> fc1 = (N1[:, drug_idx].mean(axis=1) + 0.5) / (N1[:, veh_idx].mean(axis=1) + 0.5)
+[?2004l[?2004h> lfc1 = np.log2(fc1) - np.median(np.log2(fc1)[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> tot = C.sum(axis=0)
+[?2004l[?2004h> s2 = tot / tot.mean()
+[?2004l[?2004h> N2 = C / s2
+[?2004l[?2004h> fc2 = (N2[:, drug_idx].mean(axis=1) + 0.5) / (N2[:, veh_idx].mean(axis=1) + 0.5)
+[?2004l[?2004h> lfc2 = np.log2(fc2) - np.median(np.log2(fc2)[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Max abs diff between NTC norm and Total depth norm:', np.max(np.abs(lfc1 - lfc2)))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/compare_norm.py
+[?2004lMax abs diff between NTC norm and Total depth norm: 0.1498108104928173
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/check_cols.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> for part in ['part_A', 'part_B', 'part_C']:
+[?2004l[?2004h>     res = pd.read_csv(f'/tmp/mageck_{part}.gene_summary.txt', sep='\t')
+[?2004l[?2004h>     print(part, res.columns.tolist())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/check_cols.py
+[?2004lpart_A ['id', 'num', 'neg|score', 'neg|p-value', 'neg|fdr', 'neg|rank', 'neg|goodsgrna', 'neg|lfc', 'pos|score', 'pos|p-value', 'pos|fdr', 'pos|rank', 'pos|goodsgrna', 'pos|lfc']
+part_B ['id', 'num', 'neg|score', 'neg|p-value', 'neg|fdr', 'neg|rank', 'neg|goodsgrna', 'neg|lfc', 'pos|score', 'pos|p-value', 'pos|fdr', 'pos|rank', 'pos|goodsgrna', 'pos|lfc']
+part_C ['id', 'num', 'neg|score', 'neg|p-value', 'neg|fdr', 'neg|rank', 'neg|goodsgrna', 'neg|lfc', 'pos|score', 'pos|p-value', 'pos|fdr', 'pos|rank', 'pos|goodsgrna', 'pos|lfc']
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/check_lfc.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> res = pd.read_csv('/tmp/mageck_part_A.gene_summary.txt', sep='\t')
+[?2004l[?2004h> print(res[['id', 'neg|lfc', 'pos|lfc', 'neg|fdr', 'pos|fdr']].head(10))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/check_lfc.py
+[?2004l        id  neg|lfc  pos|lfc   neg|fdr  pos|fdr
+0  TGT1197 -1.22880 -1.22880  0.000072      1.0
+1  TGT1202 -1.73140 -1.73140  0.000072      1.0
+2  TGT3471 -2.38350 -2.38350  0.000072      1.0
+3  TGT7853 -2.18710 -2.18710  0.000072      1.0
+4  TGT3601 -2.17560 -2.17560  0.000072      1.0
+5  TGT4695 -1.59930 -1.59930  0.000072      1.0
+6  TGT2915 -0.80426 -0.80426  0.000072      1.0
+7  TGT4954 -0.63827 -0.63827  0.000072      1.0
+8  TGT5795 -0.98405 -0.98405  0.000072      1.0
+9  TGT7971 -2.71410 -2.71410  0.000072      1.0
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/compare_lfc_calc.py
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m_res = pd.read_csv('/tmp/mageck_part_A.gene_summary.txt', sep='\t')
+[?2004l[?2004h> df = pd.read_csv('/tmp/counts_part_A.tsv', sep='\t')
+[?2004l[?2004h> samples = [c for c in df.columns if c not in ['sgRNA', 'gene']]
+[?2004l[?2004h> gene = df['gene'].values
+[?2004l[?2004h> ntc = (gene == 'NON_TARGETING')
+[?2004l[?2004h> C = df[samples].values
+[?2004l[?2004h> 
+[?2004l[?2004h> veh_idx = [samples.index('LIB11'), samples.index('LIB12'), samples.index('LIB15')]
+[?2004l[?2004h> drug_idx = [samples.index('LIB10'), samples.index('LIB13'), samples.index('LIB14')]
+[?2004l[?2004h> 
+[?2004l[?2004h> tot_ntc = C[ntc].sum(axis=0)
+[?2004l[?2004h> s1 = tot_ntc / tot_ntc.mean()
+[?2004l[?2004h> N1 = C / s1
+[?2004l[?2004h> fc1 = (N1[:, drug_idx].mean(axis=1) + 0.5) / (N1[:, veh_idx].mean(axis=1) + 0.5)
+[?2004l[?2004h> lfc1 = np.log2(fc1) - np.median(np.log2(fc1)[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h> calc_lfc = {}
+[?2004l[?2004h> for g in sorted(set(gene[~ntc])):
+[?2004l[?2004h>     calc_lfc[g] = float(np.median(lfc1[gene == g]))
+[?2004l[?2004h> 
+[?2004l[?2004h> comp = []
+[?2004l[?2004h> for _, r in m_res.head(10).iterrows():
+[?2004l[?2004h>     g = r['id']
+[?2004l[?2004h>     if g in calc_lfc:
+[?2004l[?2004h>         comp.append({'gene': g, 'mageck_lfc': r['neg|lfc'], 'calc_lfc': calc_lfc[g]})
+[?2004l[?2004h> print(pd.DataFrame(comp))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/compare_lfc_calc.py
+[?2004l      gene  mageck_lfc  calc_lfc
+0  TGT1197    -1.22880 -1.092232
+1  TGT1202    -1.73140 -1.619326
+2  TGT3471    -2.38350 -1.877400
+3  TGT7853    -2.18710 -2.461656
+4  TGT3601    -2.17560 -1.947810
+5  TGT4695    -1.59930 -1.511797
+6  TGT2915    -0.80426 -0.892900
+7  TGT4954    -0.63827 -0.563478
+8  TGT5795    -0.98405 -0.893998
+9  TGT7971    -2.71410 -2.799808
+[?2004hroot@ea53ea076219:/task# ls -la /task/output /task/output/part_A /task/output/part_B /task/output/part_C 2>&1 || true
+[?2004lls: cannot access '/task/output/part_A': No such file or directory
+ls: cannot access '/task/output/part_B': No such file or directory
+ls: cannot access '/task/output/part_C': No such file or directory
+/task/output:
+total 8
+drwxr-xr-x 2 root root 4096 Nov 12 06:21 .
+drwxr-xr-x 1 root root 4096 Nov 12 14:13 ..
+[?2004hroot@ea53ea076219:/task# cat << 'EOF' > /tmp/produce_all_deliverables.py
+[?2004l=2)
+
+  [?2004h> import os, sys, json, gzip, subprocess
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> 
+[?2004lu[?2004h> COMP = str.maketrans('ACGTN', 'TGCAN')
+[?2004l[?2004h> def revcomp(s): return s.translate(COMP)[::-1]
+[?2004l[?2004h> SCAFFOLD = 'GTTTTAGAGCTA'
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_spacer(read):
+[?2004l[?2004h>     k = read.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return read[k-20:k]
+[?2004l[?2004h>     rc = revcomp(read)
+[?2004l[?2004h>     k = rc.find(SCAFFOLD)
+[?2004l[?2004h>     if k >= 20:
+[?2004l[?2004h>         return rc[k-20:k]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/tmp/ntc_gene.txt', 'w') as f:
+[?2004l[?2004h>     f.write('NON_TARGETING\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> parts_config = [
+[?2004l[?2004h>     {
+[?2004l[?2004h>         'part': 'part_A',
+[?2004l[?2004h>         'veh_ids': ['LIB11', 'LIB12', 'LIB15'],
+[?2004l[?2004h>         'drug_ids': ['LIB10', 'LIB13', 'LIB14'],
+[?2004l[?2004h>         't0_ids': ['LIB8', 'LIB9'],
+[?2004l[?2004h>         'audit': [
+[?2004l[?2004h>             ('library_release', 'defective'),
+[?2004l[?2004h>             ('sample_columns', 'ok'),
+[?2004l[?2004h>             ('stagger_reads', 'ok'),
+[?2004l[?2004h>             ('read2_library', 'defective'),
+[?2004l[?2004h>             ('arm_labels', 'defective'),
+[?2004l[?2004h>             ('control_normalisation', 'defective'),
+[?2004l[?2004h>             ('drug_baseline', 'ok'),
+[?2004l[?2004h>             ('contrast_sign', 'ok')
+[?2004l[?2004h>         ]
+[?2004l[?2004h>     },
+[?2004l[?2004h>     {
+[?2004l[?2004h>         'part': 'part_B',
+[?2004l[?2004h>         'veh_ids': ['LIB8', 'LIB9', 'LIB13'],
+[?2004lcol_t0 = [s_[?2004h>         'drug_ids': ['LIB10', 'LIB11', 'LIB12'],
+[?2004l[?2004h>         't0_ids': ['LIB6', 'LIB7'],
+[?2004l[?2004h>         'audit': [
+[?2004l[?2004h>             ('library_release', 'defective'),
+[?2004l[?2004h>             ('sample_columns', 'ok'),
+[?2004l[?2004h>             ('stagger_reads', 'ok'),
+[?2004l[?2004h>             ('read2_library', 'defective'),
+[?2004l[?2004h>             ('arm_labels', 'defective'),
+[?2004l[?2004h>             ('control_normalisation', 'ok'),
+[?2004l[?2004h>             ('drug_baseline', 'defective'),
+[?2004l[?2004h>             ('contrast_sign', 'defective')
+[?2004l[?2004h>         ]
+[?2004l[?2004h>     },
+[?2004l[?2004h>     {
+[?2004l[?2004h>         'part': 'part_C',
+[?2004l[?2004h>         'veh_ids': ['LIB10', 'LIB12', 'LIB13'],
+[?2004l[?2004h>         'drug_ids': ['LIB11', 'LIB14', 'LIB15'],
+[?2004l[?2004h>         't0_ids': ['LIB8', 'LIB9'],
+[?2004l[?2004h>         'audit': [
+[?2004l[?2004h>             ('library_release', 'defective'),
+[?2004l[?2004h>             ('sample_columns', 'defective'),
+[?2004l[?2004h>             ('stagger_reads', 'defective'),
+[?2004l[?2004h>             ('read2_library', 'ok'),
+[?2004l[?2004h>             ('arm_labels', 'defective'),
+[?2004l[?2004h>             ('control_normalisation', 'ok'),
+[?2004l[?2004h>             ('drug_baseline', 'ok'),
+[?2004l[?2004h>             ('contrast_sign', 'defective')
+[?2004l[?2004h>         ]
+[?2004l[?2004h>     }
+[?2004l[?2004h> ]
+[?2004l r[?2004h> 
+[?2004l[?2004h> for cfg in parts_config:
+[?2004l[?2004h>     part = cfg['part']
+[?2004l[?2004h>     veh_ids = cfg['veh_ids']
+[?2004l[?2004h>     drug_ids = cfg['drug_ids']
+[?2004l[?2004h>     t0_ids = cfg['t0_ids']
+[?2004l[?2004h>     out_dir = f'/task/output/{part}'
+[?2004l[?2004h>     os.makedirs(out_dir, exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h>     lib_df = pd.read_csv(f'/task/input/{part}/library.tsv', sep='\t')
+[?2004l[?2004h>     sheet_df = pd.read_csv(f'/task/input/{part}/samples.tsv', sep='\t')
+[?2004l[?2004h>     ref_df = pd.read_csv(f'/task/input/{part}/reference_genes.tsv', sep='\t')
+[?2004l[?2004h>     hits_mailed_df = pd.read_csv(f'/task/input/{part}/handover/hits_mailed.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004ls[?2004h>     seq_to_idx = {seq: i for i, seq in enumerate(lib_df['sequence'])}
+[?2004l[?2004h>     counts = np.zeros((len(lib_df), len(sheet_df)), dtype=int)
+[?2004l[?2004h>     total_reads_map = {}
+[?2004l[?2004h> 
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         sid = row['sample_id']
+[?2004l[?2004h>         fq = f'/task/input/{part}/fastq/{row["fastq_file"]}'
+[?2004l[?2004h>         tot = 0
+[?2004l[?2004h>         with gzip.open(fq, 'rt') as f:
+[?2004l[?2004h>             for i, line in enumerate(f):
+[?2004l[?2004h>                 if i % 4 == 1:
+[?2004l[?2004h>                     tot += 1
+[?2004l[?2004h>                     sp = get_spacer(line.rstrip())
+[?2004l[?2004h>                     if sp in seq_to_idx:
+[?2004l[?2004h>                         counts[seq_to_idx[sp], j] += 1
+[?2004ld[?2004h>         total_reads_map[sid] = tot
+[?2004l[?2004h> 
+[?2004l[?2004h>     counts_df = pd.DataFrame({'sgRNA': lib_df['sgRNA'], 'gene': lib_df['gene']})
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         counts_df[row['sample_id']] = counts[:, j]
+[?2004l[?2004h>     counts_path = os.path.join(out_dir, 'counts.tsv')
+[?2004l[?2004h>     counts_df.to_csv(counts_path, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     analyzed_arm = {}
+[?2004lf'  {part} FP NONE {g}[?2004h>     for sid in t0_ids: analyzed_arm[sid] = 'T0'
+[?2004l[?2004h>     for sid in veh_ids: analyzed_arm[sid] = 'vehicle'
+[?2004l[?2004h>     for sid in drug_ids: analyzed_arm[sid] = 'drug'
+[?2004l[?2004h> 
+[?2004l[?2004h>     qc_dict = {'samples': {}}
+[?2004l[?2004h>     for j, row in sheet_df.iterrows():
+[?2004l[?2004h>         sid = row['sample_id']
+[?2004l[?2004h>         qc_dict['samples'][sid] = {
+[?2004l[?2004h>             'total_reads': int(total_reads_map[sid]),
+[?2004l[?2004h>             'mapped_reads': int(counts[:, j].sum()),
+[?2004l[?2004h>             'arm': analyzed_arm[sid]
+[?2004l[?2004h>         }
+[?2004l[?2004h>     with open(os.path.join(out_dir, 'qc.json'), 'w') as f:
+[?2004l[?2004h>         json.dump(qc_dict, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h>     tmp_count_file = f'/tmp/counts_{part}.tsv'
+[?2004l[?2004h>     counts_df.to_csv(tmp_count_file, sep='\t', index=False)
+[?2004l[?2004h>     prefix = f'/tmp/mageck_run_{part}'
+[?2004l[?2004h>     cmd = [
+[?2004l[?2004h>         'mageck', 'test', '-k', tmp_count_file,
+[?2004l[?2004h>         '-t', ','.join(drug_ids),
+[?2004l[?2004h>         '-c', ','.join(veh_ids),
+[?2004l[?2004h>         '--norm-method', 'control',
+[?2004l[?2004h>         '--control-gene', '/tmp/ntc_gene.txt',
+[?2004l[?2004h>         '-n', prefix
+[?2004l[?2004h>     ]
+[?2004l[?2004h>     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+[?2004l[?2004h> 
+[?2004l[?2004h>     m_res = pd.read_csv(f'{prefix}.gene_summary.txt', sep='\t')
+[?2004l[?2004h>     drug_class_map = {}
+[?2004l[?2004h>     for _, r in m_res.iterrows():
+[?2004l[?2004h>         g = r['id']
+[?2004l[?2004h>         if g == 'NON_TARGETING': continue
+[?2004l[?2004h>         neg_fdr = r['neg|fdr']
+[?2004l[?2004h>         pos_fdr = r['pos|fdr']
+[?2004l[?2004h>         if neg_fdr <= 0.05 and neg_fdr < pos_fdr:
+[?2004l[?2004h>             drug_class_map[g] = 'sensitiser'
+[?2004l[?2004h>         elif pos_fdr <= 0.05 and pos_fdr < neg_fdr:
+[?2004l[?2004h>             drug_class_map[g] = 'resistance'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             drug_class_map[g] = 'none'
+[?2004l[?2004h> 
+[?2004l[?2004h>     sample_order = list(sheet_df['sample_id'])
+[?2004l[?2004h>     s_to_col = {sid: i for i, sid in enumerate(sample_order)}
+[?2004l[?2004h>     col_t0 = [s_to_col[s] for s in t0_ids]
+[?2004l[?2004h>     col_veh = [s_to_col[s] for s in veh_ids]
+[?2004l[?2004h>     col_drug = [s_to_col[s] for s in drug_ids]
+[?2004l[?2004h> 
+[?2004l[?2004h>     gene = lib_df['gene'].values
+[?2004l[?2004h>     ntc = (gene == 'NON_TARGETING')
+[?2004l[?2004h>     tot_ntc = counts[ntc].sum(axis=0)
+[?2004l[?2004h>     size_ntc = tot_ntc / tot_ntc.mean()
+[?2004l[?2004h>     N = counts / size_ntc
+[?2004l[?2004h> 
+[?2004l[?2004h>     fc_drug_raw = (N[:, col_drug].mean(axis=1) + 0.5) / (N[:, col_veh].mean(axis=1) + 0.5)
+[?2004l[?2004h>     lfc_drug_sgrna = np.log2(fc_drug_raw)
+[?2004l[?2004h>     lfc_drug_sgrna -= np.median(lfc_drug_sgrna[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h>     fc_fit_raw = (N[:, col_veh].mean(axis=1) + 0.5) / (N[:, col_t0].mean(axis=1) + 0.5)
+[?2004l[?2004h>     lfc_fit_sgrna = np.log2(fc_fit_raw)
+[?2004l[?2004h>     lfc_fit_sgrna -= np.median(lfc_fit_sgrna[ntc])
+[?2004l[?2004h> 
+[?2004l[?2004h>     unique_genes = sorted(list(set(gene[~ntc])))
+[?2004l[?2004h>     gene_rows = []
+[?2004l[?2004h>     for g in unique_genes:
+[?2004l[?2004h>         m = (gene == g)
+[?2004l[?2004h>         lf = float(np.median(lfc_fit_sgrna[m]))
+[?2004l[?2004h>         ld = float(np.median(lfc_drug_sgrna[m]))
+[?2004l[?2004h>         cls = drug_class_map.get(g, 'none')
+[?2004l[?2004h>         gene_rows.append({
+[?2004l[?2004h>             'gene': g,
+[?2004l[?2004h>             'lfc_fitness': round(lf, 4),
+[?2004l[?2004h>             'lfc_drug': round(ld, 4),
+[?2004l[?2004h>             'drug_class': cls
+[?2004l[?2004h>         })
+[?2004l[?2004h>     gene_summary_df = pd.DataFrame(gene_rows)
+[?2004l[?2004h>     gene_summary_path = os.path.join(out_dir, 'gene_summary.tsv')
+[?2004l[?2004h>     gene_summary_df.to_csv(gene_summary_path, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     audit_rows = [{'item': item, 'verdict': verdict} for item, verdict in cfg['audit']]
+[?2004l[?2004h>     audit_df = pd.DataFrame(audit_rows)
+[?2004l[?2004h>     audit_path = os.path.join(out_dir, 'audit.tsv')
+[?2004l[?2004h>     audit_df.to_csv(audit_path, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     erratum_rows = []
+[?2004l[?2004h>     for _, r in hits_mailed_df.iterrows():
+[?2004l[?2004h>         g = r['gene']
+[?2004l[?2004h>         final_cls = drug_class_map.get(g, 'none')
+[?2004l[?2004h>         v = 'confirmed' if final_cls in ['sensitiser', 'resistance'] else 'retracted'
+[?2004l[?2004h>         erratum_rows.append({'gene': g, 'verdict': v})
+[?2004l[?2004h>     erratum_df = pd.DataFrame(erratum_rows)
+[?2004l[?2004h>     erratum_path = os.path.join(out_dir, 'erratum.tsv')
+[?2004l[?2004h>     erratum_df.to_csv(erratum_path, sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h>     ref_map = dict(zip(ref_df['gene'], ref_df['expected_class']))
+[?2004l[?2004h>     mod_ok, mod_tot, none_fp, none_tot = 0, 0, 0, 0
+[?2004l[?2004h>     for g, exp in ref_map.items():
+[?2004l[?2004h>         called = drug_class_map.get(g, 'none')
+[?2004l[?2004h>         if exp != 'none':
+[?2004l[?2004h>             mod_tot += 1
+[?2004l[?2004h>             if called == exp: mod_ok += 1
+[?2004l[?2004h>             else: print(f'  {part} MISSED {g}: exp {exp}, got {called}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             none_tot += 1
+[?2004l[?2004h>             if called != 'none':
+[?2004l[?2004h>                 none_fp += 1
+[?2004l[?2004h>                 print(f'  {part} FP NONE {g}: exp none, got {called}')
+[?2004l[?2004h>     print(f'DONE {part}: Modifiers {mod_ok}/{mod_tot}, FP {none_fp}/{none_tot}')
+[?2004l[?2004h> 
+[?2004l[?2004h> print('ALL FINISHED SUCCESSFULLY!')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@ea53ea076219:/task# python3 /tmp/produce_all_deliverables.py
+[?2004lDONE part_A: Modifiers 10/10, FP 0/30
+  part_B FP NONE TGT1559: exp none, got resistance
+DONE part_B: Modifiers 10/10, FP 1/30
+DONE part_C: Modifiers 10/10, FP 0/30
+ALL FINISHED SUCCESSFULLY!
+[?2004hroot@ea53ea076219:/task# ls -la /task/output/part_A /task/output/part_B /task/output/part_C
+[?2004l/task/output/part_A:
+total 76
+drwxrwxrwx 2 root root  4096 Nov 12 14:34 .
+drwxr-xr-x 1 root root  4096 Nov 12 14:34 ..
+-rw-rw-rw- 1 root root   185 Nov 12 14:34 audit.tsv
+-rw-rw-rw- 1 root root 45491 Nov 12 14:34 counts.tsv
+-rw-rw-rw- 1 root root   733 Nov 12 14:34 erratum.tsv
+-rw-rw-rw- 1 root root  6774 Nov 12 14:34 gene_summary.tsv
+-rw-rw-rw- 1 root root   831 Nov 12 14:34 qc.json
+
+/task/output/part_B:
+total 76
+drwxrwxrwx 2 root root  4096 Nov 12 14:34 .
+drwxr-xr-x 1 root root  4096 Nov 12 14:34 ..
+-rw-rw-rw- 1 root root   192 Nov 12 14:34 audit.tsv
+-rw-rw-rw- 1 root root 45539 Nov 12 14:34 counts.tsv
+-rw-rw-rw- 1 root root   733 Nov 12 14:34 erratum.tsv
+-rw-rw-rw- 1 root root  6745 Nov 12 14:34 gene_summary.tsv
+-rw-rw-rw- 1 root root   829 Nov 12 14:34 qc.json
+
+/task/output/part_C:
+total 76
+drwxrwxrwx 2 root root  4096 Nov 12 14:34 .
+drwxr-xr-x 1 root root  4096 Nov 12 14:34 ..
+-rw-rw-rw- 1 root root   192 Nov 12 14:34 audit.tsv
+-rw-rw-rw- 1 root root 45335 Nov 12 14:34 counts.tsv
+-rw-rw-rw- 1 root root  1453 Nov 12 14:34 erratum.tsv
+-rw-rw-rw- 1 root root  6737 Nov 12 14:34 gene_summary.tsv
+-rw-rw-rw- 1 root root   831 Nov 12 14:34 qc.json
+[?2004hroot@ea53ea076219:/task# head -n 5 /task/output/part_A/counts.tsv /task/output/part_A/gene_summary.tsv /task/output/part_A/audit.tsv /task/output/part_A/erratum.tsv
+[?2004l==> /task/output/part_A/counts.tsv <==
+sgRNA	gene	LIB8	LIB9	LIB10	LIB11	LIB12	LIB13	LIB14	LIB15
+VAL2_0001	TGT5871	61	76	21	33	50	35	54	40
+VAL2_0002	TGT6646	27	43	13	3	13	9	5	8
+VAL2_0003	TGT6147	57	59	145	138	151	134	174	119
+VAL2_0004	TGT6132	89	89	13	16	37	3	23	29
+
+==> /task/output/part_A/gene_summary.tsv <==
+gene	lfc_fitness	lfc_drug	drug_class
+TGT0030	-1.5342	0.1505	none
+TGT0059	-2.3055	0.1655	none
+TGT0141	-3.1017	-0.0105	none
+TGT0177	-2.4582	-2.0608	sensitiser
+
+==> /task/output/part_A/audit.tsv <==
+item	verdict
+library_release	defective
+sample_columns	ok
+stagger_reads	ok
+read2_library	defective
+
+==> /task/output/part_A/erratum.tsv <==
+gene	verdict
+TGT4344	retracted
+TGT0462	retracted
+TGT3601	confirmed
+TGT3362	retracted
+[?2004hroot@ea53ea076219:/task# cat /task/output/part_A/qc.json
+[?2004l{
+  "samples": {
+    "LIB8": {
+      "total_reads": 112684,
+      "mapped_reads": 99717,
+      "arm": "T0"
+    },
+    "LIB9": {
+      "total_reads": 119542,
+      "mapped_reads": 106565,
+      "arm": "T0"
+    },
+    "LIB10": {
+      "total_reads": 126498,
+      "mapped_reads": 114203,
+      "arm": "drug"
+    },
+    "LIB11": {
+      "total_reads": 113752,
+      "mapped_reads": 103010,
+      "arm": "vehicle"
+    },
+    "LIB12": {
+      "total_reads": 122481,
+      "mapped_reads": 110250,
+      "arm": "vehicle"
+    },
+    "LIB13": {
+      "total_reads": 120408,
+      "mapped_reads": 109237,
+      "arm": "drug"
+    },
+    "LIB14": {
+      "total_reads": 127498,
+      "mapped_reads": 114795,
+      "arm": "drug"
+    },
+    "LIB15": {
+      "total_reads": 129296,
+      "mapped_reads": 116805,
+      "arm": "vehicle"
+    }
+  }
+}[?2004hroot@ea53ea076219:/task# cat /task/output/part_B/qc.json && cat /task/output/part_B/audit.tsv
+[?2004l{
+  "samples": {
+    "LIB6": {
+      "total_reads": 122829,
+      "mapped_reads": 111279,
+      "arm": "T0"
+    },
+    "LIB7": {
+      "total_reads": 129823,
+      "mapped_reads": 115554,
+      "arm": "T0"
+    },
+    "LIB8": {
+      "total_reads": 112097,
+      "mapped_reads": 101881,
+      "arm": "vehicle"
+    },
+    "LIB9": {
+      "total_reads": 118133,
+      "mapped_reads": 106875,
+      "arm": "vehicle"
+    },
+    "LIB10": {
+      "total_reads": 121817,
+      "mapped_reads": 108057,
+      "arm": "drug"
+    },
+    "LIB11": {
+      "total_reads": 120050,
+      "mapped_reads": 107956,
+      "arm": "drug"
+    },
+    "LIB12": {
+      "total_reads": 109844,
+      "mapped_reads": 98516,
+      "arm": "drug"
+    },
+    "LIB13": {
+      "total_reads": 126055,
+      "mapped_reads": 113328,
+      "arm": "vehicle"
+    }
+  }
+}item	verdict
+library_release	defective
+sample_columns	ok
+stagger_reads	ok
+read2_library	defective
+arm_labels	defective
+control_normalisation	ok
+drug_baseline	defective
+contrast_sign	defective
+[?2004hroot@ea53ea076219:/task# cat /task/output/part_C/qc.json && cat /task/output/part_C/audit.tsv
+[?2004l{
+  "samples": {
+    "LIB8": {
+      "total_reads": 126079,
+      "mapped_reads": 112532,
+      "arm": "T0"
+    },
+    "LIB9": {
+      "total_reads": 112590,
+      "mapped_reads": 99886,
+      "arm": "T0"
+    },
+    "LIB10": {
+      "total_reads": 124692,
+      "mapped_reads": 111348,
+      "arm": "vehicle"
+    },
+    "LIB11": {
+      "total_reads": 115153,
+      "mapped_reads": 103081,
+      "arm": "drug"
+    },
+    "LIB12": {
+      "total_reads": 112399,
+      "mapped_reads": 102304,
+      "arm": "vehicle"
+    },
+    "LIB13": {
+      "total_reads": 110967,
+      "mapped_reads": 100372,
+      "arm": "vehicle"
+    },
+    "LIB14": {
+      "total_reads": 110410,
+      "mapped_reads": 100208,
+      "arm": "drug"
+    },
+    "LIB15": {
+      "total_reads": 125426,
+      "mapped_reads": 112596,
+      "arm": "drug"
+    }
+  }
+}item	verdict
+library_release	defective
+sample_columns	defective
+stagger_reads	defective
+read2_library	ok
+arm_labels	defective
+control_normalisation	ok
+drug_baseline	ok
+contrast_sign	defective
+[?2004hroot@ea53ea076219:/task# wc -l /task/output/part_*/counts.tsv /task/output/part_*/gene_summary.tsv /task/output/part_*/audit.tsv /task/output/part_*/erratum.tsv M[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Kv
+[?2004l  1001 /task/output/part_A/counts.tsv
+  1001 /task/output/part_B/counts.tsv
+  1001 /task/output/part_C/counts.tsv
+   231 /task/output/part_A/gene_summary.tsv
+   231 /task/output/part_B/gene_summary.tsv
+   231 /task/output/part_C/gene_summary.tsv
+     9 /task/output/part_A/audit.tsv
+     9 /task/output/part_B/audit.tsv
+     9 /task/output/part_C/audit.tsv
+    41 /task/output/part_A/erratum.tsv
+    41 /task/output/part_B/erratum.tsv
+    81 /task/output/part_C/erratum.tsv
+  3886 total
+[?2004hroot@ea53ea076219:/task# python3 -c 'import os; [os.path.exists(f"/task/output/{p}/{f}") or exit(1) for p in ["part_A", "part_B", "part_C"] for f in ["counts.tsv", "gene_summary.tsv", "audit.tsv", "erratum.tsv", "qc.json"]]; print("All verified!")'
+[?2004lAll verified!
+[?2004hroot@ea53ea076219:/task# rm -rf /tmp/*
+[?2004l[?2004hroot@ea53ea076219:/task# 

@@ -1,0 +1,749 @@
+[?2004hroot@4461f422bb19:/task# find /task -maxdepth 4 -type f -printf '%p\n' | sort
+[?2004l/task/input/fastq/RS19.fastq.gz
+/task/input/fastq/RS22.fastq.gz
+/task/input/fastq/RS26.fastq.gz
+/task/input/fastq/RS27.fastq.gz
+/task/input/fastq/RS47.fastq.gz
+/task/input/fastq/RS62.fastq.gz
+/task/input/fastq/RS69.fastq.gz
+/task/input/fastq/RS75.fastq.gz
+/task/input/fastq/RS79.fastq.gz
+/task/input/fastq/RS80.fastq.gz
+/task/input/fastq/RS89.fastq.gz
+/task/input/fastq/RS97.fastq.gz
+/task/input/lab_notes.md
+/task/input/previous_analysis/HANDOVER.md
+/task/input/previous_analysis/de_draft.tsv
+/task/input/previous_analysis/gene_counts_merged.tsv
+/task/input/previous_analysis/mail_top_responders.tsv
+/task/input/previous_analysis/scripts/01_quantify.sh
+/task/input/previous_analysis/scripts/02_merge_counts.py
+/task/input/previous_analysis/scripts/03_de.py
+/task/input/reference/transcripts.fa.gz
+/task/input/reference/tx2gene.tsv
+/task/input/samples.tsv
+/task/software/README.txt
+[?2004hroot@4461f422bb19:/task# printf '\n=== samples.tsv ===\n'; cat /task/input/samples.tsv; printf '\n=== lab_notes.md ===\n'; cat /task/input/lab_notes.md; printf '\n=== HANDOVER.md ===\n'; cat /task/input/previous_analysis/HANDOVER.md
+[?2004l
+=== samples.tsv ===
+sample_id	condition	donor_id	donor_sex	library_prep_batch	fastq_file
+RS19	treated	D874	M	2024-03-05	RS19.fastq.gz
+RS22	vehicle	D379	M	2024-03-05	RS22.fastq.gz
+RS26	vehicle	D172	M	2024-03-19	RS26.fastq.gz
+RS27	vehicle	D643	F	2024-03-19	RS27.fastq.gz
+RS47	treated	D593	M	2024-03-05	RS47.fastq.gz
+RS62	vehicle	D602	M	2024-03-19	RS62.fastq.gz
+RS69	vehicle	D187	F	2024-03-19	RS69.fastq.gz
+RS75	treated	D616	F	2024-03-05	RS75.fastq.gz
+RS79	treated	D407	M	2024-03-05	RS79.fastq.gz
+RS80	treated	D933	F	2024-03-05	RS80.fastq.gz
+RS89	treated	D120	F	2024-03-19	RS89.fastq.gz
+RS97	vehicle	D296	F	2024-03-19	RS97.fastq.gz
+
+=== lab_notes.md ===
+# Wet-lab notes: compound vs vehicle, primary cells
+
+- Cells: primary cells from 12 unrelated donors (one culture per donor), passage 2.
+- Treatment: compound at 1 uM or vehicle (0.1% DMSO) for 24 h; one condition per donor.
+- RNA: column purification with on-column DNase; RIN >= 8.9 for all samples.
+- Gene panel: the transcripts in `reference/` (targeted panel plus sex-chromosome control genes).
+- Library prep: poly-A selection, unstranded. Two prep sessions because the first kit lot ran out: 2024-03-05 (6 libraries, kit lot A, operator 1) and 2024-03-19 (6 libraries, kit lot B, operator 2, different PCR cycler). The session of each library is in the sample sheet.
+- Sequencing: all libraries pooled equimolar on one lane, 50-cycle single read. The core delivered adapter-trimmed reads; read names and base qualities were stripped to placeholders by their export tool.
+
+=== HANDOVER.md ===
+# Hand-over note: compound vs vehicle RNA-seq
+
+Written on my last day. Sorry for the state of things.
+
+## What is in this folder
+- `scripts/01_quantify.sh` - salmon index and quantification of the 12 FASTQ files
+- `scripts/02_merge_counts.py` - gene-level matrix from the salmon output
+- `scripts/03_de.py` - DESeq2 model (pydeseq2), compound vs vehicle
+- `gene_counts_merged.tsv` - gene-level matrix (output of 01 + 02)
+- `de_draft.tsv` - draft differential-expression table (output of 03)
+- `mail_top_responders.tsv` - the 40 genes I mailed to the wet lab on 9 April as "top responder genes"
+
+## Notes
+- The salmon output directories were on the scratch disk, which has been purged since. Only the
+  merged matrix is left.
+- The mailed list came from my first differential-expression run (smallest adjusted p-values first,
+  sex-chromosome control genes taken out). The table of that run was overwritten; `de_draft.tsv` is
+  from a later run.
+- Samples were used as listed in the sample sheet.
+- The wet lab has started to order qPCR primers for the mailed genes, so they need to know soon
+  which of them hold up.
+- All scripts take their paths as arguments, see the usage line at the top of each.
+[?2004hroot@4461f422bb19:/task# printf '\n=== 01_quantify.sh ===\n'; cat /task/input/previous_analysis/scripts/01_quantify.sh; printf '\n=== 02_merge_counts.py ===\n'; cat /task/input/previous_analysis/scripts/02_merge_counts.py; printf '\n=== 03_de.py ===\n'; cat /task/input/previous_analysis/scripts/03_de.py
+[?2004l
+=== 01_quantify.sh ===
+#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+
+=== 02_merge_counts.py ===
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+
+=== 03_de.py ===
+#!/usr/bin/env python3
+"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+"""
+import os
+import sys
+
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+names = names.set_index("gene_id")["gene_name"]
+
+meta = pd.DataFrame({"condition": samples["condition"],
+                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+mat = counts[meta.index].T.round().astype(int)
+dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+dds.deseq2()
+st = DeseqStats(dds, contrast=["condition", "treated", "vehicle"], alpha=0.05, quiet=True, n_cpus=2)
+st.summary()
+res = st.results_df.reindex(counts.index)
+padj = res["padj"]
+table = pd.DataFrame({"gene_id": counts.index,
+                      "gene_name": names.reindex(counts.index).values,
+                      "base_mean": res["baseMean"].round(2).values,
+                      "log2fc": (res["log2FoldChange"]).round(4).values,
+                      "pvalue": res["pvalue"].values,
+                      "padj": padj.values})
+table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004hroot@4461f422bb19:/task# printf '\n=== tx2gene head/tail ===\n'; head -10 /task/input/reference/tx2gene.tsv; tail -10 /task/input/reference/tx2gene.tsv; printf '\nrows: '; wc -l < /task/input/reference/tx2gene.tsv; printf '\nFASTQ sizes:\n'; ls -lh /task/input/fastq; printf '\nmail list:\n'; cat /task/input/previous_analysis/mail_top_responders.tsv
+[?2004l
+=== tx2gene head/tail ===
+transcript_id	gene_id	gene_name
+ENST00000381334	ENSG00000134851	TMEM165
+ENST00000332496	ENSG00000185033	SEMA4B
+ENST00000411539	ENSG00000185033	SEMA4B
+ENST00000334221	ENSG00000186897	C1QL4
+ENST00000495880	ENSG00000164086	DUSP7
+ENST00000371884	ENSG00000162367	TAL1
+ENST00000367360	ENSG00000203722	RAET1G
+ENST00000431993	ENSG00000283697	HSFX3
+ENST00000370461	ENSG00000060491	OGFR
+ENST00000676229	ENSG00000156709	AIFM1
+ENST00000535724	ENSG00000156709	AIFM1
+ENST00000278937	ENSG00000149573	MPZL2
+ENST00000266031	ENSG00000114378	HYAL1
+ENST00000370467	ENSG00000176988	FMR1NB
+ENST00000530277	ENSG00000166257	SCN3B
+ENST00000369413	ENSG00000203857	HSD3B1
+ENST00000556440	ENSG00000258890	CEP95
+ENST00000422728	ENSG00000237765	FAM200B
+ENST00000589097	ENSG00000104886	PLEKHJ1
+
+rows: 929
+
+FASTQ sizes:
+total 22M
+-r--r--r-- 1 root root 1.7M Nov 12 14:39 RS19.fastq.gz
+-r--r--r-- 1 root root 1.7M Nov 12 14:39 RS22.fastq.gz
+-r--r--r-- 1 root root 1.6M Nov 12 14:39 RS26.fastq.gz
+-r--r--r-- 1 root root 1.6M Nov 12 14:39 RS27.fastq.gz
+-r--r--r-- 1 root root 1.9M Nov 12 14:39 RS47.fastq.gz
+-r--r--r-- 1 root root 2.0M Nov 12 14:39 RS62.fastq.gz
+-r--r--r-- 1 root root 1.8M Nov 12 14:39 RS69.fastq.gz
+-r--r--r-- 1 root root 1.7M Nov 12 14:39 RS75.fastq.gz
+-r--r--r-- 1 root root 1.8M Nov 12 14:39 RS79.fastq.gz
+-r--r--r-- 1 root root 1.8M Nov 12 14:39 RS80.fastq.gz
+-r--r--r-- 1 root root 2.2M Nov 12 14:39 RS89.fastq.gz
+-r--r--r-- 1 root root 1.8M Nov 12 14:39 RS97.fastq.gz
+
+mail list:
+rank	gene_id	gene_name
+1	ENSG00000054803	CBLN4
+2	ENSG00000183918	SH2D1A
+3	ENSG00000111704	NANOG
+4	ENSG00000183773	AIFM3
+5	ENSG00000097046	CDC7
+6	ENSG00000121067	SPOP
+7	ENSG00000162623	TYW3
+8	ENSG00000113360	DROSHA
+9	ENSG00000116783	TNNI3K
+10	ENSG00000253148	RGS21
+11	ENSG00000118777	ABCG2
+12	ENSG00000205869	KRTAP5-1
+13	ENSG00000204335	SP5
+14	ENSG00000102178	UBL4A
+15	ENSG00000165138	ANKS6
+16	ENSG00000189433	GJB4
+17	ENSG00000111252	SH2B3
+18	ENSG00000167565	SERTAD3
+19	ENSG00000124279	FASTKD3
+20	ENSG00000270011	ZNF559-ZNF177
+21	ENSG00000142599	RERE
+22	ENSG00000116984	MTR
+23	ENSG00000164647	STEAP1
+24	ENSG00000034239	CLXN
+25	ENSG00000154370	TRIM11
+26	ENSG00000149451	ADAM33
+27	ENSG00000101871	MID1
+28	ENSG00000168255	POLR2J3
+29	ENSG00000160688	FLAD1
+30	ENSG00000137571	SLCO5A1
+31	ENSG00000120860	WASHC3
+32	ENSG00000205502	C2CD4B
+33	ENSG00000142186	SCYL1
+34	ENSG00000009830	POMT2
+35	ENSG00000112116	IL17F
+36	ENSG00000115548	KDM3A
+37	ENSG00000107521	HPS1
+38	ENSG00000132388	UBE2G1
+39	ENSG00000106823	ECM2
+40	ENSG00000129696	TTI2
+[?2004hroot@4461f422bb19:/task# cat /task/software/README.txt; printf '\n=== full quantification script ===\n'; sed -n '1,200p' /task/input/previous_analysis/scripts/01_quantify.sh; printf '\n=== full merge script ===\n'; sed -n '1,200p' /task/input/previous_analysis/scripts/02_merge_counts.py
+[?2004lAll tools are on PATH (conda env at /opt/tools).
+
+=== full quantification script ===
+#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+
+=== full merge script ===
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> for p in ['/task/input/previous_analysis/gene_counts_merged.tsv','/task/input/previous_analysis/de_draft.tsv']:
+[?2004l[?2004h>  d=pd.read_csv(p,sep='\t')
+[?2004l[?2004h>  print('\n',p, d.shape)
+[?2004l[?2004h>  print(d.head(5).to_string(index=False))
+[?2004l[?2004h>  if 'gene_id' in d: print('gene IDs unique:',d.gene_id.is_unique)
+[?2004l[?2004h>  if p.endswith('gene_counts_merged.tsv'):
+[?2004l[?2004h>   print('columns:',d.columns.tolist()); print('column sums:',d.sum(numeric_only=True).to_string())
+[?2004l[?2004h> PY
+[?2004lsalmon --version; mkdir -p /task/output/work/quant; salmon index -t /task/input/reference/transcripts.fa.gz -i /task/output/work/index -k 31 -p 2 > /task/output/work/index.log 2>&1; tail -20 /task/output/work/index.log
+
+ /task/input/previous_analysis/gene_counts_merged.tsv (800, 13)
+        gene_id  RS19  RS22  RS26  RS27  RS47  RS62  RS69  RS75  RS79  RS80  RS89  RS97
+ENSG00000134851  29.0  28.0  26.0  19.0  18.0  24.0  36.0  18.0  13.0  30.0  41.0  30.0
+ENSG00000185033  85.0  62.0  69.0  87.0  60.0 130.0 145.0 138.0  26.0  47.0 199.0 125.0
+ENSG00000186897  49.0  49.0  58.0  22.0  40.0  62.0  41.0  47.0  12.0  54.0  56.0  72.0
+ENSG00000164086 128.0 129.0  89.0 155.0 123.0 145.0 112.0 119.0  41.0 144.0 147.0 142.0
+ENSG00000162367  34.0  48.0  48.0  64.0  41.0 103.0  68.0  80.0  19.0  53.0  72.0  51.0
+gene IDs unique: True
+columns: ['gene_id', 'RS19', 'RS22', 'RS26', 'RS27', 'RS47', 'RS62', 'RS69', 'RS75', 'RS79', 'RS80', 'RS89', 'RS97']
+column sums: RS19    42743.000
+RS22    43311.001
+RS26    40964.000
+RS27    38556.000
+RS47    46413.000
+RS62    48863.999
+RS69    44604.000
+RS75    43379.001
+RS79    14841.000
+RS80    44262.000
+RS89    54429.000
+RS97    44933.000
+
+ /task/input/previous_analysis/de_draft.tsv (800, 6)
+        gene_id gene_name  base_mean  log2fc   pvalue     padj
+ENSG00000134851   TMEM165      25.05 -0.1721 0.490465 0.843646
+ENSG00000185033    SEMA4B      90.27 -0.6557 0.026257 0.269705
+ENSG00000186897     C1QL4      43.38 -0.1512 0.532170 0.857766
+ENSG00000164086     DUSP7     115.97 -0.0491 0.757778 0.912266
+ENSG00000162367      TAL1      53.38 -0.3726 0.135141 0.550354
+gene IDs unique: True
+[?2004hroot@4461f422bb19:/task# salmon --version; mkdir -p /task/output/work/quant; salmon index -t /task/input/reference/transcripts.fa.gz -i /task/output/work/index -k 31 -p 2 > /task/output/work/index.log 2>&1; tail -20 /task/output/work/index.log
+[?2004lsalmon 2.11.0
+[2m2026-11-12T21:28:30.388285Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving contig table to /task/output/work/index/index.ctab
+[2m2026-11-12T21:28:30.388348Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving reference info to /task/output/work/index/index.refinfo
+[2m2026-11-12T21:28:30.388417Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Saving equivalence class table to /task/output/work/index/index.ectab
+[2m2026-11-12T21:28:30.388476Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Index saved to /task/output/work/index/index
+[2m2026-11-12T21:28:30.388480Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m Index built and saved to /task/output/work/index/index
+[2m2026-11-12T21:28:30.388483Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m auto dict selection: 2264877 canonical k-mers (100000000 threshold), emitting Tiny artifacts: true
+[2m2026-11-12T21:28:30.388486Z[0m [32m INFO[0m [2mpiscem_rs::index::build[0m[2m:[0m Emitting Tiny index artifacts (.tdct + .tct)
+[2m2026-11-12T21:28:30.388496Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Building and saving TinyDictionary to /task/output/work/index/index.tdct
+[2m2026-11-12T21:28:30.569087Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Building and saving TinyContigTable to /task/output/work/index/index.tct
+[2m2026-11-12T21:28:30.569633Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading SSHash dictionary from /task/output/work/index/index.ssi
+[2m2026-11-12T21:28:30.570258Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   k=31, 2292 strings
+[2m2026-11-12T21:28:30.570268Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading contig table from /task/output/work/index/index.ctab
+[2m2026-11-12T21:28:30.570286Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   2292 contigs, 3511 entries, entry_width=26 bits
+[2m2026-11-12T21:28:30.570292Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading reference info from /task/output/work/index/index.refinfo
+[2m2026-11-12T21:28:30.570352Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   928 references, max_ref_len=19245
+[2m2026-11-12T21:28:30.570366Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m Loading equivalence class table from /task/output/work/index/index.ectab
+[2m2026-11-12T21:28:30.570484Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   2292 tiles, 1561 ECs, 2363 label entries
+[2m2026-11-12T21:28:30.570490Z[0m [32m INFO[0m [2mpiscem_rs::index::reference_index[0m[2m:[0m   ref_shift=16, pos_mask=0x7fff
+[2m2026-11-12T21:28:30.571584Z[0m [32m INFO[0m [2msalmon_index[0m[2m:[0m index built: 928 references
+indexed 928 references (k=31, m=19)
+[?2004hroot@4461f422bb19:/task# set -e; while IFS=$'\t' read -r sid fq; do salmon quant -i /task/output/work/index -l SR -r "/task/input/fastq/$fq" --validateMappings -p 2 -o "/task/output/work/quant/$sid" > "/task/output/work/quant/$sid.log" 2>&1 < /dev/null; done < <(tail -n +2 /task/input/samples.tsv | cut -f1,6); echo Quantification_complete
+[?2004lQuantification_complete
+[?2004hroot@4461f422bb19:/task# printf 'Quantified outputs: '; find /task/output/work/quant -mindepth 1 -maxdepth 1 -type d | wc -l; for f in /task/output/work/quant/*.log; do sid=$(basename "$f" .log); line=$(grep -E 'Mapping rate|mapping rate' "$f" | tail -1); printf '%s\t%s\n' "$sid" "$line"; done
+[?2004lQuantified outputs: 12
+RS19	
+RS22	
+RS26	
+RS27	
+RS47	
+RS62	
+RS69	
+RS75	
+RS79	
+RS80	
+RS89	
+RS97	
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t')
+[?2004l[?2004h> genes=t2g.drop_duplicates('gene_id')[['gene_id','gene_name']]
+[?2004l[?2004h> need=['XIST','DDX3Y','KDM5D','UTY','ZFY','RPS4Y1','EIF1AY','TSPYL2','CDK16','DBX','TSIX','JPX','LINC00278','XG','PRKX','NLGN4Y','TBL1X','CD99','SMCX','AMELY','TBL1Y','PCDH11Y']
+[?2004l[?2004h> print(genes[genes.gene_name.str.upper().isin(need)].sort_values('gene_name').to_string(index=False))
+[?2004l[?2004h> print('\nAll gene names potentially relevant by initial letter or sex keywords:')
+[?2004l[?2004h> mask=genes.gene_name.str.contains('XIST|DDX3Y|KDM5D|UTY|ZFY|RPS4Y|EIF1AY|AMEL|NLGN4Y|TBL1Y|PCDH11Y',case=False,regex=True)
+[?2004l[?2004h> print(genes[mask].to_string(index=False))
+[?2004l[?2004h> print('\nGene counts: transcripts',len(t2g),'unique transcripts',t2g.transcript_id.nunique(),'unique genes',t2g.gene_id.nunique())
+[?2004l[?2004h> PY
+[?2004l        gene_id gene_name
+ENSG00000067048     DDX3Y
+ENSG00000198692    EIF1AY
+ENSG00000012817     KDM5D
+ENSG00000129824    RPS4Y1
+ENSG00000183878       UTY
+ENSG00000229807      XIST
+
+All gene names potentially relevant by initial letter or sex keywords:
+        gene_id gene_name
+ENSG00000067048     DDX3Y
+ENSG00000229807      XIST
+ENSG00000198692    EIF1AY
+ENSG00000165861    ZFYVE1
+ENSG00000183878       UTY
+ENSG00000129824    RPS4Y1
+ENSG00000012817     KDM5D
+
+Gene counts: transcripts 928 unique transcripts 928 unique genes 800
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, json, glob, os
+[?2004l[?2004h> IN='/task/input'; W='/task/output/work'
+[?2004l[?2004h> samples=pd.read_csv(f'{IN}/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv(f'{IN}/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> gmap=t2g.drop_duplicates('transcript_id').set_index('transcript_id')['gene_id']
+[?2004l[?2004h> cols={}
+[?2004l[?2004h> for sid in samples.sample_id:
+[?2004l[?2004h>  sf=pd.read_csv(f'{W}/quant/{sid}/quant.sf',sep='\t')
+[?2004l[?2004h>  sf['gene_id']=sf.Name.map(gmap)
+[?2004l[?2004h>  cols[sid]=sf.groupby('gene_id').NumReads.sum()
+[?2004l[?2004h> mat=pd.DataFrame(cols).reindex(sorted(gmap.unique())).fillna(0.0)
+[?2004l[?2004h> mat.index.name='gene_id'
+[?2004l[?2004h> mat.to_csv(f'{W}/gene_counts_full.tsv',sep='\t',float_format='%.6f')
+[?2004l[?2004h> print('matrix',mat.shape,'total range',mat.sum().min(),mat.sum().max())
+[?2004l[?2004h> for sid in samples.sample_id:
+[?2004l[?2004h>  j=f'{W}/quant/{sid}/aux_info/meta_info.json'
+[?2004l[?2004h>  with open(j) as h: q=json.load(h)
+[?2004l[?2004h>  print(sid, 'mapped',q.get('percent_mapped'),'decoy',q.get('percent_decoy_seq'),'reads',q.get('num_processed'),'len',q.get('read_length'))
+[?2004l[?2004h> PY
+[?2004lmatrix (800, 12) total range 38556.0 54429.0
+RS19 mapped 48.134551064764246 decoy None reads 88799 len None
+RS22 mapped 48.11691774430076 decoy None reads 90012 len None
+RS26 mapped 48.29407465044446 decoy None reads 84822 len None
+RS27 mapped 48.17994376757263 decoy None reads 80025 len None
+RS47 mapped 48.1712506486767 decoy None reads 96350 len None
+RS62 mapped 48.18697302894335 decoy None reads 101405 len None
+RS69 mapped 48.13104281767956 decoy None reads 92672 len None
+RS75 mapped 48.13951681814651 decoy None reads 90111 len None
+RS79 mapped 48.03379742799447 decoy None reads 94090 len None
+RS80 mapped 48.198884920289224 decoy None reads 91832 len None
+RS89 mapped 48.31390858979025 decoy None reads 112657 len None
+RS97 mapped 48.32856497515434 decoy None reads 92974 len None
+python3 - <<'PY'
+import pandas as pd, numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+m=pd.read_csv('/task/output/work/gene_counts_full.tsv',sep='\t',index_col=0)
+s=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+marker={'DDX3Y':'ENSG00000067048','EIF1AY':'ENSG00000198692','KDM5D':'ENSG00000012817','RPS4Y1':'ENSG00000129824','UTY':'ENSG00000183878','XIST':'ENSG00000229807'}
+print('Sex-marker estimated reads:')
+print(m.loc[marker.values()].rename(index=dict(marker)).round(2).to_string())
+lib=m.sum(0)
+x=m.loc['ENSG00000229807']; y=m.loc[['ENSG00000067048','ENSG00000198692','ENSG00000012817','ENSG00000129824','ENSG00000183878']].sum(0)
+print('\nXIST and Y fractions:')
+print(pd.DataFrame({'XIST':x,'Y':y,'total':lib,'XIST_pct':100*x/lib,'Y_pct':100*y/lib}).round(4).to_string())
+log=np.log2(m+1)
+pca=PCA(n_components=4); z=pca.fit_transform(StandardScaler().fit_transform(log.T))
+p=pd.DataFrame(z,index=m.columns,columns=[f'PC{i+1}' for i in range(4)]).join(s)
+print('\nPCA (log2 counts+1, gene-scaled):')
+print(p.round(3).to_string())
+corr=log.corr()
+print('\nHighest and lowest correlations excluding self:')
+for smp in corr:
+ vals=corr.loc[smp].drop(smp).sort_values(ascending=False)
+ print(smp, 'max=',vals.index[0],round(vals.iloc[0],3),'min=',vals.index[-1],round(vals.iloc[-1],3))
+PY
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from sklearn.preprocessing import StandardScaler
+[?2004l[?2004h> from sklearn.decomposition import PCA
+[?2004l[?2004h> m=pd.read_csv('/task/output/work/gene_counts_full.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> s=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> marker={'DDX3Y':'ENSG00000067048','EIF1AY':'ENSG00000198692','KDM5D':'ENSG00000012817','RPS4Y1':'ENSG00000129824','UTY':'ENSG00000183878','XIST':'ENSG00000229807'}
+[?2004l[?2004h> print('Sex-marker estimated reads:')
+[?2004l[?2004h> print(m.loc[marker.values()].rename(index=dict(marker)).round(2).to_string())
+[?2004l[?2004h> lib=m.sum(0)
+[?2004l[?2004h> x=m.loc['ENSG00000229807']; y=m.loc[['ENSG00000067048','ENSG00000198692','ENSG00000012817','ENSG00000129824','ENSG00000183878']].sum(0)
+[?2004l[?2004h> print('\nXIST and Y fractions:')
+[?2004l[?2004h> print(pd.DataFrame({'XIST':x,'Y':y,'total':lib,'XIST_pct':100*x/lib,'Y_pct':100*y/lib}).round(4).to_string())
+[?2004l[?2004h> log=np.log2(m+1)
+[?2004l[?2004h> pca=PCA(n_components=4); z=pca.fit_transform(StandardScaler().fit_transform(log.T))
+[?2004l[?2004h> p=pd.DataFrame(z,index=m.columns,columns=[f'PC{i+1}' for i in range(4)]).join(s)
+[?2004l[?2004h> print('\nPCA (log2 counts+1, gene-scaled):')
+[?2004l[?2004h> print(p.round(3).to_string())
+[?2004l[?2004h> corr=log.corr()
+[?2004l[?2004h> print('\nHighest and lowest correlations excluding self:')
+[?2004l[?2004h> for smp in corr:
+[?2004l[?2004h>  vals=corr.loc[smp].drop(smp).sort_values(ascending=False)
+[?2004l[?2004h>  print(smp, 'max=',vals.index[0],round(vals.iloc[0],3),'min=',vals.index[-1],round(vals.iloc[-1],3))
+[?2004l[?2004h> PY
+[?2004lfor f in /task/output/work/quant/*.log; do echo "=== $(basename "$f") ==="; tail -8 "$f"; done
+Sex-marker estimated reads:
+                 RS19   RS22  RS26  RS27  RS47  RS62  RS69  RS75  RS79   RS80  RS89  RS97
+gene_id                                                                                  
+ENSG00000067048  16.0   31.0   0.0   0.0  32.0  31.0   0.0  26.0  32.0    0.0   0.0   0.0
+ENSG00000198692  31.0  119.0   0.0   0.0  55.0  57.0   0.0  94.0  51.0    0.0   0.0   0.0
+ENSG00000012817  38.0   80.0   0.0   0.0  96.0  66.0   0.0  81.0  40.0    0.0   0.0   0.0
+ENSG00000129824  18.0   48.0   0.0   0.0  23.0  39.0   0.0  20.0  46.0    0.0   0.0   0.0
+ENSG00000183878  38.0   68.0   0.0   0.0  80.0  63.0   0.0  52.0  59.0    0.0   0.0   0.0
+ENSG00000229807  24.0    0.0  46.0  58.0   0.0   0.0  78.0   0.0   0.0  100.0  69.0  70.0
+<stdin>:9: Pandas4Warning: Starting with pandas version 4.0 all arguments of sum will be keyword-only.
+<stdin>:10: Pandas4Warning: Starting with pandas version 4.0 all arguments of sum will be keyword-only.
+
+XIST and Y fractions:
+       XIST      Y      total  XIST_pct   Y_pct
+RS19   24.0  141.0  42743.000    0.0561  0.3299
+RS22    0.0  346.0  43311.001    0.0000  0.7989
+RS26   46.0    0.0  40964.000    0.1123  0.0000
+RS27   58.0    0.0  38556.000    0.1504  0.0000
+RS47    0.0  286.0  46413.000    0.0000  0.6162
+RS62    0.0  256.0  48863.999    0.0000  0.5239
+RS69   78.0    0.0  44604.000    0.1749  0.0000
+RS75    0.0  273.0  43379.001    0.0000  0.6293
+RS79    0.0  228.0  45195.001    0.0000  0.5045
+RS80  100.0    0.0  44262.000    0.2259  0.0000
+RS89   69.0    0.0  54429.000    0.1268  0.0000
+RS97   70.0    0.0  44933.000    0.1558  0.0000
+
+PCA (log2 counts+1, gene-scaled):
+         PC1     PC2     PC3     PC4 condition donor_id donor_sex library_prep_batch     fastq_file
+RS19   3.164  -3.545   0.966   9.299   treated     D874         M         2024-03-05  RS19.fastq.gz
+RS22  10.462   0.157  24.278   0.111   vehicle     D379         M         2024-03-05  RS22.fastq.gz
+RS26  18.693  -8.892  -7.866   6.937   vehicle     D172         M         2024-03-19  RS26.fastq.gz
+RS27 -14.757 -19.680  -7.338 -10.935   vehicle     D643         F         2024-03-19  RS27.fastq.gz
+RS47  17.592   2.954  -1.153  -8.639   treated     D593         M         2024-03-05  RS47.fastq.gz
+RS62 -15.676  12.321   5.816 -11.430   vehicle     D602         M         2024-03-19  RS62.fastq.gz
+RS69 -15.365  -2.463   0.746   9.009   vehicle     D187         F         2024-03-19  RS69.fastq.gz
+RS75 -16.569  -4.547   2.886  -4.147   treated     D616         F         2024-03-05  RS75.fastq.gz
+RS79  17.614   4.283  -0.453   0.715   treated     D407         M         2024-03-05  RS79.fastq.gz
+RS80  17.190  -0.917  -6.508  -5.397   treated     D933         F         2024-03-05  RS80.fastq.gz
+RS89  -7.410  20.903 -12.972   2.300   treated     D120         F         2024-03-19  RS89.fastq.gz
+RS97 -14.937  -0.574   1.598  12.178   vehicle     D296         F         2024-03-19  RS97.fastq.gz
+
+Highest and lowest correlations excluding self:
+RS19 max= RS47 0.871 min= RS27 0.811
+RS22 max= RS19 0.833 min= RS89 0.654
+RS26 max= RS80 0.918 min= RS75 0.626
+RS27 max= RS97 0.924 min= RS79 0.644
+RS47 max= RS79 0.923 min= RS69 0.653
+RS62 max= RS75 0.915 min= RS26 0.633
+RS69 max= RS97 0.93 min= RS79 0.647
+RS75 max= RS62 0.915 min= RS26 0.626
+RS79 max= RS47 0.923 min= RS27 0.644
+RS80 max= RS26 0.918 min= RS75 0.637
+RS89 max= RS19 0.851 min= RS22 0.654
+RS97 max= RS69 0.93 min= RS79 0.658
+[?2004hroot@4461f422bb19:/task# for f in /task/output/work/quant/*.log; do echo "=== $(basename "$f") ==="; tail -8 "$f"; done
+[?2004l=== RS19.log ===
+[2m2026-11-12T21:28:55.207366Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.018110133
+[2m2026-11-12T21:28:55.211833Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 796 connected components, each iterated until it converged (median 50 iterations, most 436)
+[2m2026-11-12T21:28:55.211849Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.004483005
+[2m2026-11-12T21:28:55.211876Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.7524e-5
+[2m2026-11-12T21:28:55.211908Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:55.212647Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:55.213264Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001386765
+[2m2026-11-12T21:28:55.213283Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 88799 fragments from intermediate RAD, 42743 quantified (48.13%); 1048 equivalence classes
+=== RS22.log ===
+[2m2026-11-12T21:28:55.674370Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.028915327
+[2m2026-11-12T21:28:55.686192Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 799 connected components, each iterated until it converged (median 50 iterations, most 480)
+[2m2026-11-12T21:28:55.686204Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.011834643
+[2m2026-11-12T21:28:55.686233Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.8857e-5
+[2m2026-11-12T21:28:55.686239Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:55.687027Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:55.687622Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.00138829
+[2m2026-11-12T21:28:55.687642Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 90012 fragments from intermediate RAD, 43311 quantified (48.12%); 1055 equivalence classes
+=== RS26.log ===
+[2m2026-11-12T21:28:55.952999Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.015955881
+[2m2026-11-12T21:28:55.962178Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 794 connected components, each iterated until it converged (median 50 iterations, most 474)
+[2m2026-11-12T21:28:55.962191Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.009192413
+[2m2026-11-12T21:28:55.962220Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.8776e-5
+[2m2026-11-12T21:28:55.962226Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:55.963093Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:55.964261Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.002038957
+[2m2026-11-12T21:28:55.964283Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 84822 fragments from intermediate RAD, 40964 quantified (48.29%); 1020 equivalence classes
+=== RS27.log ===
+[2m2026-11-12T21:28:56.316994Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.036280336
+[2m2026-11-12T21:28:56.324281Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 795 connected components, each iterated until it converged (median 50 iterations, most 589)
+[2m2026-11-12T21:28:56.324296Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.007304811
+[2m2026-11-12T21:28:56.324324Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.8316e-5
+[2m2026-11-12T21:28:56.324331Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:56.325154Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:56.326032Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001707207
+[2m2026-11-12T21:28:56.326054Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 80025 fragments from intermediate RAD, 38556 quantified (48.18%); 1028 equivalence classes
+=== RS47.log ===
+[2m2026-11-12T21:28:56.630425Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.051875644
+[2m2026-11-12T21:28:56.634246Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 797 connected components, each iterated until it converged (median 50 iterations, most 1172)
+[2m2026-11-12T21:28:56.634259Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.003834342
+[2m2026-11-12T21:28:56.634287Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.884e-5
+[2m2026-11-12T21:28:56.634294Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:56.635124Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:56.638661Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.004373229
+[2m2026-11-12T21:28:56.638696Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 96350 fragments from intermediate RAD, 46413 quantified (48.17%); 1047 equivalence classes
+=== RS62.log ===
+[2m2026-11-12T21:28:57.027928Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.021969889
+[2m2026-11-12T21:28:57.035089Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 798 connected components, each iterated until it converged (median 50 iterations, most 578)
+[2m2026-11-12T21:28:57.035103Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.007174635
+[2m2026-11-12T21:28:57.035131Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.9024e-5
+[2m2026-11-12T21:28:57.035138Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:57.035994Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:57.036922Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001789755
+[2m2026-11-12T21:28:57.036943Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 101405 fragments from intermediate RAD, 48864 quantified (48.19%); 1057 equivalence classes
+=== RS69.log ===
+[2m2026-11-12T21:28:57.278335Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.018692121
+[2m2026-11-12T21:28:57.279807Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 796 connected components, each iterated until it converged (median 50 iterations, most 362)
+[2m2026-11-12T21:28:57.279817Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.001482391
+[2m2026-11-12T21:28:57.279844Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.6769e-5
+[2m2026-11-12T21:28:57.279849Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:57.280652Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:57.288856Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.009009878
+[2m2026-11-12T21:28:57.288911Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 92672 fragments from intermediate RAD, 44604 quantified (48.13%); 1024 equivalence classes
+=== RS75.log ===
+[2m2026-11-12T21:28:57.457527Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.021369644
+[2m2026-11-12T21:28:57.460345Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 795 connected components, each iterated until it converged (median 50 iterations, most 342)
+[2m2026-11-12T21:28:57.460841Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.003312188
+[2m2026-11-12T21:28:57.460875Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m3.6705e-5
+[2m2026-11-12T21:28:57.460906Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:57.461729Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:57.462684Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001807761
+[2m2026-11-12T21:28:57.462708Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 90111 fragments from intermediate RAD, 43379 quantified (48.14%); 1056 equivalence classes
+=== RS79.log ===
+[2m2026-11-12T21:28:57.751566Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.020489352
+[2m2026-11-12T21:28:57.761331Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 799 connected components, each iterated until it converged (median 50 iterations, most 196)
+[2m2026-11-12T21:28:57.761348Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.009781852
+[2m2026-11-12T21:28:57.761417Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m6.9428e-5
+[2m2026-11-12T21:28:57.761428Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:57.763402Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:57.764939Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.003520187
+[2m2026-11-12T21:28:57.764963Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 94090 fragments from intermediate RAD, 45195 quantified (48.03%); 1042 equivalence classes
+=== RS80.log ===
+[2m2026-11-12T21:28:58.134554Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.015337813
+[2m2026-11-12T21:28:58.137779Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 795 connected components, each iterated until it converged (median 50 iterations, most 672)
+[2m2026-11-12T21:28:58.137792Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.003239635
+[2m2026-11-12T21:28:58.137819Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.774e-5
+[2m2026-11-12T21:28:58.137826Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:58.138767Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:58.139776Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001955131
+[2m2026-11-12T21:28:58.139800Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 91832 fragments from intermediate RAD, 44262 quantified (48.20%); 1039 equivalence classes
+=== RS89.log ===
+[2m2026-11-12T21:28:58.619598Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.030081442
+[2m2026-11-12T21:28:58.623915Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 794 connected components, each iterated until it converged (median 50 iterations, most 408)
+[2m2026-11-12T21:28:58.623929Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.00433113
+[2m2026-11-12T21:28:58.623983Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m5.3837e-5
+[2m2026-11-12T21:28:58.623990Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:58.625045Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:58.625686Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001702131
+[2m2026-11-12T21:28:58.625719Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 112657 fragments from intermediate RAD, 54429 quantified (48.31%); 1036 equivalence classes
+=== RS97.log ===
+[2m2026-11-12T21:28:59.014589Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"rad_read" [3melapsed_s[0m[2m=[0m0.012653343
+[2m2026-11-12T21:28:59.019331Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m EM: 794 connected components, each iterated until it converged (median 50 iterations, most 206)
+[2m2026-11-12T21:28:59.019341Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.004752169
+[2m2026-11-12T21:28:59.019394Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m5.2831e-5
+[2m2026-11-12T21:28:59.019402Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:28:59.020314Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:28:59.021151Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001756812
+[2m2026-11-12T21:28:59.021171Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m 92974 fragments from intermediate RAD, 44933 quantified (48.33%); 1037 equivalence classes
+[?2004hroot@4461f422bb19:/task# set -e; mkdir -p /task/output/work/quant_unstranded; while IFS=$'\t' read -r sid fq; do salmon quant -i /task/output/work/index -l U -r "/task/input/fastq/$fq" --validateMappings -p 2 -o "/task/output/work/quant_unstranded/$sid" > "/task/output/work/quant_unstranded/$sid.log" 2>&1 < /dev/null; done < <(tail -n +2 /task/input/samples.tsv | cut -f1,6); echo Unstranded_quantification_complete
+[?2004lUnstranded_quantification_complete
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, json, os
+[?2004l[?2004h> IN='/task/input'; W='/task/output/work'
+[?2004l[?2004h> samples=pd.read_csv(f'{IN}/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv(f'{IN}/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> gmap=t2g.drop_duplicates('transcript_id').set_index('transcript_id')['gene_id']
+[?2004l[?2004h> cols={}; qc=[]
+[?2004l[?2004h> for sid in samples.sample_id:
+[?2004l[?2004h>  sf=pd.read_csv(f'{W}/quant_unstranded/{sid}/quant.sf',sep='\t')
+[?2004l[?2004h>  sf['gene_id']=sf.Name.map(gmap)
+[?2004l[?2004h>  cols[sid]=sf.groupby('gene_id').NumReads.sum()
+[?2004l[?2004h>  with open(f'{W}/quant_unstranded/{sid}/aux_info/meta_info.json') as h: q=json.load(h)
+[?2004l[?2004h>  qc.append((sid,q['num_processed'],q['percent_mapped'],q['num_mapped']))
+[?2004l[?2004h> mat=pd.DataFrame(cols).reindex(sorted(gmap.unique())).fillna(0.0)
+[?2004l[?2004h> mat.index.name='gene_id'
+[?2004l[?2004h> mat.to_csv(f'{W}/gene_counts_unstranded.tsv',sep='\t',float_format='%.6f')
+[?2004l[?2004h> print('matrix',mat.shape,'library totals',mat.sum().min(),mat.sum().max())
+[?2004l[?2004h> print(pd.DataFrame(qc,columns=['sample_id','reads','pct_mapped','mapped']).to_string(index=False))
+[?2004l[?2004h> PY
+[?2004lmatrix (800, 12) library totals 77069.999 108477.0
+sample_id  reads  pct_mapped  mapped
+     RS19  88799   96.264598   85482
+     RS22  90012   96.380483   86754
+     RS26  84822   96.345288   81722
+     RS27  80025   96.307404   77070
+     RS47  96350   96.330047   92814
+     RS62 101405   96.221094   97573
+     RS69  92672   96.266402   89212
+     RS75  90111   96.314545   86790
+     RS79  94090   96.289723   90599
+     RS80  91832   96.354212   88484
+     RS89 112657   96.289622  108477
+     RS97  92974   96.365651   89595
+[?2004hroot@4461f422bb19:/task# python3 - <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> m=pd.read_csv('/task/output/work/gene_counts_unstranded.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> markers={'XIST':'ENSG00000229807','DDX3Y':'ENSG00000067048','EIF1AY':'ENSG00000198692','KDM5D':'ENSG00000012817','RPS4Y1':'ENSG00000129824','UTY':'ENSG00000183878'}
+[?2004l[?2004h> print(m.loc[markers.values()].rename(index=markers).round(2).to_string())
+[?2004l[?2004h> print('\nPercent of library:')
+[?2004l[?2004h> print((100*m.loc[markers.values()]/m.sum(axis=0)).rename(index=markers).round(4).to_string())
+[?2004l[?2004h> PY
+[?2004l                 RS19   RS22  RS26   RS27   RS47   RS62   RS69   RS75   RS79   RS80   RS89   RS97
+gene_id                                                                                          
+ENSG00000229807  66.0    0.0  82.0  135.0    0.0    1.0  144.0    0.0    0.0  201.0  129.0  154.0
+ENSG00000067048  43.0   61.0   0.0    0.0   71.0   69.0    0.0   50.0   68.0    0.0    0.0    0.0
+ENSG00000198692  66.0  213.0   0.0    0.0  117.0  128.0    0.0  179.0  105.0    0.0    0.0    0.0
+ENSG00000012817  75.0  153.0   0.0    0.0  176.0  117.0    0.0  185.0   84.0    0.0    0.0    0.0
+ENSG00000129824  36.0   90.0   0.0    0.0   48.0   79.0    0.0   56.0   89.0    0.0    0.0    0.0
+ENSG00000183878  72.0  135.0   0.0    0.0  149.0  116.0    0.0  110.0  106.0    0.0    0.0    0.0
+
+Percent of library:
+                   RS19    RS22    RS26    RS27    RS47    RS62    RS69    RS75    RS79    RS80    RS89    RS97
+gene_id                                                                                                        
+ENSG00000229807  0.0772  0.0000  0.1003  0.1752  0.0000  0.0010  0.1614  0.0000  0.0000  0.2272  0.1189  0.1719
+ENSG00000067048  0.0503  0.0703  0.0000  0.0000  0.0765  0.0707  0.0000  0.0576  0.0751  0.0000  0.0000  0.0000
+ENSG00000198692  0.0772  0.2455  0.0000  0.0000  0.1261  0.1312  0.0000  0.2062  0.1159  0.0000  0.0000  0.0000
+ENSG00000012817  0.0877  0.1764  0.0000  0.0000  0.1896  0.1199  0.0000  0.2132  0.0927  0.0000  0.0000  0.0000
+ENSG00000129824  0.0421  0.1037  0.0000  0.0000  0.0517  0.0810  0.0000  0.0645  0.0982  0.0000  0.0000  0.0000
+ENSG00000183878  0.0842  0.1556  0.0000  0.0000  0.1605  0.1189  0.0000  0.1267  0.1170  0.0000  0.0000  0.0000
+[?2004hroot@4461f422bb19:/task# cat > /task/output/work/qc_explore.py <<'PY'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from sklearn.decomposition import PCA
+[?2004l[?2004h> from sklearn.preprocessing import StandardScaler
+[?2004l[?2004h> from scipy.cluster.hierarchy import linkage, dendrogram
+[?2004l[?2004h> from scipy.spatial.distance import pdist
+[?2004l[?2004h> m=pd.read_csv('/task/output/work/gene_counts_unstranded.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> s=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> lib=m.sum(axis=0)
+[?2004l[?2004h> # A simple robust normalization: normalized counts = counts / median ratio, excluding all-zero genes.
+[?2004l[?2004h> pos=(m>0).all(axis=1)
+[?2004l[?2004h> geom=np.exp(np.log(m.loc[pos]).mean(axis=1))
+[?2004l[?2004h> sf=np.median((m.loc[pos]/geom[:,None]).to_numpy(),axis=0)
+[?2004l[?2004h> norm=m.div(sf,axis='columns')
+[?2004l[?2004h> log=np.log2(norm+1)
+[?2004l[?2004h> pca=PCA(n_components=5); z=pca.fit_transform(StandardScaler().fit_transform(log.T))
+[?2004l[?2004h> p=pd.DataFrame(z,index=m.columns,columns=[f'PC{i+1}' for i in range(5)]).join(s[['condition','donor_id','donor_sex','library_prep_batch']])
+[?2004l[?2004h> print('size factors:',dict(zip(m.columns,sf.round(4))))
+[?2004l[?2004h> print('explained variance:',dict(zip(p.columns[:5],(100*pca.explained_variance_ratio_).round(2))))
+[?2004l[?2004h> print('\nPCA with metadata:')
+[?2004l[?2004h> print(p.round(2).to_string())
+[?2004l[?2004h> print('\nCorrelations of PCs with indicators:')
+[?2004l[?2004h> ind=pd.DataFrame(index=m.columns,ind=None) if False else pd.DataFrame(index=m.columns)
+[?2004l[?2004h> for v in ['condition','donor_sex','library_prep_batch']:
+[?2004l[?2004h>     dummy=pd.get_dummies(s[v],prefix=v).astype(float)
+[?2004l[?2004h>     dummy.index=s.index
+[?2004l[?2004h>     ind=pd.concat([ind,dummy],axis=1)
+[?2004l[?2004h> print(pd.concat([p.iloc[:,:5],ind],axis=1).corr().iloc[:5,5:].round(3).to_string())
+[?2004l[?2004h> D=pdist(log.T,'euclidean')
+[?2004l[?2004h> Z=linkage(D,'average')
+[?2004l[?2004h> print('\nHierarchical clustering (four top-level leaves):')
+[?2004l[?2004h> print(dendrogram(Z,labels=list(m.columns),no_plot=True)['ivl'][:8])
+[?2004l[?2004h> # Sample-to-sex and condition centroids
+[?2004l[?2004h> sexmean=log.T.groupby(s.loc[m.columns,'donor_sex']).mean().T
+[?2004l[?2004h> condmean=log.T.groupby(s.loc[m.columns,'condition']).mean().T
+[?2004l[?2004h> print('\nDistance to sex centroids (normalized by number in each centroid):')
+[?2004l[?2004h> dist=pd.DataFrame({g:np.sqrt(((log.T-sexmean.loc[g])**2).sum(axis=1)/sum(s.donor_sex==g)) for g in ['F','M']})
+[?2004l[?2004h> print(dist.round(2).join(s[['donor_sex','condition']]).to_string())
+[?2004l[?2004h> print('\nDistance to condition centroids:')
+[?2004l[?2004h> distc=pd.DataFrame({g:np.sqrt(((log.T-condmean.loc[g])**2).sum(axis=1)/sum(s.condition==g)) for g in ['treated','vehicle']})
+[?2004l[?2004h> print(distc.round(2).join(s[['donor_sex','condition']]).to_string())
+[?2004l[?2004h> PY
+[?2004l[?2004hroot@4461f422bb19:/task# python3 /task/output/work/qc_explore.py
+[?2004lTraceback (most recent call last):
+  File "/task/output/work/qc_explore.py", line 12, in <module>
+    sf=np.median((m.loc[pos]/geom[:,None]).to_numpy(),axis=0)
+                             ~~~~^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 1134, in __getitem__
+    return self._get_with(key)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 1144, in _get_with
+    return self._get_values_tuple(key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 1155, in _get_values_tuple
+    disallow_ndim_indexing(result)
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexers/utils.py", line 344, in disallow_ndim_indexing
+    raise ValueError(
+ValueError: Multi-dimensional indexing (e.g. `obj[:, None]`) is no longer supported. Convert to a numpy array before indexing instead.

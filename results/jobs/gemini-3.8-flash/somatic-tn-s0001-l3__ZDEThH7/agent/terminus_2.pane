@@ -1,0 +1,1490 @@
+[?2004hroot@e01a4c56390f:/task# ls -la /task/input
+[?2004ltotal 28
+dr-xr-xr-x 1 root root 4096 Nov 12 06:53 .
+drwxr-xr-x 1 root root 4096 Nov 12 06:54 ..
+-r--r--r-- 1 root root 1653 Nov 11 20:27 core_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 12 06:53 fastq
+-r--r--r-- 1 root root  532 Nov 11 20:27 manifest.tsv
+dr-xr-xr-x 1 root root 4096 Nov 11 20:27 reference
+-r--r--r-- 1 root root  447 Nov 11 20:27 targets.bed
+[?2004hroot@e01a4c56390f:/task# cat /task/input/core_notes.md
+[?2004l# Sequencing core hand-over: run 214, panel CGP-22
+
+## Assay
+
+- Hybrid-capture panel CGP-22: 13 target regions, 46.3 kb in total (`targets.bed`). The panel
+  reference `reference/ref.fa` (contig `chr22_panel`) is the hg38 chr22 slice the baits were designed on.
+- Libraries: enzymatic end repair / A-tailing, ligation of dual-indexed adapters, PCR amplification,
+  one pooled capture reaction for all six libraries.
+- Sequencing: NovaSeq 6000, flow cell HKF3WDSX7 lane 2, 2 x 100 cycles. Demultiplexed with bcl2fastq;
+  adapters were trimmed by the instrument software. FASTQ files are otherwise as produced.
+- Requested mean depth on target: tumour 180x, normal 90x.
+
+## Libraries
+
+| sample_id | specimen | DNA input (ng) | shearing | PCR cycles | i7+i5 index |
+|---|---|---|---|---|---|
+| CG24-7410 | fresh-frozen biopsy | 80 | batch A | 8 | CTCTATAC+AAATAGAA |
+| CG24-1366 | peripheral blood (EDTA) | 200 | batch A | 8 | CTAATGAC+TGTGTCGA |
+| CG24-6425 | peripheral blood (EDTA) | 200 | batch A | 8 | GGCATGTG+TCGCCCTT |
+| CG24-4187 | fresh-frozen biopsy | 100 | batch A | 8 | CATTAACT+CACGCTGT |
+| CG24-9024 | FFPE section (block from 2018) | 80 | batch A | 10 | TAAGTGTC+TGCTGTGG |
+| CG24-3973 | peripheral blood (EDTA) | 200 | batch A | 8 | GCCACTTC+TCACTCCC |
+
+## Remarks
+
+- Shearing: Covaris LE220, low-EDTA TE, standard setting, one batch.
+- FFPE sections were deparaffinised and extracted with the FFPE DNA kit of the pathology lab.
+- Tumour cell content estimated by the pathologist on the adjacent H&E section: PT-0452 70%, PT-0740 60%, PT-0760 70%.
+- All libraries passed the core's yield and fragment-size checks (mean insert 260-280 bp).
+[?2004hroot@e01a4c56390f:/task# cat /task/input/manifest.tsv
+[?2004lpatient	sample_type	sample_id	fastq_1	fastq_2
+PT-0452	tumour	CG24-4187	fastq/CG24-4187_R1.fastq.gz	fastq/CG24-4187_R2.fastq.gz
+PT-0452	normal	CG24-6425	fastq/CG24-6425_R1.fastq.gz	fastq/CG24-6425_R2.fastq.gz
+PT-0740	tumour	CG24-7410	fastq/CG24-7410_R1.fastq.gz	fastq/CG24-7410_R2.fastq.gz
+PT-0740	normal	CG24-1366	fastq/CG24-1366_R1.fastq.gz	fastq/CG24-1366_R2.fastq.gz
+PT-0760	tumour	CG24-9024	fastq/CG24-9024_R1.fastq.gz	fastq/CG24-9024_R2.fastq.gz
+PT-0760	normal	CG24-3973	fastq/CG24-3973_R1.fastq.gz	fastq/CG24-3973_R2.fastq.gz
+[?2004hroot@e01a4c56390f:/task# cat /task/input/targets.bed
+[?2004lchr22_panel	3428	8329	CGP22_T01
+chr22_panel	14129	17369	CGP22_T02
+chr22_panel	18545	23233	CGP22_T03
+chr22_panel	24410	27345	CGP22_T04
+chr22_panel	30718	34618	CGP22_T05
+chr22_panel	38007	42097	CGP22_T06
+chr22_panel	44478	48801	CGP22_T07
+chr22_panel	73700	76430	CGP22_T08
+chr22_panel	87478	90922	CGP22_T09
+chr22_panel	99067	101895	CGP22_T10
+chr22_panel	104419	108368	CGP22_T11
+chr22_panel	113665	116302	CGP22_T12
+chr22_panel	120423	123099	CGP22_T13
+[?2004hroot@e01a4c56390f:/task# head -n 5 /task/input/reference/ref.fa
+[?2004l>chr22_panel
+ATCACATCCTAAAAATAAAGCCCAGGATGGGGAATAAAGCTGAATTAAATATGAAGATAA
+ATAACAAACATCATTTATTAGCACTGCCCTGAATTTTCCAGTATTGTGGCACCTAAATGA
+GTTCCTGGATCCTATCACTGTTGACCCTAATGCCAAACGAATAACTAACTCAAGCTGACA
+AAATTCAAGCGAGACTCCAAAGAGTAAGTAAGCCCATTAAAAAAAAGTTTACATTAAATT
+[?2004hroot@e01a4c56390f:/task# mkdir -p /task/work /task/output/somatic
+[?2004l[?2004hroot@e01a4c56390f:/task# cp /task/input/reference/ref.fa* /task/work/
+[?2004l[?2004hroot@e01a4c56390f:/task# bwa index /task/work/ref.fa
+[?2004l[bwa_index] Pack FASTA... 0.00 sec
+[bwa_index] Construct BWT for the packed sequence...
+[bwa_index] 0.02 seconds elapse.
+[bwa_index] Update BWT... 0.00 sec
+[bwa_index] Pack forward-only FASTA... 0.00 sec
+[bwa_index] Construct SA from BWT and Occ... 0.01 sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa index /task/work/ref.fa
+[main] Real time: 0.050 sec; CPU: 0.036 sec
+[?2004hroot@e01a4c56390f:/task# ls -lh /task/input/fastq
+[?2004ltotal 21M
+-r--r--r-- 1 root root 1.2M Nov 11 20:27 CG24-1366_R1.fastq.gz
+-r--r--r-- 1 root root 1.2M Nov 11 20:27 CG24-1366_R2.fastq.gz
+-r--r--r-- 1 root root 1.1M Nov 11 20:27 CG24-3973_R1.fastq.gz
+-r--r--r-- 1 root root 1.1M Nov 11 20:27 CG24-3973_R2.fastq.gz
+-r--r--r-- 1 root root 2.4M Nov 11 20:27 CG24-4187_R1.fastq.gz
+-r--r--r-- 1 root root 2.4M Nov 11 20:27 CG24-4187_R2.fastq.gz
+-r--r--r-- 1 root root 1.2M Nov 11 20:27 CG24-6425_R1.fastq.gz
+-r--r--r-- 1 root root 1.2M Nov 11 20:27 CG24-6425_R2.fastq.gz
+-r--r--r-- 1 root root 2.2M Nov 11 20:27 CG24-7410_R1.fastq.gz
+-r--r--r-- 1 root root 2.2M Nov 11 20:27 CG24-7410_R2.fastq.gz
+-r--r--r-- 1 root root 2.3M Nov 11 20:27 CG24-9024_R1.fastq.gz
+-r--r--r-- 1 root root 2.3M Nov 11 20:27 CG24-9024_R2.fastq.gz
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/align.sh
+[?2004l[?2004h> #!/bin/bash
+[?2004l[?2004h> set -euo pipefail
+[?2004l[?2004h> REF=/task/work/ref.fa
+[?2004l[?2004h> for sample in CG24-1366 CG24-3973 CG24-4187 CG24-6425 CG24-7410 CG24-9024; do
+[?2004l[?2004h>     echo "Aligning $sample..."
+[?2004l[?2004h>     bwa mem -t 4 -R "@RG\tID:${sample}\tSM:${sample}\tPL:ILLUMINA" \
+[?2004l[?2004h>         $REF /task/input/fastq/${sample}_R1.fastq.gz /task/input/fastq/${sample}_R2.fastq.gz | \
+[?2004l[?2004h>         samtools sort -@ 2 -o /task/work/${sample}.sorted.bam -
+[?2004l[?2004h>     samtools index /task/work/${sample}.sorted.bam
+[?2004l[?2004h> done
+[?2004l[?2004h> echo "Alignment complete."
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# bash /task/work/align.sh
+[?2004lAligning CG24-1366...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 49810 sequences (4981000 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 20682, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (237, 268, 299)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (113, 423)
+[M::mem_pestat] mean and std.dev: (267.72, 44.93)
+[M::mem_pestat] low and high boundaries for proper pairs: (51, 485)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 49810 reads in 1.582 CPU sec, 0.437 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-1366\tSM:CG24-1366\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-1366_R1.fastq.gz /task/input/fastq/CG24-1366_R2.fastq.gz
+[main] Real time: 0.576 sec; CPU: 1.712 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Aligning CG24-3973...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 45854 sequences (4585400 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 19001, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (238, 268, 298)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (118, 418)
+[M::mem_pestat] mean and std.dev: (268.32, 45.02)
+[M::mem_pestat] low and high boundaries for proper pairs: (58, 478)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 45854 reads in 1.384 CPU sec, 0.389 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-3973\tSM:CG24-3973\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-3973_R1.fastq.gz /task/input/fastq/CG24-3973_R2.fastq.gz
+[main] Real time: 0.497 sec; CPU: 1.491 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Aligning CG24-4187...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 98712 sequences (9871200 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 41030, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (238, 268, 299)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (116, 421)
+[M::mem_pestat] mean and std.dev: (268.47, 44.64)
+[M::mem_pestat] low and high boundaries for proper pairs: (55, 482)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 98712 reads in 2.840 CPU sec, 0.757 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-4187\tSM:CG24-4187\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-4187_R1.fastq.gz /task/input/fastq/CG24-4187_R2.fastq.gz
+[main] Real time: 0.970 sec; CPU: 3.044 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Aligning CG24-6425...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 49946 sequences (4994600 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 20739, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (239, 269, 298)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (121, 416)
+[M::mem_pestat] mean and std.dev: (268.71, 44.84)
+[M::mem_pestat] low and high boundaries for proper pairs: (62, 475)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 49946 reads in 1.329 CPU sec, 0.364 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-6425\tSM:CG24-6425\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-6425_R1.fastq.gz /task/input/fastq/CG24-6425_R2.fastq.gz
+[main] Real time: 0.476 sec; CPU: 1.442 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Aligning CG24-7410...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 92222 sequences (9222200 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 38317, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (238, 269, 299)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (116, 421)
+[M::mem_pestat] mean and std.dev: (268.78, 45.03)
+[M::mem_pestat] low and high boundaries for proper pairs: (55, 482)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 92222 reads in 2.698 CPU sec, 0.755 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-7410\tSM:CG24-7410\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-7410_R1.fastq.gz /task/input/fastq/CG24-7410_R2.fastq.gz
+[main] Real time: 0.957 sec; CPU: 2.896 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Aligning CG24-9024...
+[M::bwa_idx_load_from_disk] read 0 ALT contigs
+[M::process] read 97012 sequences (9701200 bp)...
+[M::mem_pestat] # candidate unique pairs for (FF, FR, RF, RR): (0, 40428, 0, 0)
+[M::mem_pestat] skip orientation FF as there are not enough pairs
+[M::mem_pestat] analyzing insert size distribution for orientation FR...
+[M::mem_pestat] (25, 50, 75) percentile: (239, 269, 299)
+[M::mem_pestat] low and high boundaries for computing mean and std.dev: (119, 419)
+[M::mem_pestat] mean and std.dev: (268.61, 44.44)
+[M::mem_pestat] low and high boundaries for proper pairs: (59, 479)
+[M::mem_pestat] skip orientation RF as there are not enough pairs
+[M::mem_pestat] skip orientation RR as there are not enough pairs
+[M::mem_process_seqs] Processed 97012 reads in 2.512 CPU sec, 0.749 real sec
+[main] Version: 0.7.19-r1273
+[main] CMD: bwa mem -t 4 -R @RG\tID:CG24-9024\tSM:CG24-9024\tPL:ILLUMINA /task/work/ref.fa /task/input/fastq/CG24-9024_R1.fastq.gz /task/input/fastq/CG24-9024_R2.fastq.gz
+[main] Real time: 0.986 sec; CPU: 2.748 sec
+[bam_sort_core] merging from 0 files and 2 in-memory blocks...
+Alignment complete.
+[?2004hroot@e01a4c56390f:/task# bcftools mpileup -f /task/work/ref.fa -R /task/input/targets.bed -a FORMAT/AD,FORMAT/DP -Ou /task/work/*.sorted.bam | bcftools call -mv -Oz -o /task/work/all_samples.vcf.gz
+[?2004l[mpileup] 6 samples in 6 input files
+Note: none of --samples-file, --ploidy or --ploidy-file given, assuming all sites are diploid
+[mpileup] maximum number of reads per input file set to -d 250
+[?2004hroot@e01a4c56390f:/task# bcftools index /task/work/all_samples.vcf.gz
+[?2004l[?2004hroot@e01a4c56390f:/task# bcftools query -l /task/work/all_samples.vcf.gz
+[?2004lCG24-1366
+CG24-3973
+CG24-4187
+CG24-6425
+CG24-7410
+CG24-9024
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/check_pairs.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> vcf = pysam.VariantFile('/task/work/all_samples.vcf.gz')
+[?2004l[?2004h> samples = list(vcf.header.samples)
+[?2004l[?2004h> tumours = ['CG24-4187', 'CG24-7410', 'CG24-9024']
+[?2004l[?2004h> normals = ['CG24-1366', 'CG24-3973', 'CG24-6425']
+[?2004l[?2004h> matches = {t: {n: 0 for n in normals} for t in tumours}
+[?2004l[?2004h> totals = {t: {n: 0 for n in normals} for t in tumours}
+[?2004l[?2004h> for rec in vcf:
+[?2004l[?2004h>     if not rec.alts or len(rec.alts) != 1 or len(rec.ref) != 1 or len(rec.alts[0]) != 1:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     for t in tumours:
+[?2004l[?2004h>         gt_t = rec.samples[t]['GT']
+[?2004l[?2004h>         dp_t = rec.samples[t]['DP']
+[?2004l[?2004h>         if None in gt_t or dp_t < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         for n in normals:
+[?2004l[?2004h>             gt_n = rec.samples[n]['GT']
+[?2004l[?2004h>             dp_n = rec.samples[n]['DP']
+[?2004l[?2004h>             if None in gt_n or dp_n < 20:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             totals[t][n] += 1
+[?2004l[?2004h>             if gt_t == gt_n:
+[?2004l[?2004h>                 matches[t][n] += 1
+[?2004l[?2004h> for t in tumours:
+[?2004l[?2004h>     print(f'Tumour: {t}')
+[?2004l[?2004h>     for n in normals:
+[?2004l[?2004h>         pct = matches[t][n] / totals[t][n] * 100 if totals[t][n] > 0 else 0
+[?2004l[?2004h>         print(f'  Normal {n}: {matches[t][n]}/{totals[t][n]} ({pct:.1f}%)')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/check_pairs.py
+[?2004lTumour: CG24-4187
+  Normal CG24-1366: 132/152 (86.8%)
+  Normal CG24-3973: 87/152 (57.2%)
+  Normal CG24-6425: 75/152 (49.3%)
+Tumour: CG24-7410
+  Normal CG24-1366: 75/152 (49.3%)
+  Normal CG24-3973: 84/152 (55.3%)
+  Normal CG24-6425: 132/152 (86.8%)
+Tumour: CG24-9024
+  Normal CG24-1366: 81/152 (53.3%)
+  Normal CG24-3973: 126/152 (82.9%)
+  Normal CG24-6425: 78/152 (51.3%)
+[?2004hroot@e01a4c56390f:/task# samtools flagstat /task/work/CG24-4187.sorted.bam
+[?2004l98712 + 0 in total (QC-passed reads + QC-failed reads)
+98712 + 0 primary
+0 + 0 secondary
+0 + 0 supplementary
+0 + 0 duplicates
+0 + 0 primary duplicates
+98712 + 0 mapped (100.00% : N/A)
+98712 + 0 primary mapped (100.00% : N/A)
+98712 + 0 paired in sequencing
+49356 + 0 read1
+49356 + 0 read2
+98712 + 0 properly paired (100.00% : N/A)
+98712 + 0 with itself and mate mapped
+0 + 0 singletons (0.00% : N/A)
+0 + 0 with mate mapped to a different chr
+0 + 0 with mate mapped to a different chr (mapQ>=5)
+[?2004hroot@e01a4c56390f:/task# samtools coverage -b /task/input/targets.bed /task/work/CG24-4187.sorted.bam | head -n 5
+[?2004lDoes the file "/task/input/targets.bed" really contain a list of files and do all exist?
+samtools coverage: Cannot open file list "/task/input/targets.bed".: No such file or directory
+[?2004hroot@e01a4c56390f:/task# which samtools bcftools bwa minimap2 freebayes varscan mutect2 strelka 2>&1
+[?2004l/opt/tools/bin/samtools
+/opt/tools/bin/bcftools
+/opt/tools/bin/bwa
+/opt/tools/bin/minimap2
+[?2004hroot@e01a4c56390f:/task# samtools depth -b /task/input/targets.bed /task/work/CG24-4187.sorted.bam | awk '{sum+=$3} END {print "Mean depth:", sum/NR, "Sites:", NR}'
+[?2004lMean depth: 205.023 Sites: 46341
+[?2004hroot@e01a4c56390f:/task# samtools collate -u -O /task/work/CG24-4187.sorted.bam | samtools fixmate -m -u - - | samtools sort -u - | samtools markdup -s - - | head -n 10
+[?2004lã     ˇ BC _Öí—N¬0Üãw%>D_†ùÌFÄ^!Aí1Ê¶\ëêõVä]åok‚Éò-2x’””øˇw˛¶˜ÉiÎÛ ˜aÁ>ß§£_+•7€Ω0q€ça‰Ûı´fly˚8Öûœ)≥˚Ω^€«p2‚√1s∞C{]Mkõ¿„œ{ûN¸A€JÂÍ(`‡óÀ‹Áw§Khk ∫6zE…X"lêÉpà‹pº0uˇÖ©¶F@ñŸŒ:*Ω≥túêD¸t∂˚Cn¨DdÊÕ™Æ.CJ y˘∏ÆcïÓî!“(ïfEêﬂ:8Ö¢Ñuä0ß#î)mvCX’ß¨ §Pƒ≤·s
+°Áú™nÇ≠Uö
+#ú#<˚èˆá≈.±m§%€wY“d	lòﬁæË»Æ<Vﬁ‡‰\t≤ù§–ªM~@8+k n µèûæZ‡EòrI  ã     ˇ BC w ºöMàE«;†Ç¥´tß1›ï	éJ◊Wƒﬁ]ÕŸ`≤Bí%!9PTÙ(3é8†‰‚E¡É¢ƒè®àÇó ÿì‡ä‚^<y¡ìæÓÈŸÆô≠ÆÆÍ≠¿“”U=Ÿ˜€˜˛Ô’´ˆv˘x˘√ÿw‡êΩÀxÀ8cL∆KÜÒÃß>
+£8¡à&˝ «V◊èá	Üœ~òêÏ.F(B∆}◊Ü5ÓuF„Ò`Ï.€∂k¨¥?Ø∫ùNgoœπV.a⁄±ÀMÌ~œÈw=Ø´6*◊ôíπ|^[Ÿµ∂∫Ñ)¡F∫ærÍ¯˙äqÙ‡∆ ALÔ¢(
+çµ#gÄ≈k+»˜◊å'Œù]π—0ˆp.‡ Œ1	Ï”ÑP'àƒ$ ·‘±±ÊŸkMW$]pÄvghŒ(†Ÿhn.–ºhÓòCÛ†I´— å‡GìÑ¢0»…∏@¬å ≈¿µg<•C€∂˜˙È¿ ≠ÒÿJ;©5≤nV«Äi˙€õŸ__hÈNØ®‡SÒM»<ƒ9Õk€NszõÃ@ÊY	‚I— ¬ä¡ˇö;ç´≥\aßWA†∆kƒ”˙h¯xz]Ä&ãßC4ëÑD8Lç˝"û‘…lßcu’ÜWq]˚å◊8û‹ÕE@”õC≥±4ôØˆö(¡±œXÇ£¿'ìà“¡>4ÍKm5∆™!ô˙lV9∑π(põÅÕ˝&ô÷¯ó“Êh§vz•≈^y∑öàhJÕcöwÍI@≥_ö°X0Ï'»ßO“∑.ª´;<ô‚.*C˝∂TF‘{ÇàzÊOIΩÜ@ö
+b¯âhÑ∑Q`Àrlwu–Î˛W√Û∂=MüÕõ˜∑ŸînÛí<¢PVıaS–úÄƒ6⁄n3,QL—]È*Ø‚a}6∑qJ|I¿ÊU`sD &J‡õ1É,‡$¶t›FÊ7ïbr˜Lé¨WÒ˙lÆ.ïrsI†ƒ'`ﬁñÌ@âc <1ãèFƒi˛FµòÂ:}4∑Ç€xöhû4âM&4ŸT≈qéFÖLü'cÛñö’
+®xÛÕ™≈F*ƒ„Pu#µüKS	“‘È•	<YMÃ¸Æ¡É¬éÆÿà§xﬁCd9ILn^ºÙ˝ÊNNn>»Õ@≥\#≈ƒßQîÔXŒFMZœ¶~¢[ÛD≥ò⁄…¶å©ÁÄë∫À
+(¸ U˘®9Øﬁ:5,3RÆd‘g≥õ©O!ıhçc) D2Á	&n£M&ÌÍØÅÎ4rõêCÛ©@äèöÎkäb‰>DâÉ	≠eèwˆ/,ƒ!ª·©<•è∆·"Í3ADΩhÀ–@ñÇ÷Mòï8PÁltùf®∫ü1Yﬁ∏Yƒ6Û*W_∞9Û∑Hï28%>Ñ¥h˜È˘L«ç∫ãﬁÃÖ7_Î≥˘ú+¸.‘fÊˇ1‰õ©òÖ⁄°ÑãC√ãÈ\¸ËÏ* …v˚Ö+€ù–“m47I’&JâQBYQ◊bŒ`G*Ü ≈◊¨}b⁄@RBTÎæàS‚+%ŒNzR68°!ÉˆDÖäpl©ÌfÂI<”π·—l
+–duﬂ›≤⁄A;¶ SMÖXCÅ˚˝~Ø∑<T*xTÇ¸˜∂‚MÅÖ˘ødbìï6ò˙1‘6†<Ÿ(ê1ï√≠ÿÏÊ‘ÊK¡v·M`sè¥$ŒéÍ¬¨´ÖY4IRö`‹Â≈$©™Q‰{}6'ÖlJø9lñ§gô (óbåÉ–ˇˇÿx]MGjvæ0ïõØ	¸0∞˘›êüÛ2®˘ +îXKÑ·ÿvR;ı∆^∂Ìéæ†Ÿ4'eçbÿ.`s⁄ú–vKJ¶jh∂N€°˘FÄÊ@sØ4¢†ùE≥$E√‚‰E€iômÂ±ãNÔfªÖHà¶õe@Û≥!QEíÄÁuç—(öÀm§4rz≥˝˜¥˙≠ Õ”ÄÊ⁄ön
+iî)öTNÆj8•VÖQUMO˘ÊŒV(b#™ZÛG/[eøf
+[?2004hroot@e01a4c56390f:/task# samtools collate -u -O /task/work/CG24-4187.sorted.bam | samtools fixmate -m -u - - | samtools sort -u - | samtools markdup -s - /dev/null
+[?2004lCOMMAND: samtools markdup -s - /dev/null
+READ: 98712
+WRITTEN: 98712
+EXCLUDED: 0
+EXAMINED: 98712
+PAIRED: 98712
+SINGLE: 0
+DUPLICATE PAIR: 8200
+DUPLICATE SINGLE: 0
+DUPLICATE PAIR OPTICAL: 0
+DUPLICATE SINGLE OPTICAL: 0
+DUPLICATE NON PRIMARY: 0
+DUPLICATE NON PRIMARY OPTICAL: 0
+DUPLICATE PRIMARY TOTAL: 8200
+DUPLICATE TOTAL: 8200
+ESTIMATED_LIBRARY_SIZE: 280384
+
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/find_somatic_candidates.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> vcf = pysam.VariantFile('/task/work/all_samples.vcf.gz')
+[?2004l[?2004h> for pat, t, n in pairs:
+[?2004l[?2004h>     print(f'=== Patient {pat} (Tumour: {t}, Normal: {n}) ===')
+[?2004l[?2004h>     vcf.reset()
+[?2004l[?2004h>     for rec in vcf:
+[?2004l[?2004h>         t_sample = rec.samples[t]
+[?2004l[?2004h>         n_sample = rec.samples[n]
+[?2004l[?2004h>         t_ad = t_sample.get('AD', (0, 0))
+[?2004l[?2004h>         n_ad = n_sample.get('AD', (0, 0))
+[?2004l[?2004h>         if t_ad and len(t_ad) > 1 and sum(t_ad) > 0:
+[?2004l[?2004h>             t_dp = sum(t_ad)
+[?2004l[?2004h>             t_alt = t_ad[1]
+[?2004l[?2004h>             t_af = t_alt / t_dp
+[?2004l[?2004h>             n_alt = n_ad[1] if n_ad and len(n_ad) > 1 else 0
+[?2004l[?2004h>             n_dp = sum(n_ad) if n_ad else 0
+[?2004l[?2004h>             n_af = n_alt / n_dp if n_dp > 0 else 0
+[?2004l[?2004h>             if t_af >= 0.05 and n_af < 0.02:
+[?2004l[?2004h>                 print(f'{rec.chrom}:{rec.pos} {rec.ref}>{','.join(rec.alts)} Tumour AD:{t_ad} (AF={t_af:.3f}) Normal AD:{n_ad} (AF={n_af:.3f})')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/find_somatic_candidates.py
+[?2004l=== Patient PT-0452 (Tumour: CG24-4187, Normal: CG24-1366) ===
+chr22_panel:16144 T>C Tumour AD:(140, 71) (AF=0.336) Normal AD:(102, 0) (AF=0.000)
+chr22_panel:31590 A>G Tumour AD:(176, 41) (AF=0.189) Normal AD:(110, 0) (AF=0.000)
+chr22_panel:34240 C>T Tumour AD:(142, 73) (AF=0.340) Normal AD:(100, 0) (AF=0.000)
+chr22_panel:40113 C>T Tumour AD:(133, 65) (AF=0.328) Normal AD:(97, 1) (AF=0.010)
+chr22_panel:40973 C>T Tumour AD:(92, 72) (AF=0.439) Normal AD:(99, 0) (AF=0.000)
+chr22_panel:41258 A>G Tumour AD:(139, 47) (AF=0.253) Normal AD:(128, 0) (AF=0.000)
+chr22_panel:41655 A>G Tumour AD:(138, 67) (AF=0.327) Normal AD:(85, 1) (AF=0.012)
+chr22_panel:46998 T>C Tumour AD:(177, 36) (AF=0.169) Normal AD:(114, 0) (AF=0.000)
+chr22_panel:47137 G>C Tumour AD:(163, 45) (AF=0.216) Normal AD:(111, 0) (AF=0.000)
+chr22_panel:48469 C>T Tumour AD:(152, 46) (AF=0.232) Normal AD:(93, 0) (AF=0.000)
+chr22_panel:74495 C>T Tumour AD:(124, 74) (AF=0.374) Normal AD:(103, 0) (AF=0.000)
+chr22_panel:74827 G>A Tumour AD:(143, 67) (AF=0.319) Normal AD:(85, 0) (AF=0.000)
+chr22_panel:74941 G>GT Tumour AD:(175, 48) (AF=0.215) Normal AD:(104, 0) (AF=0.000)
+chr22_panel:76032 T>A Tumour AD:(110, 64) (AF=0.368) Normal AD:(106, 0) (AF=0.000)
+chr22_panel:88814 T>C Tumour AD:(153, 70) (AF=0.314) Normal AD:(103, 0) (AF=0.000)
+chr22_panel:88859 A>G Tumour AD:(133, 81) (AF=0.379) Normal AD:(94, 0) (AF=0.000)
+chr22_panel:99835 C>T Tumour AD:(146, 75) (AF=0.339) Normal AD:(99, 0) (AF=0.000)
+chr22_panel:107298 T>C Tumour AD:(149, 45) (AF=0.232) Normal AD:(109, 0) (AF=0.000)
+chr22_panel:107639 T>A Tumour AD:(135, 71) (AF=0.345) Normal AD:(116, 0) (AF=0.000)
+chr22_panel:107710 C>T Tumour AD:(175, 38) (AF=0.178) Normal AD:(100, 0) (AF=0.000)
+chr22_panel:121005 A>G Tumour AD:(123, 64) (AF=0.342) Normal AD:(89, 0) (AF=0.000)
+=== Patient PT-0740 (Tumour: CG24-7410, Normal: CG24-6425) ===
+chr22_panel:15864 ATCTT>A Tumour AD:(143, 71) (AF=0.332) Normal AD:(123, 0) (AF=0.000)
+chr22_panel:16290 C>CCTG Tumour AD:(152, 63) (AF=0.293) Normal AD:(122, 0) (AF=0.000)
+chr22_panel:16362 A>G Tumour AD:(159, 34) (AF=0.176) Normal AD:(132, 0) (AF=0.000)
+chr22_panel:26334 T>C Tumour AD:(120, 63) (AF=0.344) Normal AD:(100, 1) (AF=0.010)
+chr22_panel:32223 A>C Tumour AD:(156, 61) (AF=0.281) Normal AD:(107, 0) (AF=0.000)
+chr22_panel:32659 T>A Tumour AD:(162, 58) (AF=0.264) Normal AD:(112, 0) (AF=0.000)
+chr22_panel:33165 T>G Tumour AD:(130, 68) (AF=0.343) Normal AD:(121, 0) (AF=0.000)
+chr22_panel:40339 A>G Tumour AD:(124, 68) (AF=0.354) Normal AD:(98, 0) (AF=0.000)
+chr22_panel:41122 C>G Tumour AD:(123, 47) (AF=0.276) Normal AD:(98, 0) (AF=0.000)
+chr22_panel:44819 C>T Tumour AD:(159, 36) (AF=0.185) Normal AD:(87, 0) (AF=0.000)
+chr22_panel:45721 G>A Tumour AD:(135, 71) (AF=0.345) Normal AD:(98, 0) (AF=0.000)
+chr22_panel:46423 A>T Tumour AD:(133, 56) (AF=0.296) Normal AD:(96, 0) (AF=0.000)
+chr22_panel:46465 G>A Tumour AD:(155, 31) (AF=0.167) Normal AD:(109, 0) (AF=0.000)
+chr22_panel:75389 G>T Tumour AD:(121, 53) (AF=0.305) Normal AD:(97, 0) (AF=0.000)
+chr22_panel:87727 T>C Tumour AD:(140, 62) (AF=0.307) Normal AD:(122, 0) (AF=0.000)
+chr22_panel:100223 G>C Tumour AD:(132, 55) (AF=0.294) Normal AD:(99, 0) (AF=0.000)
+chr22_panel:106285 G>C Tumour AD:(112, 46) (AF=0.291) Normal AD:(124, 0) (AF=0.000)
+chr22_panel:106448 GCTCC>G Tumour AD:(133, 63) (AF=0.321) Normal AD:(106, 0) (AF=0.000)
+chr22_panel:106733 C>A Tumour AD:(173, 38) (AF=0.180) Normal AD:(87, 0) (AF=0.000)
+chr22_panel:106880 T>C Tumour AD:(143, 74) (AF=0.341) Normal AD:(97, 0) (AF=0.000)
+chr22_panel:114050 G>A Tumour AD:(126, 57) (AF=0.311) Normal AD:(103, 0) (AF=0.000)
+chr22_panel:114663 T>C Tumour AD:(143, 64) (AF=0.309) Normal AD:(128, 0) (AF=0.000)
+chr22_panel:116031 G>A Tumour AD:(143, 61) (AF=0.299) Normal AD:(104, 0) (AF=0.000)
+=== Patient PT-0760 (Tumour: CG24-9024, Normal: CG24-3973) ===
+chr22_panel:14341 G>T Tumour AD:(170, 48) (AF=0.220) Normal AD:(112, 1) (AF=0.009)
+chr22_panel:14791 T>G Tumour AD:(143, 85) (AF=0.373) Normal AD:(122, 0) (AF=0.000)
+chr22_panel:14876 C>A Tumour AD:(170, 58) (AF=0.254) Normal AD:(94, 0) (AF=0.000)
+chr22_panel:25539 A>G Tumour AD:(127, 84) (AF=0.398) Normal AD:(86, 0) (AF=0.000)
+chr22_panel:26177 AAAAT>A Tumour AD:(148, 68) (AF=0.315) Normal AD:(107, 0) (AF=0.000)
+chr22_panel:26542 G>C Tumour AD:(134, 78) (AF=0.368) Normal AD:(96, 0) (AF=0.000)
+chr22_panel:26788 C>A Tumour AD:(122, 71) (AF=0.368) Normal AD:(92, 0) (AF=0.000)
+chr22_panel:31668 T>A Tumour AD:(151, 82) (AF=0.352) Normal AD:(104, 0) (AF=0.000)
+chr22_panel:34328 C>T Tumour AD:(141, 87) (AF=0.382) Normal AD:(93, 0) (AF=0.000)
+chr22_panel:41767 A>G Tumour AD:(146, 28) (AF=0.161) Normal AD:(88, 1) (AF=0.011)
+chr22_panel:44704 A>G Tumour AD:(107, 75) (AF=0.412) Normal AD:(106, 0) (AF=0.000)
+chr22_panel:45651 G>A Tumour AD:(141, 54) (AF=0.277) Normal AD:(94, 0) (AF=0.000)
+chr22_panel:47210 G>A Tumour AD:(179, 36) (AF=0.167) Normal AD:(111, 0) (AF=0.000)
+chr22_panel:48020 G>A Tumour AD:(144, 75) (AF=0.342) Normal AD:(109, 0) (AF=0.000)
+chr22_panel:75586 T>C Tumour AD:(136, 55) (AF=0.288) Normal AD:(88, 0) (AF=0.000)
+chr22_panel:75717 T>TGTTTC Tumour AD:(137, 50) (AF=0.267) Normal AD:(82, 0) (AF=0.000)
+chr22_panel:75819 T>G Tumour AD:(142, 71) (AF=0.333) Normal AD:(74, 0) (AF=0.000)
+chr22_panel:75937 G>A Tumour AD:(147, 36) (AF=0.197) Normal AD:(81, 0) (AF=0.000)
+chr22_panel:76163 C>A Tumour AD:(127, 39) (AF=0.235) Normal AD:(82, 0) (AF=0.000)
+chr22_panel:88651 C>CGA Tumour AD:(131, 81) (AF=0.382) Normal AD:(100, 0) (AF=0.000)
+chr22_panel:89569 T>A Tumour AD:(141, 71) (AF=0.335) Normal AD:(119, 1) (AF=0.008)
+chr22_panel:101498 C>A Tumour AD:(167, 38) (AF=0.185) Normal AD:(88, 0) (AF=0.000)
+chr22_panel:101550 A>G Tumour AD:(144, 69) (AF=0.324) Normal AD:(100, 0) (AF=0.000)
+chr22_panel:105599 C>T Tumour AD:(153, 50) (AF=0.246) Normal AD:(85, 0) (AF=0.000)
+chr22_panel:106417 G>A Tumour AD:(149, 48) (AF=0.244) Normal AD:(109, 0) (AF=0.000)
+chr22_panel:107337 G>A Tumour AD:(150, 40) (AF=0.211) Normal AD:(102, 0) (AF=0.000)
+chr22_panel:115289 C>T Tumour AD:(185, 57) (AF=0.236) Normal AD:(104, 0) (AF=0.000)
+chr22_panel:115918 G>T Tumour AD:(171, 30) (AF=0.149) Normal AD:(92, 0) (AF=0.000)
+chr22_panel:122106 A>G Tumour AD:(117, 53) (AF=0.312) Normal AD:(69, 0) (AF=0.000)
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/check_call.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> # Check if bcftools mpileup does overlap removal by default
+[?2004l[?2004h> # -x / --ignore-overlaps is default in modern samtools/bcftools mpileup!
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# bcftools mpileup --help | grep -i overlap
+[?2004lmpileup: unrecognized option '--help'
+Invalid option: '?'
+[?2004hroot@e01a4c56390f:/task# bcftools mpileup 2>&1 | grep -i overlap || true
+[?2004l  -x, --ignore-overlaps   Disable read-pair overlap detection
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/compare_af.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> 
+[?2004l[?2004h> bam = pysam.AlignmentFile('/task/work/CG24-4187.sorted.bam')
+[?2004l[?2004h> pos = 16144 - 1 # 0-based
+[?2004l[?2004h> fragments = {}
+[?2004l[?2004h> for pileupcolumn in bam.pileup('chr22_panel', pos, pos + 1, truncate=True):
+[?2004l[?2004h>     for read in pileupcolumn.pileups:
+[?2004l[?2004h>         if read.is_del or read.is_refskip:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         qname = read.alignment.query_name
+[?2004l[?2004h>         base = read.alignment.query_sequence[read.query_position]
+[?2004l[?2004h>         fragments[qname] = base
+[?2004l[?2004h> 
+[?2004l[?2004h> total_frags = len(fragments)
+[?2004l[?2004h> alt_frags = sum(1 for b in fragments.values() if b == 'C')
+[?2004l[?2004h> ref_frags = sum(1 for b in fragments.values() if b == 'T')
+[?2004l[?2004h> print(f'Fragment counting at 16144: Total={total_frags}, Ref={ref_frags}, Alt={alt_frags}, AF={alt_frags/total_frags:.4f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/compare_af.py
+[?2004lFragment counting at 16144: Total=211, Ref=139, Alt=71, AF=0.3365
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/scan_targets.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> targets = []
+[?2004l[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004l[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2]), parts[3]))
+[?2004l[?2004h> 
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     n_bam = pysam.AlignmentFile(f'/task/work/{n_id}.sorted.bam')
+[?2004l[?2004h>     print(f'*** Scanning {pat}: Tumour={t_id}, Normal={n_id} ***')
+[?2004l[?2004h>     candidates = []
+[?2004l[?2004h>     for chrom, start, end, name in targets:
+[?2004l[?2004h>         for col in t_bam.pileup(chrom, start, end, truncate=True, min_base_quality=15, min_mapping_quality=20):
+[?2004l[?2004h>             t_frags = {}
+[?2004l[?2004h>             for read in col.pileups:
+[?2004l[?2004h>                 if read.is_del or read.is_refskip:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 qname = read.alignment.query_name
+[?2004l[?2004h>                 b = read.alignment.query_sequence[read.query_position].upper()
+[?2004l[?2004h>                 t_frags[qname] = b
+[?2004l[?2004h>             if len(t_frags) < 30:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             ref_b = ref_fa.fetch(chrom, col.pos, col.pos + 1).upper()
+[?2004l[?2004h>             counts = {}
+[?2004l[?2004h>             for b in t_frags.values():
+[?2004l[?2004h>                 counts[b] = counts.get(b, 0) + 1
+[?2004l[?2004h>             for b, cnt in counts.items():
+[?2004l[?2004h>                 if b != ref_b and cnt / len(t_frags) >= 0.04:
+[?2004l[?2004h>                     af = cnt / len(t_frags)
+[?2004l[?2004h>                     n_frags = {}
+[?2004l[?2004h>                     for n_read in n_bam.pileup(chrom, col.pos, col.pos + 1, truncate=True, min_base_quality=15, min_mapping_quality=20):
+[?2004l[?2004h>                         if n_read.pos == col.pos:
+[?2004l[?2004h>                             for r in n_read.pileups:
+[?2004l[?2004h>                                 if r.is_del or r.is_refskip:
+[?2004l[?2004h>                                     continue
+[?2004l[?2004h>                                 n_frags[r.alignment.query_name] = r.alignment.query_sequence[r.query_position].upper()
+[?2004l[?2004h>                     n_cnt = sum(1 for nb in n_frags.values() if nb == b)
+[?2004l[?2004h>                     candidates.append((col.pos + 1, ref_b, b, af, cnt, len(t_frags), n_cnt, len(n_frags)))
+[?2004l[?2004h>     for c in candidates:
+[?2004l[?2004h>         if c[6] > 1 or c[6] / max(1, c[7]) > 0.02:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         print(f'{chrom}:{c[0]} {c[1]}>{c[2]} Tumour: {c[4]}/{c[5]} ({c[3]:.3f}) Normal: {c[6]}/{c[7]}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/scan_targets.py
+[?2004l*** Scanning PT-0452: Tumour=CG24-4187, Normal=CG24-1366 ***
+chr22_panel:16144 T>C Tumour: 71/211 (0.336) Normal: 0/101
+chr22_panel:31590 A>G Tumour: 41/215 (0.191) Normal: 0/107
+chr22_panel:34240 C>T Tumour: 73/213 (0.343) Normal: 0/98
+chr22_panel:34415 G>C Tumour: 25/205 (0.122) Normal: 0/96
+chr22_panel:40113 C>T Tumour: 64/197 (0.325) Normal: 1/98
+chr22_panel:40380 A>C Tumour: 24/174 (0.138) Normal: 0/105
+chr22_panel:40592 A>G Tumour: 18/182 (0.099) Normal: 0/95
+chr22_panel:40973 C>T Tumour: 71/163 (0.436) Normal: 0/97
+chr22_panel:41258 A>G Tumour: 47/184 (0.255) Normal: 0/127
+chr22_panel:41655 A>G Tumour: 66/204 (0.324) Normal: 1/85
+chr22_panel:46998 T>C Tumour: 36/208 (0.173) Normal: 0/111
+chr22_panel:47137 G>C Tumour: 45/206 (0.218) Normal: 0/110
+chr22_panel:48469 C>T Tumour: 45/196 (0.230) Normal: 0/92
+chr22_panel:74495 C>T Tumour: 73/196 (0.372) Normal: 0/102
+chr22_panel:74827 G>A Tumour: 67/207 (0.324) Normal: 0/83
+chr22_panel:76032 T>A Tumour: 62/172 (0.360) Normal: 0/104
+chr22_panel:88814 T>C Tumour: 70/222 (0.315) Normal: 0/102
+chr22_panel:88859 A>G Tumour: 80/211 (0.379) Normal: 0/93
+chr22_panel:99484 G>A Tumour: 26/187 (0.139) Normal: 0/99
+chr22_panel:99835 C>T Tumour: 75/221 (0.339) Normal: 0/99
+chr22_panel:107298 T>C Tumour: 44/193 (0.228) Normal: 0/109
+chr22_panel:107639 T>A Tumour: 71/205 (0.346) Normal: 0/115
+chr22_panel:107710 C>T Tumour: 38/212 (0.179) Normal: 0/101
+chr22_panel:121005 A>G Tumour: 64/186 (0.344) Normal: 0/87
+chr22_panel:121732 A>G Tumour: 25/197 (0.127) Normal: 0/94
+chr22_panel:122853 C>A Tumour: 18/190 (0.095) Normal: 0/83
+*** Scanning PT-0740: Tumour=CG24-7410, Normal=CG24-6425 ***
+chr22_panel:16362 A>G Tumour: 34/191 (0.178) Normal: 0/129
+chr22_panel:16591 G>A Tumour: 16/221 (0.072) Normal: 0/109
+chr22_panel:26334 T>C Tumour: 62/180 (0.344) Normal: 1/101
+chr22_panel:26651 T>G Tumour: 25/187 (0.134) Normal: 0/105
+chr22_panel:26851 A>T Tumour: 29/195 (0.149) Normal: 0/112
+chr22_panel:32223 A>C Tumour: 61/216 (0.282) Normal: 0/105
+chr22_panel:32659 T>A Tumour: 58/220 (0.264) Normal: 0/111
+chr22_panel:33165 T>G Tumour: 68/196 (0.347) Normal: 0/120
+chr22_panel:40339 A>G Tumour: 68/192 (0.354) Normal: 0/97
+chr22_panel:41122 C>G Tumour: 47/169 (0.278) Normal: 0/98
+chr22_panel:41416 T>A Tumour: 33/207 (0.159) Normal: 0/97
+chr22_panel:44819 C>T Tumour: 36/194 (0.186) Normal: 0/87
+chr22_panel:45721 G>A Tumour: 70/204 (0.343) Normal: 0/98
+chr22_panel:46423 A>T Tumour: 54/185 (0.292) Normal: 0/94
+chr22_panel:46465 G>A Tumour: 31/182 (0.170) Normal: 0/109
+chr22_panel:74733 T>C Tumour: 18/144 (0.125) Normal: 0/107
+chr22_panel:75389 G>T Tumour: 53/173 (0.306) Normal: 0/97
+chr22_panel:76109 T>G Tumour: 14/165 (0.085) Normal: 0/108
+chr22_panel:87727 T>C Tumour: 62/202 (0.307) Normal: 0/121
+chr22_panel:87803 T>C Tumour: 13/200 (0.065) Normal: 0/100
+chr22_panel:100223 G>C Tumour: 55/186 (0.296) Normal: 0/99
+chr22_panel:106001 T>C Tumour: 12/197 (0.061) Normal: 0/89
+chr22_panel:106285 G>C Tumour: 46/157 (0.293) Normal: 0/124
+chr22_panel:106733 C>A Tumour: 37/209 (0.177) Normal: 0/87
+chr22_panel:106880 T>C Tumour: 73/214 (0.341) Normal: 0/97
+chr22_panel:114050 G>A Tumour: 57/181 (0.315) Normal: 0/103
+chr22_panel:114663 T>C Tumour: 64/207 (0.309) Normal: 0/126
+chr22_panel:116031 G>A Tumour: 61/202 (0.302) Normal: 0/103
+*** Scanning PT-0760: Tumour=CG24-9024, Normal=CG24-3973 ***
+chr22_panel:14341 G>T Tumour: 49/219 (0.224) Normal: 0/112
+chr22_panel:14791 T>G Tumour: 85/226 (0.376) Normal: 0/120
+chr22_panel:14876 C>A Tumour: 58/226 (0.257) Normal: 0/93
+chr22_panel:14914 A>G Tumour: 16/220 (0.073) Normal: 0/96
+chr22_panel:16052 G>A Tumour: 30/237 (0.127) Normal: 0/106
+chr22_panel:25539 A>G Tumour: 82/207 (0.396) Normal: 0/86
+chr22_panel:25629 G>T Tumour: 13/203 (0.064) Normal: 0/91
+chr22_panel:26542 G>C Tumour: 77/208 (0.370) Normal: 0/94
+chr22_panel:26788 C>A Tumour: 69/190 (0.363) Normal: 0/91
+chr22_panel:27038 C>T Tumour: 9/210 (0.043) Normal: 0/86
+chr22_panel:31668 T>A Tumour: 81/231 (0.351) Normal: 0/103
+chr22_panel:31821 C>T Tumour: 20/192 (0.104) Normal: 0/109
+chr22_panel:31884 C>A Tumour: 15/252 (0.060) Normal: 0/113
+chr22_panel:33513 G>A Tumour: 29/221 (0.131) Normal: 0/92
+chr22_panel:34274 C>A Tumour: 11/236 (0.047) Normal: 0/91
+chr22_panel:34328 C>T Tumour: 85/225 (0.378) Normal: 0/89
+chr22_panel:41767 A>G Tumour: 28/171 (0.164) Normal: 1/89
+chr22_panel:44704 A>G Tumour: 75/182 (0.412) Normal: 0/106
+chr22_panel:45283 G>A Tumour: 21/206 (0.102) Normal: 0/104
+chr22_panel:45651 G>A Tumour: 54/191 (0.283) Normal: 0/92
+chr22_panel:47210 G>A Tumour: 36/211 (0.171) Normal: 0/110
+chr22_panel:48020 G>A Tumour: 75/217 (0.346) Normal: 0/109
+chr22_panel:74646 C>T Tumour: 19/203 (0.094) Normal: 0/77
+chr22_panel:75456 T>A Tumour: 14/185 (0.076) Normal: 0/98
+chr22_panel:75586 T>C Tumour: 54/189 (0.286) Normal: 0/88
+chr22_panel:75819 T>G Tumour: 69/209 (0.330) Normal: 0/73
+chr22_panel:75937 G>A Tumour: 36/180 (0.200) Normal: 0/82
+chr22_panel:76163 C>A Tumour: 39/165 (0.236) Normal: 0/82
+chr22_panel:89569 T>A Tumour: 70/218 (0.321) Normal: 1/119
+chr22_panel:89761 C>T Tumour: 19/201 (0.095) Normal: 0/99
+chr22_panel:101498 C>A Tumour: 37/202 (0.183) Normal: 0/87
+chr22_panel:101550 A>G Tumour: 69/210 (0.329) Normal: 0/100
+chr22_panel:105599 C>T Tumour: 50/202 (0.248) Normal: 0/85
+chr22_panel:105745 C>T Tumour: 21/205 (0.102) Normal: 0/77
+chr22_panel:106417 G>A Tumour: 47/196 (0.240) Normal: 0/108
+chr22_panel:107337 G>A Tumour: 40/190 (0.211) Normal: 0/102
+chr22_panel:107780 T>G Tumour: 15/208 (0.072) Normal: 0/107
+chr22_panel:114559 C>T Tumour: 17/197 (0.086) Normal: 0/116
+chr22_panel:115101 C>A Tumour: 30/222 (0.135) Normal: 0/99
+chr22_panel:115289 C>T Tumour: 58/244 (0.238) Normal: 0/103
+chr22_panel:115918 G>T Tumour: 29/195 (0.149) Normal: 0/92
+chr22_panel:122106 A>G Tumour: 53/167 (0.317) Normal: 0/68
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/scan_indels.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> targets = []
+[?2004l[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004l[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2]), parts[3]))
+[?2004l[?2004h> 
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     n_bam = pysam.AlignmentFile(f'/task/work/{n_id}.sorted.bam')
+[?2004l[?2004h>     print(f'*** Scanning Indels for {pat}: Tumour={t_id}, Normal={n_id} ***')
+[?2004l[?2004h>     indel_counts = defaultdict(lambda: {'tumour': set(), 'normal': set()})
+[?2004l[?2004h>     for chrom, start, end, name in targets:
+[?2004l[?2004h>         for read in t_bam.fetch(chrom, start, end):
+[?2004l[?2004h>             if read.is_secondary or read.is_supplementary or read.mapping_quality < 20:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             curr_pos = read.reference_start
+[?2004l[?2004h>             read_pos = 0
+[?2004l[?2004h>             for op, length in read.cigartuples:
+[?2004l[?2004h>                 if op == 0:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 1:
+[?2004l[?2004h>                     ins_seq = read.query_sequence[read_pos:read_pos+length]
+[?2004l[?2004h>                     indel_counts[(chrom, curr_pos, 'INS', ins_seq)]['tumour'].add(read.query_name)
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 2:
+[?2004l[?2004h>                     del_seq = ref_fa.fetch(chrom, curr_pos, curr_pos+length)
+[?2004l[?2004h>                     indel_counts[(chrom, curr_pos, 'DEL', del_seq)]['tumour'].add(read.query_name)
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                 elif op in (4, 5):
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>     for chrom, start, end, name in targets:
+[?2004l[?2004h>         for read in n_bam.fetch(chrom, start, end):
+[?2004l[?2004h>             if read.is_secondary or read.is_supplementary or read.mapping_quality < 20:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             curr_pos = read.reference_start
+[?2004l[?2004h>             read_pos = 0
+[?2004l[?2004h>             for op, length in read.cigartuples:
+[?2004l[?2004h>                 if op == 0:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 1:
+[?2004l[?2004h>                     ins_seq = read.query_sequence[read_pos:read_pos+length]
+[?2004l[?2004h>                     key = (chrom, curr_pos, 'INS', ins_seq)
+[?2004l[?2004h>                     if key in indel_counts:
+[?2004l[?2004h>                         indel_counts[key]['normal'].add(read.query_name)
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 2:
+[?2004l[?2004h>                     del_seq = ref_fa.fetch(chrom, curr_pos, curr_pos+length)
+[?2004l[?2004h>                     key = (chrom, curr_pos, 'DEL', del_seq)
+[?2004l[?2004h>                     if key in indel_counts:
+[?2004l[?2004h>                         indel_counts[key]['normal'].add(read.query_name)
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                 elif op in (4, 5):
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>     for (chrom, pos, itype, seq), d in sorted(indel_counts.items()):
+[?2004l[?2004h>         t_cnt = len(d['tumour'])
+[?2004l[?2004h>         n_cnt = len(d['normal'])
+[?2004l[?2004h>         if t_cnt >= 8:
+[?2004l[?2004h>             print(f'{chrom}:{pos} {itype} {seq} Tumour: {t_cnt} Normal: {n_cnt}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/scan_indels.py
+[?2004l*** Scanning Indels for PT-0452: Tumour=CG24-4187, Normal=CG24-1366 ***
+chr22_panel:33122 DEL A Tumour: 43 Normal: 0
+chr22_panel:33475 DEL GGC Tumour: 41 Normal: 0
+chr22_panel:41495 INS ATGTG Tumour: 28 Normal: 0
+chr22_panel:74941 INS T Tumour: 48 Normal: 0
+chr22_panel:120923 DEL CTACCA Tumour: 34 Normal: 0
+*** Scanning Indels for PT-0740: Tumour=CG24-7410, Normal=CG24-6425 ***
+chr22_panel:15864 DEL TCTT Tumour: 76 Normal: 0
+chr22_panel:16290 INS CTG Tumour: 62 Normal: 0
+chr22_panel:17032 INS TGGAA Tumour: 36 Normal: 0
+chr22_panel:31343 DEL ATTTTCAA Tumour: 40 Normal: 0
+chr22_panel:33967 DEL T Tumour: 29 Normal: 0
+chr22_panel:88454 INS CTG Tumour: 33 Normal: 0
+chr22_panel:106448 DEL CTCC Tumour: 63 Normal: 0
+*** Scanning Indels for PT-0760: Tumour=CG24-9024, Normal=CG24-3973 ***
+chr22_panel:26177 DEL AAAT Tumour: 67 Normal: 0
+chr22_panel:33394 DEL C Tumour: 39 Normal: 0
+chr22_panel:75717 INS GTTTC Tumour: 50 Normal: 0
+chr22_panel:88651 INS GA Tumour: 81 Normal: 0
+chr22_panel:106110 INS ATGCG Tumour: 37 Normal: 0
+chr22_panel:121998 DEL CGC Tumour: 28 Normal: 0
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/check_indel_spectrum.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> targets = []
+[?2004l[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004l[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2]), parts[3]))
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     indel_counts = defaultdict(lambda: {'tumour': set()})
+[?2004l[?2004h>     for chrom, start, end, name in targets:
+[?2004l[?2004h>         for read in t_bam.fetch(chrom, start, end):
+[?2004l[?2004h>             if read.is_secondary or read.is_supplementary or read.mapping_quality < 20:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             curr_pos = read.reference_start
+[?2004l[?2004h>             read_pos = 0
+[?2004l[?2004h>             for op, length in read.cigartuples:
+[?2004l[?2004h>                 if op == 0:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 1:
+[?2004l[?2004h>                     ins_seq = read.query_sequence[read_pos:read_pos+length]
+[?2004l[?2004h>                     indel_counts[(chrom, curr_pos, 'INS', ins_seq)]['tumour'].add(read.query_name)
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 elif op == 2:
+[?2004l[?2004h>                     indel_counts[(chrom, curr_pos, 'DEL', length)]['tumour'].add(read.query_name)
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>                 elif op in (4, 5):
+[?2004l[?2004h>                     read_pos += length
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     curr_pos += length
+[?2004l[?2004h>     counts = sorted([len(d['tumour']) for d in indel_counts.values()], reverse=True)
+[?2004l[?2004h>     print(pat, 'top indel fragment counts:', counts[:15])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/check_indel_spectrum.py
+[?2004lPT-0452 top indel fragment counts: [48, 43, 41, 34, 28]
+PT-0740 top indel fragment counts: [76, 63, 62, 40, 36, 33, 29, 1, 1]
+PT-0760 top indel fragment counts: [81, 67, 50, 39, 37, 28, 1, 1, 1]
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/check_snv_spectrum.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> targets = []
+[?2004l[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004l[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2]), parts[3]))
+[?2004l[?2004h> 
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     n_bam = pysam.AlignmentFile(f'/task/work/{n_id}.sorted.bam')
+[?2004l[?2004h>     snv_list = []
+[?2004l[?2004h>     for chrom, start, end, name in targets:
+[?2004l[?2004h>         for col in t_bam.pileup(chrom, start, end, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>             t_frags = {}
+[?2004l[?2004h>             for read in col.pileups:
+[?2004l[?2004h>                 if read.is_del or read.is_refskip:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 t_frags[read.alignment.query_name] = read.alignment.query_sequence[read.query_position].upper()
+[?2004l[?2004h>             ref_b = ref_fa.fetch(chrom, col.pos, col.pos + 1).upper()
+[?2004l[?2004h>             counts = {}
+[?2004l[?2004h>             for b in t_frags.values():
+[?2004l[?2004h>                 counts[b] = counts.get(b, 0) + 1
+[?2004l[?2004h>             for b, cnt in counts.items():
+[?2004l[?2004h>                 if b != ref_b and cnt >= 5:
+[?2004l[?2004h>                     af = cnt / len(t_frags)
+[?2004l[?2004h>                     n_frags = {}
+[?2004l[?2004h>                     for n_read in n_bam.pileup(chrom, col.pos, col.pos + 1, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>                         if n_read.pos == col.pos:
+[?2004l[?2004h>                             for r in n_read.pileups:
+[?2004l[?2004h>                                 if not r.is_del and not r.is_refskip:
+[?2004l[?2004h>                                     n_frags[r.alignment.query_name] = r.alignment.query_sequence[r.query_position].upper()
+[?2004l[?2004h>                     n_cnt = sum(1 for nb in n_frags.values() if nb == b)
+[?2004l[?2004h>                     snv_list.append((af, cnt, len(t_frags), n_cnt, len(n_frags), col.pos + 1, ref_b, b))
+[?2004l[?2004h>     snv_list.sort(key=lambda x: x[0], reverse=True)
+[?2004l[?2004h>     somatic = [x for x in snv_list if x[3] <= 1 and (x[3] / max(1, x[4])) < 0.02 and x[0] >= 0.04]
+[?2004l[?2004h>     germline = [x for x in snv_list if (x[3] / max(1, x[4])) >= 0.15]
+[?2004l[?2004h>     noise = [x for x in snv_list if x not in somatic and x not in germline]
+[?2004l[?2004h>     print(f'=== {pat} SNV summary: total {len(snv_list)} sites with alt >= 5 reads ===')
+[?2004l[?2004h>     print(f'Somatic candidates (AF>=0.04): {len(somatic)}')
+[?2004l[?2004h>     print(f'Germline: {len(germline)}')
+[?2004l[?2004h>     print(f'Noise/Other: {len(noise)}')
+[?2004l[?2004h>     print('Somatic sorted by AF:')
+[?2004l[?2004h>     for s in somatic:
+[?2004l[?2004h>         print(f'  pos={s[5]} {s[6]}>{s[7]} AF={s[0]:.4f} ({s[1]}/{s[2]}) Normal={s[3]}/{s[4]}')
+[?2004l[?2004h>     if noise:
+[?2004l[?2004h>         print('Noise:')
+[?2004l[?2004h>         for n in noise:
+[?2004l[?2004h>             print(f'  pos={n[5]} {n[6]}>{n[7]} AF={n[0]:.4f} ({n[1]}/{n[2]}) Normal={n[3]}/{n[4]}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/check_snv_spectrum.py
+[?2004l=== PT-0452 SNV summary: total 82 sites with alt >= 5 reads ===
+Somatic candidates (AF>=0.04): 26
+Germline: 56
+Noise/Other: 0
+Somatic sorted by AF:
+  pos=40973 C>T AF=0.4356 (71/163) Normal=0/97
+  pos=88859 A>G AF=0.3791 (80/211) Normal=0/93
+  pos=74495 C>T AF=0.3724 (73/196) Normal=0/102
+  pos=76032 T>A AF=0.3605 (62/172) Normal=0/104
+  pos=107639 T>A AF=0.3463 (71/205) Normal=0/115
+  pos=121005 A>G AF=0.3441 (64/186) Normal=0/87
+  pos=34240 C>T AF=0.3427 (73/213) Normal=0/98
+  pos=99835 C>T AF=0.3394 (75/221) Normal=0/99
+  pos=16144 T>C AF=0.3365 (71/211) Normal=0/101
+  pos=40113 C>T AF=0.3249 (64/197) Normal=1/98
+  pos=74827 G>A AF=0.3237 (67/207) Normal=0/83
+  pos=41655 A>G AF=0.3235 (66/204) Normal=1/85
+  pos=88814 T>C AF=0.3153 (70/222) Normal=0/102
+  pos=41258 A>G AF=0.2554 (47/184) Normal=0/127
+  pos=48469 C>T AF=0.2296 (45/196) Normal=0/92
+  pos=107298 T>C AF=0.2280 (44/193) Normal=0/109
+  pos=47137 G>C AF=0.2184 (45/206) Normal=0/110
+  pos=31590 A>G AF=0.1907 (41/215) Normal=0/107
+  pos=107710 C>T AF=0.1792 (38/212) Normal=0/101
+  pos=46998 T>C AF=0.1731 (36/208) Normal=0/111
+  pos=99484 G>A AF=0.1390 (26/187) Normal=0/99
+  pos=40380 A>C AF=0.1379 (24/174) Normal=0/105
+  pos=121732 A>G AF=0.1269 (25/197) Normal=0/94
+  pos=34415 G>C AF=0.1220 (25/205) Normal=0/96
+  pos=40592 A>G AF=0.0989 (18/182) Normal=0/95
+  pos=122853 C>A AF=0.0947 (18/190) Normal=0/83
+=== PT-0740 SNV summary: total 82 sites with alt >= 5 reads ===
+Somatic candidates (AF>=0.04): 28
+Germline: 54
+Noise/Other: 0
+Somatic sorted by AF:
+  pos=40339 A>G AF=0.3542 (68/192) Normal=0/97
+  pos=33165 T>G AF=0.3469 (68/196) Normal=0/120
+  pos=26334 T>C AF=0.3444 (62/180) Normal=1/101
+  pos=45721 G>A AF=0.3431 (70/204) Normal=0/98
+  pos=106880 T>C AF=0.3411 (73/214) Normal=0/97
+  pos=114050 G>A AF=0.3149 (57/181) Normal=0/103
+  pos=114663 T>C AF=0.3092 (64/207) Normal=0/126
+  pos=87727 T>C AF=0.3069 (62/202) Normal=0/121
+  pos=75389 G>T AF=0.3064 (53/173) Normal=0/97
+  pos=116031 G>A AF=0.3020 (61/202) Normal=0/103
+  pos=100223 G>C AF=0.2957 (55/186) Normal=0/99
+  pos=106285 G>C AF=0.2930 (46/157) Normal=0/124
+  pos=46423 A>T AF=0.2919 (54/185) Normal=0/94
+  pos=32223 A>C AF=0.2824 (61/216) Normal=0/105
+  pos=41122 C>G AF=0.2781 (47/169) Normal=0/98
+  pos=32659 T>A AF=0.2636 (58/220) Normal=0/111
+  pos=44819 C>T AF=0.1856 (36/194) Normal=0/87
+  pos=16362 A>G AF=0.1780 (34/191) Normal=0/129
+  pos=106733 C>A AF=0.1770 (37/209) Normal=0/87
+  pos=46465 G>A AF=0.1703 (31/182) Normal=0/109
+  pos=41416 T>A AF=0.1594 (33/207) Normal=0/97
+  pos=26851 A>T AF=0.1487 (29/195) Normal=0/112
+  pos=26651 T>G AF=0.1337 (25/187) Normal=0/105
+  pos=74733 T>C AF=0.1250 (18/144) Normal=0/107
+  pos=76109 T>G AF=0.0848 (14/165) Normal=0/108
+  pos=16591 G>A AF=0.0724 (16/221) Normal=0/109
+  pos=87803 T>C AF=0.0650 (13/200) Normal=0/100
+  pos=106001 T>C AF=0.0609 (12/197) Normal=0/89
+=== PT-0760 SNV summary: total 102 sites with alt >= 5 reads ===
+Somatic candidates (AF>=0.04): 42
+Germline: 59
+Noise/Other: 1
+Somatic sorted by AF:
+  pos=44704 A>G AF=0.4121 (75/182) Normal=0/106
+  pos=25539 A>G AF=0.3961 (82/207) Normal=0/86
+  pos=34328 C>T AF=0.3778 (85/225) Normal=0/89
+  pos=14791 T>G AF=0.3761 (85/226) Normal=0/120
+  pos=26542 G>C AF=0.3702 (77/208) Normal=0/94
+  pos=26788 C>A AF=0.3632 (69/190) Normal=0/91
+  pos=31668 T>A AF=0.3506 (81/231) Normal=0/103
+  pos=48020 G>A AF=0.3456 (75/217) Normal=0/109
+  pos=75819 T>G AF=0.3301 (69/209) Normal=0/73
+  pos=101550 A>G AF=0.3286 (69/210) Normal=0/100
+  pos=89569 T>A AF=0.3211 (70/218) Normal=1/119
+  pos=122106 A>G AF=0.3174 (53/167) Normal=0/68
+  pos=75586 T>C AF=0.2857 (54/189) Normal=0/88
+  pos=45651 G>A AF=0.2827 (54/191) Normal=0/92
+  pos=14876 C>A AF=0.2566 (58/226) Normal=0/93
+  pos=105599 C>T AF=0.2475 (50/202) Normal=0/85
+  pos=106417 G>A AF=0.2398 (47/196) Normal=0/108
+  pos=115289 C>T AF=0.2377 (58/244) Normal=0/103
+  pos=76163 C>A AF=0.2364 (39/165) Normal=0/82
+  pos=14341 G>T AF=0.2237 (49/219) Normal=0/112
+  pos=107337 G>A AF=0.2105 (40/190) Normal=0/102
+  pos=75937 G>A AF=0.2000 (36/180) Normal=0/82
+  pos=101498 C>A AF=0.1832 (37/202) Normal=0/87
+  pos=47210 G>A AF=0.1706 (36/211) Normal=0/110
+  pos=41767 A>G AF=0.1637 (28/171) Normal=1/89
+  pos=115918 G>T AF=0.1487 (29/195) Normal=0/92
+  pos=115101 C>A AF=0.1351 (30/222) Normal=0/99
+  pos=33513 G>A AF=0.1312 (29/221) Normal=0/92
+  pos=16052 G>A AF=0.1266 (30/237) Normal=0/106
+  pos=31821 C>T AF=0.1042 (20/192) Normal=0/109
+  pos=105745 C>T AF=0.1024 (21/205) Normal=0/77
+  pos=45283 G>A AF=0.1019 (21/206) Normal=0/104
+  pos=89761 C>T AF=0.0945 (19/201) Normal=0/99
+  pos=74646 C>T AF=0.0936 (19/203) Normal=0/77
+  pos=114559 C>T AF=0.0863 (17/197) Normal=0/116
+  pos=75456 T>A AF=0.0757 (14/185) Normal=0/98
+  pos=14914 A>G AF=0.0727 (16/220) Normal=0/96
+  pos=107780 T>G AF=0.0721 (15/208) Normal=0/107
+  pos=25629 G>T AF=0.0640 (13/203) Normal=0/91
+  pos=31884 C>A AF=0.0595 (15/252) Normal=0/113
+  pos=34274 C>A AF=0.0466 (11/236) Normal=0/91
+  pos=27038 C>T AF=0.0429 (9/210) Normal=0/86
+Noise:
+  pos=31752 A>G AF=0.0253 (5/198) Normal=0/117
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/test_indels.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> for pos, op, seq in [(33122, 'DEL', 'A'), (33475, 'DEL', 'GGC'), (41495, 'INS', 'ATGTG'), (74941, 'INS', 'T'), (120923, 'DEL', 'CTACCA')]:
+[?2004l[?2004h>     ctx = ref_fa.fetch('chr22_panel', pos - 5, pos + 10)
+[?2004l[?2004h>     print(f'{pos} {op} {seq}: context around pos: {ctx}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/test_indels.py
+[?2004l33122 DEL A: context around pos: GATGGAGGTCTTTCC
+33475 DEL GGC: context around pos: GATAAGGCCAACCTT
+41495 INS ATGTG: context around pos: GGTCACTAATTTCTA
+74941 INS T: context around pos: CTAAGAAAATGCATC
+120923 DEL CTACCA: context around pos: TAGAGCTACCATGCC
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/calc_indel_af.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_indel_af(bam_path, chrom, pos, op, seq):
+[?2004l[?2004h>     bam = pysam.AlignmentFile(bam_path)
+[?2004l[?2004h>     alt_frags = set()
+[?2004l[?2004h>     total_frags = set()
+[?2004l[?2004h>     for read in bam.fetch(chrom, max(0, pos - 20), pos + 20):
+[?2004l[?2004h>         if read.is_secondary or read.is_supplementary or read.mapping_quality < 20:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if read.reference_start <= pos and read.reference_end > pos:
+[?2004l[?2004h>             total_frags.add(read.query_name)
+[?2004l[?2004h>         curr_pos = read.reference_start
+[?2004l[?2004h>         read_pos = 0
+[?2004l[?2004h>         for cop, clen in read.cigartuples:
+[?2004l[?2004h>             if cop == 0:
+[?2004l[?2004h>                 curr_pos += clen
+[?2004l[?2004h>                 read_pos += clen
+[?2004l[?2004h>             elif cop == 1:
+[?2004l[?2004h>                 if op == 'INS' and curr_pos == pos and read.query_sequence[read_pos:read_pos+clen] == seq:
+[?2004l[?2004h>                     alt_frags.add(read.query_name)
+[?2004l[?2004h>                 read_pos += clen
+[?2004l[?2004h>             elif cop == 2:
+[?2004l[?2004h>                 if op == 'DEL' and curr_pos == pos and clen == len(seq):
+[?2004l[?2004h>                     alt_frags.add(read.query_name)
+[?2004l[?2004h>                 curr_pos += clen
+[?2004l[?2004h>             elif cop in (4, 5):
+[?2004l[?2004h>                 read_pos += clen
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 curr_pos += clen
+[?2004l[?2004h>     total_frags.update(alt_frags)
+[?2004l[?2004h>     af = len(alt_frags) / len(total_frags) if total_frags else 0
+[?2004l[?2004h>     return len(alt_frags), len(total_frags), af
+[?2004l[?2004h> 
+[?2004l[?2004h> for pos, op, seq in [(33122, 'DEL', 'A'), (33475, 'DEL', 'GGC'), (41495, 'INS', 'ATGTG'), (74941, 'INS', 'T'), (120923, 'DEL', 'CTACCA')]:
+[?2004l[?2004h>     alt, tot, af = get_indel_af('/task/work/CG24-4187.sorted.bam', 'chr22_panel', pos, op, seq)
+[?2004l[?2004h>     print(f'{pos} {op} {seq}: Alt={alt}, Total={tot}, AF={af:.4f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/calc_indel_af.py
+[?2004l33122 DEL A: Alt=43, Total=229, AF=0.1878
+33475 DEL GGC: Alt=41, Total=204, AF=0.2010
+41495 INS ATGTG: Alt=28, Total=187, AF=0.1497
+74941 INS T: Alt=48, Total=226, AF=0.2124
+120923 DEL CTACCA: Alt=34, Total=177, AF=0.1921
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/test_all_indels.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> from calc_indel_af import get_indel_af
+[?2004l[?2004h> 
+[?2004l[?2004h> all_indels = {
+[?2004l[?2004h>     'PT-0452': ('CG24-4187', [
+[?2004l[?2004h>         (33122, 'DEL', 'A'),
+[?2004l[?2004h>         (33475, 'DEL', 'GGC'),
+[?2004l[?2004h>         (41495, 'INS', 'ATGTG'),
+[?2004l[?2004h>         (74941, 'INS', 'T'),
+[?2004l[?2004h>         (120923, 'DEL', 'CTACCA')
+[?2004l[?2004h>     ]),
+[?2004l[?2004h>     'PT-0740': ('CG24-7410', [
+[?2004l[?2004h>         (15864, 'DEL', 'TCTT'),
+[?2004l[?2004h>         (16290, 'INS', 'CTG'),
+[?2004l[?2004h>         (17032, 'INS', 'TGGAA'),
+[?2004l[?2004h>         (31343, 'DEL', 'ATTTTCAA'),
+[?2004l[?2004h>         (33967, 'DEL', 'T'),
+[?2004l[?2004h>         (88454, 'INS', 'CTG'),
+[?2004l[?2004h>         (106448, 'DEL', 'CTCC')
+[?2004l[?2004h>     ]),
+[?2004l[?2004h>     'PT-0760': ('CG24-9024', [
+[?2004l[?2004h>         (26177, 'DEL', 'AAAT'),
+[?2004l[?2004h>         (33394, 'DEL', 'C'),
+[?2004l[?2004h>         (75717, 'INS', 'GTTTC'),
+[?2004l[?2004h>         (88651, 'INS', 'GA'),
+[?2004l[?2004h>         (106110, 'INS', 'ATGCG'),
+[?2004l[?2004h>         (121998, 'DEL', 'CGC')
+[?2004l[?2004h>     ])
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, (t_id, indels) in all_indels.items():
+[?2004l[?2004h>     print(f'=== {pat} Indels ===')
+[?2004l[?2004h>     for pos, op, seq in indels:
+[?2004l[?2004h>         alt, tot, af = get_indel_af(f'/task/work/{t_id}.sorted.bam', 'chr22_panel', pos, op, seq)
+[?2004l[?2004h>         print(f'{pos} {op} {seq}: Alt={alt}, Total={tot}, AF={af:.4f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/test_all_indels.py
+[?2004l33122 DEL A: Alt=43, Total=229, AF=0.1878
+33475 DEL GGC: Alt=41, Total=204, AF=0.2010
+41495 INS ATGTG: Alt=28, Total=187, AF=0.1497
+74941 INS T: Alt=48, Total=226, AF=0.2124
+120923 DEL CTACCA: Alt=34, Total=177, AF=0.1921
+=== PT-0452 Indels ===
+33122 DEL A: Alt=43, Total=229, AF=0.1878
+33475 DEL GGC: Alt=41, Total=204, AF=0.2010
+41495 INS ATGTG: Alt=28, Total=187, AF=0.1497
+74941 INS T: Alt=48, Total=226, AF=0.2124
+120923 DEL CTACCA: Alt=34, Total=177, AF=0.1921
+=== PT-0740 Indels ===
+15864 DEL TCTT: Alt=76, Total=226, AF=0.3363
+16290 INS CTG: Alt=62, Total=217, AF=0.2857
+17032 INS TGGAA: Alt=36, Total=205, AF=0.1756
+31343 DEL ATTTTCAA: Alt=40, Total=169, AF=0.2367
+33967 DEL T: Alt=29, Total=191, AF=0.1518
+88454 INS CTG: Alt=33, Total=218, AF=0.1514
+106448 DEL CTCC: Alt=63, Total=193, AF=0.3264
+=== PT-0760 Indels ===
+26177 DEL AAAT: Alt=67, Total=208, AF=0.3221
+33394 DEL C: Alt=39, Total=222, AF=0.1757
+75717 INS GTTTC: Alt=50, Total=191, AF=0.2618
+88651 INS GA: Alt=81, Total=214, AF=0.3785
+106110 INS ATGCG: Alt=37, Total=210, AF=0.1762
+121998 DEL CGC: Alt=28, Total=180, AF=0.1556
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/generate_vcfs.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> 
+[?2004l[?2004h> targets = []
+[?2004l'[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004l'af': ro[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2])))
+[?2004l[?2004h> 
+[?2004lp[?2004h> def in_target(chrom, pos):
+[?2004l[?2004h>     for c, s, e in targets:
+[?2004l[?2004h>         if c == chrom and s <= (pos - 1) < e:
+[?2004l[?2004h>             return True
+[?2004l[?2004h>     return False
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> # We will collect SNVs and Indels
+[?2004l[?2004h> all_variants = {}
+[?2004l[?2004h> 
+[?2004l[?2004h> # Indels identified earlier
+[?2004l[?2004h> patient_indels = {
+[?2004l[?2004h>     'PT-0452': [
+[?2004l[?2004h>         (33122, 'DEL', 'A'),
+[?2004l[?2004h>         (33475, 'DEL', 'GGC'),
+[?2004l[?2004h>         (41495, 'INS', 'ATGTG'),
+[?2004l[?2004h>         (74941, 'INS', 'T'),
+[?2004l[?2004h>         (120923, 'DEL', 'CTACCA')
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'PT-0740': [
+[?2004l[?2004h>         (15864, 'DEL', 'TCTT'),
+[?2004l[?2004h>         (16290, 'INS', 'CTG'),
+[?2004l[?2004h>         (17032, 'INS', 'TGGAA'),
+[?2004l[?2004h>         (31343, 'DEL', 'ATTTTCAA'),
+[?2004l[?2004h>         (33967, 'DEL', 'T'),
+[?2004l[?2004h>         (88454, 'INS', 'CTG'),
+[?2004l[?2004h>         (106448, 'DEL', 'CTCC')
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'PT-0760': [
+[?2004l[?2004h>         (26177, 'DEL', 'AAAT'),
+[?2004l[?2004h>         (33394, 'DEL', 'C'),
+[?2004l[?2004h>         (75717, 'INS', 'GTTTC'),
+[?2004l[?2004h>         (88651, 'INS', 'GA'),
+[?2004l[?2004h>         (106110, 'INS', 'ATGCG'),
+[?2004l[?2004h>         (121998, 'DEL', 'CGC')
+[?2004l[?2004h>     ]
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> from calc_indel_af import get_indel_af
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     n_bam = pysam.AlignmentFile(f'/task/work/{n_id}.sorted.bam')
+[?2004l[?2004h>     v_list = []
+[?2004l[?2004h>     
+[?2004l[?2004h>     # 1. Scan SNVs
+[?2004l[?2004h>     for chrom, start, end in targets:
+[?2004l[?2004h>         for col in t_bam.pileup(chrom, start, end, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>             t_frags = {}
+[?2004l[?2004h>             for read in col.pileups:
+[?2004l[?2004h>                 if read.is_del or read.is_refskip:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 t_frags[read.alignment.query_name] = read.alignment.query_sequence[read.query_position].upper()
+[?2004l[?2004h>             ref_b = ref_fa.fetch(chrom, col.pos, col.pos + 1).upper()
+[?2004l[?2004h>             counts = {}
+[?2004l[?2004h>             for b in t_frags.values():
+[?2004l[?2004h>                 counts[b] = counts.get(b, 0) + 1
+[?2004l[?2004h>             for b, cnt in counts.items():
+[?2004l[?2004h>                 if b != ref_b and cnt >= 5:
+[?2004l[?2004h>                     af = cnt / len(t_frags)
+[?2004l[?2004h>                     # Check normal
+[?2004l[?2004h>                     n_frags = {}
+[?2004l[?2004h>                     for n_read in n_bam.pileup(chrom, col.pos, col.pos + 1, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>                         if n_read.pos == col.pos:
+[?2004l[?2004h>                             for r in n_read.pileups:
+[?2004l[?2004h>                                 if not r.is_del and not r.is_refskip:
+[?2004l[?2004h>                                     n_frags[r.alignment.query_name] = r.alignment.query_sequence[r.query_position].upper()
+[?2004l[?2004h>                     n_cnt = sum(1 for nb in n_frags.values() if nb == b)
+[?2004l[?2004h>                     if n_cnt <= 1 and (n_cnt / max(1, len(n_frags))) < 0.02 and af >= 0.05:
+[?2004l[?2004h>                         # Somatic SNV
+[?2004l[?2004h>                         v_list.append({
+[?2004l[?2004h>                             'chrom': chrom,
+[?2004l[?2004h>                             'pos': col.pos + 1,
+[?2004l[?2004h>                             'ref': ref_b,
+[?2004l[?2004h>                             'alt': b,
+[?2004l[?2004h>                             'af': round(af, 4),
+[?2004l[?2004h>                             'type': 'snv'
+[?2004l[?2004h>                         })
+[?2004l[?2004h>     
+[?2004l[?2004h>     # 2. Add indels
+[?2004l[?2004h>     for pos, op, seq in patient_indels[pat]:
+[?2004l[?2004h>         alt_cnt, tot_cnt, af = get_indel_af(f'/task/work/{t_id}.sorted.bam', 'chr22_panel', pos, op, seq)
+[?2004l[?2004h>         if af >= 0.05:
+[?2004l[?2004h>             # Construct standard VCF representation
+[?2004l[?2004h>             # VCF POS is 1-based coordinate of preceding base
+[?2004l[?2004h>             # For deletion at 0-based pos, ref sequence is base at pos-1 plus deleted sequence
+[?2004l[?2004h>             pre_base = ref_fa.fetch('chr22_panel', pos - 1, pos).upper()
+[?2004l[?2004h>             if op == 'DEL':
+[?2004l[?2004h>                 vcf_pos = pos # 1-based pos of pre_base
+[?2004l[?2004h>                 ref_seq = pre_base + seq
+[?2004l[?2004h>                 alt_seq = pre_base
+[?2004l[?2004h>             elif op == 'INS':
+[?2004l[?2004h>                 vcf_pos = pos # 1-based pos of pre_base
+[?2004l[?2004h>                 ref_seq = pre_base
+[?2004l[?2004h>                 alt_seq = pre_base + seq
+[?2004l[?2004h>             v_list.append({
+[?2004l[?2004h>                 'chrom': 'chr22_panel',
+[?2004l[?2004h>                 'pos': vcf_pos,
+[?2004l[?2004h>                 'ref': ref_seq,
+[?2004l[?2004h>                 'alt': alt_seq,
+[?2004l[?2004h>                 'af': round(af, 4),
+[?2004l[?2004h>                 'type': 'indel'
+[?2004l[?2004h>             })
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Sort variants by pos
+[?2004l[?2004h>     v_list.sort(key=lambda x: x['pos'])
+[?2004l[?2004h>     all_variants[pat] = v_list
+[?2004l[?2004h>     print(f'{pat}: {sum(1 for v in v_list if v["type"]=="snv")} SNVs, {sum(1 for v in v_list if v["type"]=="indel")} Indels')
+[?2004l[?2004h> 
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/generate_vcfs.py
+[?2004l33122 DEL A: Alt=43, Total=229, AF=0.1878
+33475 DEL GGC: Alt=41, Total=204, AF=0.2010
+41495 INS ATGTG: Alt=28, Total=187, AF=0.1497
+74941 INS T: Alt=48, Total=226, AF=0.2124
+120923 DEL CTACCA: Alt=34, Total=177, AF=0.1921
+PT-0452: 26 SNVs, 5 Indels
+PT-0740: 28 SNVs, 7 Indels
+PT-0760: 40 SNVs, 6 Indels
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/produce_vcfs.py
+[?2004l[?2004h> import pysam
+[?2004lID=AF,[?2004h> import subprocess
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> ref_fa = pysam.FastaFile('/task/work/ref.fa')
+[?2004l[?2004h> from calc_indel_af import get_indel_af
+[?2004l[?2004h> 
+[?2004l[?2004h> targets = []
+[?2004l[?2004h> with open('/task/input/targets.bed') as f:
+[?2004l v i[?2004h>     for line in f:
+[?2004l[?2004h>         parts = line.strip().split()
+[?2004lrite(f"{v['chrom']}\t{v['pos'[?2004h>         if parts:
+[?2004l[?2004h>             targets.append((parts[0], int(parts[1]), int(parts[2])))
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l
+ [?2004h> 
+[?2004l[?2004h> patient_indels = {
+[?2004lcess.run(cm[?2004h>     'PT-0452': [
+[?2004l[?2004h>         (33122, 'DEL', 'A'),
+[?2004lishe[?2004h>         (33475, 'DEL', 'GGC'),
+[?2004l[?2004h>         (41495, 'INS', 'ATGTG'),
+[?2004l
+[?2004h>         (74941, 'INS', 'T'),
+[?2004l[?2004h>         (120923, 'DEL', 'CTACCA')
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'PT-0740': [
+[?2004l[?2004h>         (15864, 'DEL', 'TCTT'),
+[?2004l[?2004h>         (16290, 'INS', 'CTG'),
+[?2004l[?2004h>         (17032, 'INS', 'TGGAA'),
+[?2004l[?2004h>         (31343, 'DEL', 'ATTTTCAA'),
+[?2004l[?2004h>         (33967, 'DEL', 'T'),
+[?2004l[?2004h>         (88454, 'INS', 'CTG'),
+[?2004l[?2004h>         (106448, 'DEL', 'CTCC')
+[?2004l[?2004h>     ],
+[?2004l[?2004h>     'PT-0760': [
+[?2004l[?2004h>         (26177, 'DEL', 'AAAT'),
+[?2004l[?2004h>         (33394, 'DEL', 'C'),
+[?2004l[?2004h>         (75717, 'INS', 'GTTTC'),
+[?2004l[?2004h>         (88651, 'INS', 'GA'),
+[?2004l[?2004h>         (106110, 'INS', 'ATGCG'),
+[?2004l[?2004h>         (121998, 'DEL', 'CGC')
+[?2004l[?2004h>     ]
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/output/somatic', exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> for pat, t_id, n_id in pairs:
+[?2004l[?2004h>     t_bam = pysam.AlignmentFile(f'/task/work/{t_id}.sorted.bam')
+[?2004l[?2004h>     n_bam = pysam.AlignmentFile(f'/task/work/{n_id}.sorted.bam')
+[?2004l[?2004h>     v_list = []
+[?2004l[?2004h>     
+[?2004l[?2004h>     for chrom, start, end in targets:
+[?2004l[?2004h>         for col in t_bam.pileup(chrom, start, end, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>             t_frags = {}
+[?2004l[?2004h>             for read in col.pileups:
+[?2004l[?2004h>                 if read.is_del or read.is_refskip:
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 t_frags[read.alignment.query_name] = read.alignment.query_sequence[read.query_position].upper()
+[?2004l[?2004h>             ref_b = ref_fa.fetch(chrom, col.pos, col.pos + 1).upper()
+[?2004l[?2004h>             counts = {}
+[?2004l[?2004h>             for b in t_frags.values():
+[?2004l[?2004h>                 counts[b] = counts.get(b, 0) + 1
+[?2004l[?2004h>             for b, cnt in counts.items():
+[?2004l[?2004h>                 if b != ref_b and cnt >= 5:
+[?2004l[?2004h>                     af = cnt / len(t_frags)
+[?2004l[?2004h>                     n_frags = {}
+[?2004l[?2004h>                     for n_read in n_bam.pileup(chrom, col.pos, col.pos + 1, truncate=True, min_base_quality=20, min_mapping_quality=20):
+[?2004l[?2004h>                         if n_read.pos == col.pos:
+[?2004l[?2004h>                             for r in n_read.pileups:
+[?2004l[?2004h>                                 if not r.is_del and not r.is_refskip:
+[?2004l[?2004h>                                     n_frags[r.alignment.query_name] = r.alignment.query_sequence[r.query_position].upper()
+[?2004l[?2004h>                     n_cnt = sum(1 for nb in n_frags.values() if nb == b)
+[?2004l[?2004h>                     if n_cnt <= 1 and (n_cnt / max(1, len(n_frags))) < 0.02 and af >= 0.05:
+[?2004l[?2004h>                         v_list.append({
+[?2004l[?2004h>                             'chrom': chrom,
+[?2004l[?2004h>                             'pos': col.pos + 1,
+[?2004l[?2004h>                             'ref': ref_b,
+[?2004l[?2004h>                             'alt': b,
+[?2004l[?2004h>                             'af': af
+[?2004l[?2004h>                         })
+[?2004l[?2004h>     
+[?2004l[?2004h>     for pos, op, seq in patient_indels[pat]:
+[?2004l[?2004h>         alt_cnt, tot_cnt, af = get_indel_af(f'/task/work/{t_id}.sorted.bam', 'chr22_panel', pos, op, seq)
+[?2004l[?2004h>         if af >= 0.05:
+[?2004l[?2004h>             pre_base = ref_fa.fetch('chr22_panel', pos - 1, pos).upper()
+[?2004l[?2004h>             if op == 'DEL':
+[?2004l[?2004h>                 vcf_pos = pos
+[?2004l[?2004h>                 ref_seq = pre_base + seq
+[?2004l[?2004h>                 alt_seq = pre_base
+[?2004l[?2004h>             elif op == 'INS':
+[?2004l[?2004h>                 vcf_pos = pos
+[?2004l[?2004h>                 ref_seq = pre_base
+[?2004l[?2004h>                 alt_seq = pre_base + seq
+[?2004l[?2004h>             v_list.append({
+[?2004l[?2004h>                 'chrom': 'chr22_panel',
+[?2004l[?2004h>                 'pos': vcf_pos,
+[?2004l[?2004h>                 'ref': ref_seq,
+[?2004l[?2004h>                 'alt': alt_seq,
+[?2004l[?2004h>                 'af': af
+[?2004l[?2004h>             })
+[?2004l[?2004h>     
+[?2004l[?2004h>     v_list.sort(key=lambda x: x['pos'])
+[?2004l[?2004h>     
+[?2004l[?2004h>     raw_vcf = f'/task/work/{pat}.raw.vcf'
+[?2004l[?2004h>     with open(raw_vcf, 'w') as out:
+[?2004l[?2004h>         out.write('##fileformat=VCFv4.2\n')
+[?2004l[?2004h>         out.write('##reference=reference/ref.fa\n')
+[?2004l[?2004h>         out.write('##contig=<ID=chr22_panel,length=124000>\n')
+[?2004l[?2004h>         out.write('##FILTER=<ID=PASS,Description="All filters passed">\n')
+[?2004l[?2004h>         out.write('##INFO=<ID=AF,Number=A,Type=Float,Description="Allele fraction of tumour library DNA fragments">\n')
+[?2004l[?2004h>         out.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n')
+[?2004l[?2004h>         for v in v_list:
+[?2004l[?2004h>             out.write(f"{v['chrom']}\t{v['pos']}\t.\t{v['ref']}\t{v['alt']}\t.\tPASS\tAF={v['af']:.4f}\n")
+[?2004l[?2004h>     
+[?2004l[?2004h>     norm_vcf = f'/task/output/somatic/{pat}.vcf.gz'
+[?2004l[?2004h>     cmd = f'bcftools norm -f /task/work/ref.fa {raw_vcf} | bgzip -c > {norm_vcf} && tabix -p vcf {norm_vcf}'
+[?2004l[?2004h>     subprocess.run(cmd, shell=True, check=True)
+[?2004l[?2004h>     print(f'Finished {pat} -> {norm_vcf}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/produce_vcfs.py
+[?2004l33122 DEL A: Alt=43, Total=229, AF=0.1878
+33475 DEL GGC: Alt=41, Total=204, AF=0.2010
+41495 INS ATGTG: Alt=28, Total=187, AF=0.1497
+74941 INS T: Alt=48, Total=226, AF=0.2124
+120923 DEL CTACCA: Alt=34, Total=177, AF=0.1921
+Lines   total/split/joined/realigned/mismatch_removed/dup_removed/skipped:	31/0/0/0/0/0/0
+Records with case changed:	0
+Finished PT-0452 -> /task/output/somatic/PT-0452.vcf.gz
+Lines   total/split/joined/realigned/mismatch_removed/dup_removed/skipped:	35/0/0/0/0/0/0
+Records with case changed:	0
+Finished PT-0740 -> /task/output/somatic/PT-0740.vcf.gz
+Lines   total/split/joined/realigned/mismatch_removed/dup_removed/skipped:	46/0/0/0/0/0/0
+Records with case changed:	0
+Finished PT-0760 -> /task/output/somatic/PT-0760.vcf.gz
+[?2004hroot@e01a4c56390f:/task# cat << 'EOF' > /task/work/finalize.py
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> import json
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> pairs = [
+[?2004l[?2004h>     ('PT-0452', 'CG24-4187', 'CG24-1366'),
+[?2004l[?2004h>     ('PT-0740', 'CG24-7410', 'CG24-6425'),
+[?2004l[?2004h>     ('PT-0760', 'CG24-9024', 'CG24-3973')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/output/pairing.tsv', 'w') as f:
+[?2004l[?2004h>     f.write('patient\ttumour_sample\tnormal_sample\n')
+[?2004l[?2004h>     for pat, t, n in pairs:
+[?2004l[?2004h>         f.write(f'{pat}\t{t}\t{n}\n')
+[?2004l[?2004h> 
+[?2004l[?2004h> summary = {'patients': {}}
+[?2004l[?2004h> for pat, t, n in pairs:
+[?2004l[?2004h>     vcf_path = f'/task/output/somatic/{pat}.vcf.gz'
+[?2004l[?2004h>     vcf = pysam.VariantFile(vcf_path)
+[?2004l[?2004h>     n_snv = 0
+[?2004l[?2004h>     n_indel = 0
+[?2004l[?2004h>     for rec in vcf:
+[?2004l[?2004h>         assert list(rec.filter.keys()) == ['PASS'], f'Filter not PASS: {rec.filter.keys()}'
+[?2004l[?2004h>         assert 'AF' in rec.info, 'AF missing in INFO'
+[?2004l[?2004h>         ref = rec.ref
+[?2004l[?2004h>         assert len(rec.alts) == 1, 'More than 1 alt allele'
+[?2004l[?2004h>         alt = rec.alts[0]
+[?2004l[?2004h>         if len(ref) == 1 and len(alt) == 1:
+[?2004l[?2004h>             n_snv += 1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             n_indel += 1
+[?2004l[?2004h>     summary['patients'][pat] = {
+[?2004l[?2004h>         'tumour_sample': t,
+[?2004l[?2004h>         'normal_sample': n,
+[?2004l[?2004h>         'n_snv': n_snv,
+[?2004l[?2004h>         'n_indel': n_indel
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/output/summary.json', 'w') as f:
+[?2004l[?2004h>     json.dump(summary, f, indent=2)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Summary:')
+[?2004l[?2004h> print(json.dumps(summary, indent=2))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e01a4c56390f:/task# python3 /task/work/finalize.py
+[?2004lSummary:
+{
+  "patients": {
+    "PT-0452": {
+      "tumour_sample": "CG24-4187",
+      "normal_sample": "CG24-1366",
+      "n_snv": 26,
+      "n_indel": 5
+    },
+    "PT-0740": {
+      "tumour_sample": "CG24-7410",
+      "normal_sample": "CG24-6425",
+      "n_snv": 28,
+      "n_indel": 7
+    },
+    "PT-0760": {
+      "tumour_sample": "CG24-9024",
+      "normal_sample": "CG24-3973",
+      "n_snv": 40,
+      "n_indel": 6
+    }
+  }
+}
+[?2004hroot@e01a4c56390f:/task# ls -la /task/output
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Nov 12 07:39 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:30 ..
+-rw-rw-rw- 1 root root  120 Nov 12 07:39 pairing.tsv
+drwxrwxrwx 2 root root 4096 Nov 12 07:39 somatic
+-rw-rw-rw- 1 root root  424 Nov 12 07:39 summary.json
+[?2004hroot@e01a4c56390f:/task# ls -la /task/output/somatic
+[?2004ltotal 32
+drwxrwxrwx 2 root root 4096 Nov 12 07:39 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:39 ..
+-rw-rw-rw- 1 root root  699 Nov 12 07:39 PT-0452.vcf.gz
+-rw-rw-rw- 1 root root  169 Nov 12 07:39 PT-0452.vcf.gz.tbi
+-rw-rw-rw- 1 root root  753 Nov 12 07:39 PT-0740.vcf.gz
+-rw-rw-rw- 1 root root  171 Nov 12 07:39 PT-0740.vcf.gz.tbi
+-rw-rw-rw- 1 root root  810 Nov 12 07:39 PT-0760.vcf.gz
+-rw-rw-rw- 1 root root  172 Nov 12 07:39 PT-0760.vcf.gz.tbi
+[?2004hroot@e01a4c56390f:/task# cat /task/output/pairing.tsv
+[?2004lpatient	tumour_sample	normal_sample
+PT-0452	CG24-4187	CG24-1366
+PT-0740	CG24-7410	CG24-6425
+PT-0760	CG24-9024	CG24-3973
+[?2004hroot@e01a4c56390f:/task# cat /task/output/summary.json
+[?2004l{
+  "patients": {
+    "PT-0452": {
+      "tumour_sample": "CG24-4187",
+      "normal_sample": "CG24-1366",
+      "n_snv": 26,
+      "n_indel": 5
+    },
+    "PT-0740": {
+      "tumour_sample": "CG24-7410",
+      "normal_sample": "CG24-6425",
+      "n_snv": 28,
+      "n_indel": 7
+    },
+    "PT-0760": {
+      "tumour_sample": "CG24-9024",
+      "normal_sample": "CG24-3973",
+      "n_snv": 40,
+      "n_indel": 6
+    }
+  }
+}[?2004hroot@e01a4c56390f:/task# zcat /task/output/somatic/PT-0452.vcf.gz | head -n 15
+[?2004l##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##reference=reference/ref.fa
+##contig=<ID=chr22_panel,length=124000>
+##INFO=<ID=AF,Number=A,Type=Float,Description="Allele fraction of tumour library DNA fragments">
+##bcftools_normVersion=1.25+htslib-1.25
+##bcftools_normCommand=norm -f /task/work/ref.fa /task/work/PT-0452.raw.vcf; Date=Thu Nov 12 07:39:04 2026
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+chr22_panel	16144	.	T	C	.	PASS	AF=0.3365
+chr22_panel	31590	.	A	G	.	PASS	AF=0.1907
+chr22_panel	33122	.	GA	G	.	PASS	AF=0.1878
+chr22_panel	33475	.	AGGC	A	.	PASS	AF=0.201
+chr22_panel	34240	.	C	T	.	PASS	AF=0.3427
+chr22_panel	34415	.	G	C	.	PASS	AF=0.122
+chr22_panel	40113	.	C	T	.	PASS	AF=0.3249
+[?2004hroot@e01a4c56390f:/task# rm -rf /task/work
+[?2004l[?2004hroot@e01a4c56390f:/task# ls -la /task/input
+[?2004ltotal 32
+dr-xr-xr-x 1 root root 4096 Nov 12 06:53 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:40 ..
+-r--r--r-- 1 root root 1653 Nov 11 20:27 core_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 12 06:53 fastq
+-r--r--r-- 1 root root  532 Nov 11 20:27 manifest.tsv
+dr-xr-xr-x 1 root root 4096 Nov 11 20:27 reference
+-r--r--r-- 1 root root  447 Nov 11 20:27 targets.bed
+[?2004hroot@e01a4c56390f:/task# ls -la /task/output
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Nov 12 07:39 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:40 ..
+-rw-rw-rw- 1 root root  120 Nov 12 07:39 pairing.tsv
+drwxrwxrwx 2 root root 4096 Nov 12 07:39 somatic
+-rw-rw-rw- 1 root root  424 Nov 12 07:39 summary.json
+[?2004hroot@e01a4c56390f:/task# ls -la /task/output/somatic
+[?2004ltotal 32
+drwxrwxrwx 2 root root 4096 Nov 12 07:39 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:39 ..
+-rw-rw-rw- 1 root root  699 Nov 12 07:39 PT-0452.vcf.gz
+-rw-rw-rw- 1 root root  169 Nov 12 07:39 PT-0452.vcf.gz.tbi
+-rw-rw-rw- 1 root root  753 Nov 12 07:39 PT-0740.vcf.gz
+-rw-rw-rw- 1 root root  171 Nov 12 07:39 PT-0740.vcf.gz.tbi
+-rw-rw-rw- 1 root root  810 Nov 12 07:39 PT-0760.vcf.gz
+-rw-rw-rw- 1 root root  172 Nov 12 07:39 PT-0760.vcf.gz.tbi
+[?2004hroot@e01a4c56390f:/task# 

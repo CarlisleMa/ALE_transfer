@@ -1,0 +1,310 @@
+Inference credentials: 1 mappings across 1 trials
+terminus-2 / openai (1 trials): OPENAI_API_KEY → OPENAI_API_KEY; base URL=http://127.0.0.1:8774/v1 (configured/default); API format=Agent/SDK default (unknown)
+Registered custom model 'openai/minimax/minimax-m3.1-flash' with info: {'max_input_tokens': 1048576, 'max_output_tokens': 524288, 'input_cost_per_token': 1.5e-07, 'output_cost_per_token': 6e-07, 'cache_read_input_token_cost': 1.5e-08}
+max_turns (f.k.a. max_episodes) artificially limited to 150. Consider removing this limit for better task completion.
+Both tmux and asciinema are already installed
+Agent 'terminus-2' exposes no native web search or fetch tools for Harbor to disable; continuing. Sandbox network policy still applies.
+Sending keys: ["cd /task && find . -maxdepth 3 -type f -printf '%p\\t%k KB\\n' | sort\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["printf '\\n===== sop.md =====\\n'; cat /task/input/sop.md; printf '\\n===== library_prep_notes.md =====\\n'; cat /task/input/library_prep_notes.md\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["printf '\\n===== samples.tsv =====\\n'; cat /task/input/samples.tsv; printf '\\n===== primers.tsv =====\\n'; cat /task/input/primers.tsv; printf '\\n===== mock_community.tsv =====\\n'; cat /task/input/mock_community.tsv\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['printf \'\\n===== reference_taxonomy.tsv (head/tail/count) =====\\n\'; head -10 /task/input/reference_taxonomy.tsv; tail -5 /task/input/reference_taxonomy.tsv; wc -l /task/input/reference_taxonomy.tsv; printf \'\\n===== reference FASTA headers and lengths =====\\n\'; awk \'/^>/{if(n){print h"\\t"n}; h=substr($0,2); n=0; next}{gsub(/[[:space:]]/,""); n+=length($0)}END{if(n)print h"\\t"n}\' /task/input/reference_db.fasta | head -30; grep -c \'^>\' /task/input/reference_db.fasta\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["cat /task/software/README.txt; printf '\\n===== versions =====\\n'; vsearch --version; cutadapt --version; python3 --version\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["printf '\\n===== first records S01 =====\\n'; zcat /task/input/fastq/S01_R1.fastq.gz | sed -n '1,12p'; zcat /task/input/fastq/S01_R2.fastq.gz | sed -n '1,12p'; printf '\\n===== first records S04 blank =====\\n'; zcat /task/input/fastq/S04_R1.fastq.gz | sed -n '1,8p'; zcat /task/input/fastq/S04_R2.fastq.gz | sed -n '1,8p'\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['printf \'\\n===== raw read counts and length distributions =====\\n\'; for f in /task/input/fastq/*_R1.fastq.gz; do s=$(basename "$f" _R1.fastq.gz); n=$(zcat "$f" | awk \'END{print NR/4}\'); lens=$(zcat "$f" | awk \'NR%4==2{n[length($0)]++} END{for(k in n) printf "%s:%s ",k,n[k]; print ""}\' | sort -n); printf \'%s\\t%s\\t%s\\n\' "$s" "$n" "$lens"; done\n'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ["printf '\\n===== reference first records and boundary sequences =====\\n'; sed -n '1,12p' /task/input/reference_db.fasta; python3 - <<'PY'\nfrom collections import Counter\nseqs={}\nname=None\nfor line in open('/task/input/reference_db.fasta'):\n    line=line.strip()\n    if line.startswith('>'):\n        name=line[1:].split()[0]; seqs[name]=''\n    else: seqs[name]+=line.upper()\nprint('records',len(seqs),'lengths',Counter(map(len,seqs.values())))\nfor n,s in list(seqs.items())[:10]: print(n,len(s),s[:25],s[-25:])\nfor motif in ['GTGY','GGACTAC','CATTAG','TTAGAC']:\n    hits=[(n,s.find(motif)) for n,s in seqs.items() if motif in s]\n    print(motif,len(hits),hits[:10])\nPY\n"] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ["vsearch --help 2>&1 | grep -E -- '--cluster_unoise|--cluster_otu|--size_derep|--centroids|--relabel|--consout|--sortbysize' | head -40\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["cat > /tmp/inspect_fastq.py <<'PY'\nimport gzip, os, collections\nIUPAC = {\n'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),\n'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),\n'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\ndef matches(seq, motif):\n    return len(seq)>=len(motif) and all(b in IUPAC[p] for b,p in zip(seq,motif))\ndef find_all(seq,motif,step=1):\n    return [i for i in range(0,len(seq)-len(motif)+1,step) if matches(seq[i:i+len(motif)],motif)]\ndef records(path):\n    with gzip.open(path,'rt') as f:\n        while True:\n            h=f.readline()\n            if not h: break\n            h=h.rstrip('\\n')\n            if not h.startswith('@'): raise ValueError((path,h))\n            seq=[]\n            while True:\n                x=f.readline()\n                if not x: raise EOFError\n                x=x.rstrip('\\n')\n                if x.startswith('+'): break\n                seq.append(x)\n            seq=''.join(seq)\n            qual=[]; qlen=0\n            while qlen<len(seq):\n                x=f.readline()\n                if not x: raise EOFError\n                x=x.rstrip('\\n'); qual.append(x); qlen+=len(x)\n            if qlen!=len(seq): raise ValueError('quality length')\n            yield h,seq,''.join(qual)\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\nRC_R=rc(R)\nfor sample in ['S01','S04','S11']:\n    p1=f'/task/input/fastq/{sample}_R1.fastq.gz'; p2=f'/task/input/fastq/{sample}_R2.fastq.gz'\n    r1=list(records(p1)); r2=list(records(p2))\n    print('\\n',sample,'records',len(r1),len(r2),'lengths',collections.Counter(map(lambda x:len(x[1]),r1)))\n    for name,rs in [('R1',r1),('R2',r2)]:\n        stats=collections.Counter()\n        for h,s,q in rs:\n            for motif,label in [(F,'F'),(R,'R'),(RC_R,'RC_R')]:\n                pos=find_all(s,motif)\n                if pos: stats[(label,tuple(pos[:5]))]+=1\n        print(name,'motif positions',stats.most_common(15))\n    d1={h.split()[0]:(s,q) for h,s,q in r1}; d2={h.split()[0]:(s,q) for h,s,q in r2}\n    print('shared IDs',len(set(d1)&set(d2)),'only1',len(set(d1)-set(d2)),'only2',len(set(d2)-set(d1)))\n    for h,s,q in r1[:3]:\n        hid=h.split()[0]; t=d2.get(hid,('',''))[0]\n        print(hid)\n        print(' R1',len(s),s[:25],s[-25:])\n        print(' R2',len(t),t[:25],t[-25:])\n        print(' R2rc',rc(t)[:25],rc(t)[-25:])\nPY\npython3 /tmp/inspect_fastq.py\n"] min_timeout_sec: 2.0 max_timeout_sec: 180.0
+Sending keys: ["python3 - <<'PY'\nfrom collections import Counter\nseqs={}; name=None\nfor line in open('/task/input/reference_db.fasta'):\n    line=line.strip()\n    if line.startswith('>'):\n        name=line[1:].split()[0]; seqs[name]=''\n    else: seqs[name]+=line.upper()\nfor n in list(seqs)[:3]:\n    s=seqs[n]; print(n,len(s)); print(s)\nprint('duplicate exact reference sequences:',len(seqs)-len(set(seqs.values())))\nprint('lengths:',sorted(Counter(map(len,seqs.values())).items()))\nPY\n"] min_timeout_sec: 0.5 max_timeout_sec: 180.0
+Sending keys: ["zcat /task/input/fastq/S01_R1.fastq.gz | awk '{print NR, length($0), substr($0,1,12)}' | head -20\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["cat > /tmp/profile_reads.py <<'PY'\nimport gzip, glob, os, collections, sys\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\ndef ok(seq,mot): return len(seq)==len(mot) and all(x in IUPAC[c] for x,c in zip(seq,mot))\ndef positions(seq,mot): return [i for i in range(len(seq)-len(mot)+1) if ok(seq[i:i+len(mot)],mot)]\ndef records(path):\n    with gzip.open(path,'rt') as f:\n        while (h:=f.readline()):\n            seq=f.readline().strip(); f.readline(); qual=f.readline().strip()\n            yield h.strip(),seq,qual\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\nprint('primer lengths',len(F),len(R),'F',F,'R',R,'RC_R',rc(R))\nfor test in ['GTGTCAGCCGCCGCGGTAAT','GGACTACCGGGGTATCTAAT','GGAATACGAGGGTTTCTAAT']:\n    print(test,'F@',positions(test,F),'R@',positions(test,R),'RCR@',positions(test,rc(R)))\n\ndef orient_one(s):\n    # Return canonical internal sequence if either primer is found within first 8 nt.\n    fs=[i for i in positions(s,F) if i<8]\n    rs=[i for i in positions(s,R) if i<8]\n    # Direct R primer means this read is reverse-oriented; reverse complement it.\n    if fs:\n        p=min(fs); return s[p+len(F):], 'F', p\n    if rs:\n        p=min(rs); x=rc(s); # reverse primer now at end, account for prefix offset in original\n        # rc(R) starts at len(s)-p-len(R)\n        return x[:len(s)-p-len(R)], 'R', p\n    return None,None,None\n\nallrows=[]\nfor p1 in sorted(glob.glob('/task/input/fastq/*_R1.fastq.gz')):\n    sid=os.path.basename(p1).replace('_R1.fastq.gz','')\n    p2=p1.replace('_R1.fastq.gz','_R2.fastq.gz')\n    rs1=list(records(p1)); rs2=list(records(p2))\n    d2={h.split()[0]:(s,q) for h,s,q in rs2}\n    cnt=collections.Counter(); lens=collections.Counter(); offsets=collections.Counter(); both=0; noid=0\n    examples=[]\n    for h,s,q in rs1:\n        hit,ori,off=orient_one(s); cnt[ori]+=1; offsets[(ori,off)]+=1\n        if hit is not None: lens[len(hit)]+=1\n        hid=h.split()[0]\n        if hid not in d2: noid+=1; continue\n        h2,s2,q2=d2[hid]; hit2,ori2,off2=orient_one(s2)\n        cnt['R2_'+str(ori2)]+=1; offsets[('R2',ori2,off2)]+=1\n        if hit and hit2: both+=1\n        if len(examples)<3: examples.append((h,s,hit,ori,off,h2,s2,hit2,ori2,off2))\n    print('\\n',sid,'R1',len(rs1),'R2',len(rs2),'noid',noid)\n    print('counts',cnt)\n    print('offsets',sorted(offsets.items(),key=lambda x:str(x[0])))\n    print('internal lengths',lens.most_common(15),'both primer-classified',both)\n    for e in examples:\n        h,s,hit,ori,off,h2,s2,hit2,ori2,off2=e\n        print(h.split()[0],ori,off,len(hit or ''),(hit or '')[:20],(hit or '')[-20:])\n        print(' mate2',ori2,off2,len(hit2 or ''),(hit2 or '')[:20],(hit2 or '')[-20:])\nPY\npython3 /tmp/profile_reads.py\n"] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["cat > /tmp/profile_reads.py <<'PY'\nimport gzip, glob, os, collections\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\ndef distance(seq,mot):\n    # minimum Hamming distance while allowing an IUPAC template base\n    best=(999,None,None)\n    for p in range(0,9):\n        if p+len(mot)>len(seq): break\n        d=0\n        for x,c in zip(seq[p:p+len(mot)],mot):\n            if x not in IUPAC[c]: d+=1\n        if d<best[0]: best=(d,p,seq[p:p+len(mot)])\n    return best\ndef records(path):\n    with gzip.open(path,'rt') as f:\n        while True:\n            h=f.readline()\n            if not h: return\n            seq=f.readline().strip(); f.readline(); qual=f.readline().strip()\n            yield h.strip(),seq,qual\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\nprint('F',F,'R',R,'RC_R',rc(R))\nfor sample_path in sorted(glob.glob('/task/input/fastq/*_R1.fastq.gz')):\n    sid=os.path.basename(sample_path).replace('_R1.fastq.gz','')\n    p2=sample_path.replace('_R1.fastq.gz','_R2.fastq.gz')\n    rs1=list(records(sample_path)); rs2=list(records(p2))\n    d2={h.split()[0]:(s,q) for h,s,q in rs2}\n    stat=collections.Counter(); offsets=collections.Counter(); pairorient=collections.Counter(); lens=collections.Counter(); noid=0\n    for h,s,q in rs1:\n        df=distance(s,F); dr=distance(s,R)\n        hid=h.split()[0]\n        if hid not in d2: noid+=1; continue\n        s2=d2[hid][0]; df2=distance(s2,F); dr2=distance(s2,R)\n        def cls(a,b):\n            if a[0] < b[0]: return 'F'\n            if b[0] < a[0]: return 'R'\n            return 'tie'\n        c1=cls(df,dr); c2=cls(df2,dr2)\n        pairorient[(c1,c2)]+=1\n        stat[(c1,df[0] if c1=='F' else dr[0])]+=1\n        stat[(c2,df2[0] if c2=='F' else dr2[0])]+=1\n        offsets[(c1,df[1] if c1=='F' else dr[1])]+=1\n        offsets[(c2,df2[1] if c2=='F' else dr2[1])]+=1\n        # Internal length based on selected primer start and length\n        for seq,cc,dd in [(s,c1,(df if c1=='F' else dr)),(s2,c2,(df2 if c2=='F' else dr2))]:\n            if cc in ('F','R'): lens[(cc,len(seq)-dd[1]-(len(F) if cc=='F' else len(R)))]+=1\n    print('\\n',sid,'R1',len(rs1),'R2',len(rs2),'noid',noid)\n    print('pair orientations',pairorient)\n    print('best-mismatch by orientation',sorted(stat.items(),key=lambda x:str(x[0])))\n    print('best primer offsets',sorted(offsets.items(),key=lambda x:str(x[0])))\n    print('trimmed candidate lengths',lens.most_common(12))\nPY\npython3 /tmp/profile_reads.py\n"] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["vsearch --help 2>&1 | grep -A2 -B1 -E -- '--fastq_merge|--mergepairs|--fastq_maxdiffs|--fastq_qaoffset' | head -80\n"] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["cat > /tmp/trim_profile.py <<'PY'\nimport gzip, glob, os, collections\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\ndef lev(a,b):\n    # a=template primer; b=observed prefix; all template consumed, all observed consumed\n    dp=list(range(len(b)+1))\n    for i,x in enumerate(a,1):\n        nd=[i]+[0]*len(b)\n        for j,y in enumerate(b,1):\n            nd[j]=min(dp[j]+1,nd[j-1]+1,dp[j-1]+(0 if y in IUPAC[x] else 1))\n        dp=nd\n    return dp[-1]\ndef primer_trim(s):\n    F='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\n    opts=[]\n    for motif,ori in [(F,'F'),(R,'R')]:\n        for k in range(max(12,len(motif)-4),min(len(s),len(motif)+5)+1):\n            opts.append((lev(motif,s[:k]),abs(k-len(motif)),ori,k))\n    # Distances dominate; prefer expected observed primer length only on ties.\n    d,_,ori,k=min(opts,key=lambda z:(z[0],z[1]))\n    return ori,k,d,s[:k]\ndef fq(path):\n    with gzip.open(path,'rt') as f:\n        while True:\n            h=f.readline()\n            if not h: break\n            s=f.readline().strip(); f.readline(); q=f.readline().strip()\n            yield h.strip(),s,q\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\nfor p1 in sorted(glob.glob('/task/input/fastq/*_R1.fastq.gz')):\n    sid=os.path.basename(p1).replace('_R1.fastq.gz',''); p2=p1.replace('_R1.fastq.gz','_R2.fastq.gz')\n    d2={h.split()[0]:(s,q) for h,s,q in fq(p2)}\n    st=collections.Counter(); trims=collections.Counter(); lens=collections.Counter(); fail=0\n    for h,s,q in fq(p1):\n        s2,q2=d2[h.split()[0]]\n        for x,qq in [(s,q),(s2,q2)]:\n            ori,k,d,obs=primer_trim(x); st[(ori,d)]+=1; trims[(ori,k)]+=1\n            if d>2: fail+=1\n            if ori=='F': internal=x[k:]\n            else: internal=rc(x[k:])\n            lens[len(internal)]+=1\n    print(sid,'status',sorted(st.items()),'trim lengths',sorted(trims.items()),'internal lengths',lens.most_common(12),'fail>2',fail)\nPY\npython3 /tmp/trim_profile.py\n"] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-c'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["cat > /tmp/trim_profile_fast.py <<'PY'\nimport gzip, glob, os, collections\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\ncache={}\ndef lev(a,b):\n    key=(a,b)\n    if key in cache:return cache[key]\n    dp=list(range(len(b)+1))\n    for i,x in enumerate(a,1):\n        nd=[i]+[0]*len(b)\n        for j,y in enumerate(b,1):\n            nd[j]=min(dp[j]+1,nd[j-1]+1,dp[j-1]+(0 if y in IUPAC[x] else 1))\n        dp=nd\n    cache[key]=dp[-1]; return dp[-1]\ndef primer_trim(s):\n    opts=[]\n    for motif,ori in [(F,'F'),(R,'R')]:\n        for k in range(max(12,len(motif)-4),min(len(s),len(motif)+5)+1):\n            opts.append((lev(motif,s[:k]),abs(k-len(motif)),ori,k))\n    d,_,ori,k=min(opts,key=lambda z:(z[0],z[1]))\n    return ori,k,d,s[:k]\ndef fq(path):\n    with gzip.open(path,'rt') as f:\n        while True:\n            h=f.readline()\n            if not h: break\n            s=f.readline().strip(); f.readline(); q=f.readline().strip()\n            yield h.strip(),s,q\nfor p1 in sorted(glob.glob('/task/input/fastq/*_R1.fastq.gz')):\n    sid=os.path.basename(p1).replace('_R1.fastq.gz',''); p2=p1.replace('_R1.fastq.gz','_R2.fastq.gz')\n    d2={h.split()[0]:(s,q) for h,s,q in fq(p2)}\n    st=collections.Counter(); trims=collections.Counter(); lens=collections.Counter(); fail=0\n    for h,s,q in fq(p1):\n        s2,q2=d2[h.split()[0]]\n        for x in (s,s2):\n            ori,k,d,obs=primer_trim(x); st[(ori,d)]+=1; trims[(ori,k)]+=1\n            fail += d>2\n            internal=x[k:] if ori=='F' else rc(x[k:])\n            lens[len(internal)]+=1\n    print(sid,'status',sorted(st.items()),'trim lengths',sorted(trims.items()),'internal lengths',lens.most_common(12),'fail>2',fail,flush=True)\nPY\npython3 /tmp/trim_profile_fast.py\n"] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ["cat > /tmp/show_offsets.py <<'PY'\nimport gzip, collections\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\ndef rc(s): return s.translate(COMP)[::-1]\ndef pos(s,m): return [i for i in range(10) if i+len(m)<=len(s) and all(x in IUPAC[c] for x,c in zip(s[i:i+len(m)],m))]\ndef fq(path):\n  with gzip.open(path,'rt') as f:\n    while True:\n      h=f.readline()\n      if not h: return\n      s=f.readline().strip(); f.readline(); q=f.readline().strip(); yield h.strip(),s,q\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\nseen=collections.Counter()\nfor h,s,q in fq('/task/input/fastq/S01_R1.fastq.gz'):\n  for motif,ori in [(F,'F'),(R,'R')]:\n    for p in pos(s,motif):\n      key=(ori,p)\n      if seen[key]<3:\n        seen[key]+=1\n        print('\\n',key,h.split()[0], 'prefix=',s[:p], 'primer=',s[p:p+len(motif)], 'post=',s[p+len(motif):p+len(motif)+35])\n        print('qual prefix/primer/post',q[:p],q[p:p+len(motif)],q[p+len(motif):p+len(motif)+35])\nprint('\\nseen',seen)\nPY\npython3 /tmp/show_offsets.py\n"] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ["cat > /tmp/align_examples.py <<'PY'\nfrom difflib import SequenceMatcher\n# load refs and a known read\nrefs={}; n=None\nfor line in open('/task/input/reference_db.fasta'):\n line=line.strip()\n if line.startswith('>'): n=line[1:].split()[0]; refs[n]=''\n else: refs[n]+=line\nI={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nC=str.maketrans('ACGT','TGCA')\ndef rc(s):return s.translate(C)[::-1]\ndef pos(s,m):\n return [i for i in range(5) if i+len(m)<=len(s) and all(x in I[c] for x,c in zip(s[i:i+len(m)],m))]\ndef fq(path):\n with open(path,'rt') as f:\n  while (h:=f.readline()):\n   s=f.readline().strip();f.readline();q=f.readline().strip();yield h,s,q\nF='GTGYCAGCMGCCGCGGTAA';R='GGACTACNVGGGTWTCTAAT'\nfor h,s,q in fq('/task/input/fastq/S01_R1.fastq.gz'):\n for motif,ori in [(F,'F'),(R,'R')]:\n  pp=pos(s,motif)\n  if pp:\n   p=pp[0]; internal=s[p+len(motif):] if ori=='F' else rc(s[p+len(motif):])\n   print('\\nread',h,'ori',ori,'p',p,'internal length',len(internal),internal[:45])\n   # align internal as query against each ref substring using local ratio; print top 3 and simple terminal overlap with each ref\n   scored=[]\n   for rn,ref in refs.items():\n    sm=SequenceMatcher(None,internal,ref,autojunk=False); m=sm.find_longest_match(0,len(internal),0,len(ref)); scored.append((m.size,rn,m,ref))\n   for size,rn,m,ref in sorted(scored,reverse=True)[:3]:\n    print(rn,'longmatch',size,m,'refcontext',ref[max(0,m.a-5):m.b+8])\n   break\nPY\npython3 /tmp/align_examples.py\n"] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['sed -i "s/open(\'\\/task\\/input\\/fastq\\/S01_R1.fastq.gz\')/gzip.open(\'\\/task\\/input\\/fastq\\/S01_R1.fastq.gz\',\'rt\')/" /tmp/align_examples.py; sed -i \'1i import gzip\' /tmp/align_examples.py; python3 /tmp/align_examples.py\n'] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['python3 - <<\'PY\'\np=\'/tmp/align_examples.py\'\ns=open(p).read()\ns=s.replace("with open(path,\'rt\') as f:", "with gzip.open(path,\'rt\') as f:")\nopen(p,\'w\').write(s)\nPY\ngrep -n \'gzip\\|with \' /tmp/align_examples.py; python3 /tmp/align_examples.py\n'] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["cat > /tmp/normalize_reads.py <<'PY'\n#!/usr/bin/env python3\nimport gzip, glob, os, collections, sys\nIUPAC={'A':set('A'),'C':set('C'),'G':set('G'),'T':set('T'),'R':set('AG'),'Y':set('CT'),'S':set('GC'),'W':set('AT'),'K':set('GT'),'M':set('AC'),'B':set('CGT'),'D':set('AGT'),'H':set('ACT'),'V':set('ACG'),'N':set('ACGT')}\nCOMP=str.maketrans('ACGT','TGCA')\nF='GTGYCAGCMGCCGCGGTAA'; R='GGACTACNVGGGTWTCTAAT'\n\ndef rc(s): return s.translate(COMP)[::-1]\ndef exact_match(seq,motif,start=0,maxend=8):\n    out=[]\n    for p in range(start,maxend+1):\n        if p+len(motif)<=len(seq) and all(b in IUPAC[c] for b,c in zip(seq[p:p+len(motif)],motif)):\n            out.append(p)\n    return out\n\ndef best_prefix_mismatch(seq,motif,primer_len,maxoffset=5):\n    # Compare motif to a read window beginning at maxoffset and ending by\n    # maxoffset+len(motif)+2. This catches a substitution but not an indel.\n    best=(999,None,None)\n    for p in range(maxoffset+1):\n        for end in range(p+len(motif)-2,p+len(motif)+3):\n            if end>len(seq): continue\n            obs=seq[p:end]\n            # Require approximately expected primer span; full template must align\n            # to a same-sized window unless a terminal insertion/deletion.\n            if len(obs)!=len(motif): continue\n            d=sum(b not in IUPAC[c] for b,c in zip(obs,motif))\n            if d<best[0]: best=(d,p,end)\n    return best\n\ndef detect(seq):\n    fs=exact_match(seq,F,0,5)\n    rs=exact_match(seq,R,0,5)\n    candidates=[]\n    for p in fs: candidates.append((0,'F',p,p+len(F)))\n    for p in rs: candidates.append((0,'R',p,p+len(R)))\n    if candidates:\n        # Prefer orientation by smallest observed prefix, then F in ties.\n        candidates.sort(key=lambda x:(x[2]-x[1],0 if x[1]=='F' else 1,x[1]))\n        return candidates[0]\n    # One-substitution fallback: test expected-size windows at positions 0..5.\n    best=None\n    for motif,ori in ((F,'F'),(R,'R')):\n        for p in range(6):\n            obs=seq[p:p+len(motif)]\n            if len(obs)<len(motif): continue\n            d=sum(b not in IUPAC[c] for b,c in zip(obs,motif))\n            # Primer length 19/20 and observed offsets 0..3; require <=1 error.\n            if d<=1:\n                key=(d,p,0 if ori=='F' else 1)\n                if best is None or key<best[0]: best=(key,ori,p,p+len(motif))\n    if best: return (best[0][0],best[1],best[2],best[3])\n    return None\n\ndef fq(path):\n    with gzip.open(path,'rt') as f:\n        while True:\n            h=f.readline()\n            if not h: return\n            s=f.readline().strip(); f.readline(); q=f.readline().strip()\n            if len(s)!=len(q): raise ValueError((path,h,len(s),len(q)))\n            yield h.strip(),s,q\n\ndef trim(seq,qual):\n    hit=detect(seq)\n    if hit is None: return None\n    d,ori,p,end=hit\n    if ori=='F': return seq[end:],qual[end:],(d,ori,p,end)\n    internal=rc(seq[end:]); internalq=qual[end:][::-1]\n    return internal,internalq,(d,ori,p,end)\n\noutdir='/tmp/normalized'; os.makedirs(outdir,exist_ok=True)\nsummary=[]\nfor p1 in sorted(glob.glob('/task/input/fastq/*_R1.fastq.gz')):\n    sid=os.path.basename(p1).replace('_R1.fastq.gz',''); p2=p1.replace('_R1.fastq.gz','_R2.fastq.gz')\n    d2={h.split()[0]:(s,q) for h,s,q in fq(p2)}\n    o1=open(f'{outdir}/{sid}_R1.fastq','w'); o2=open(f'{outdir}/{sid}_R2.fastq','w')\n    st=collections.Counter(); lens=collections.Counter(); failed=0; written=0\n    for h,s,q in fq(p1):\n        hid=h.split()[0]\n        if hid not in d2: failed+=1; continue\n        s2,q2=d2[hid]\n        a=trim(s,q); b=trim(s2,q2)\n        if a is None or b is None:\n            failed+=1; st['unmatched']+=1; continue\n        # A valid pair should have one forward and one reverse oriented mate.\n        if a[2][1]==b[2][1]: failed+=1; st['same_orientation']+=1; continue\n        o1.write(f'@{hid} 1\\n{a[0]}\\n+\\n{a[1]}\\n')\n        o2.write(f'@{hid} 2\\n{b[0]}\\n+\\n{b[1]}\\n')\n        written+=1; st[('F',a[2][0])]+=1; st[('R',b[2][0])]+=1; st[('F',b[2][0])]+=1; st[('R',a[2][0])]+=1\n        lens[len(a[0])]+=1; lens[len(b[0])]+=1\n    o1.close(); o2.close(); summary.append((sid,written,failed,st,lens))\n    print(sid,'written',written,'failed',failed,'status',sorted(st.items(),key=str),'lengths',lens.most_common(10),flush=True)\nPY\npython3 /tmp/normalize_reads.py\n"] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-\\\n'] min_timeout_sec: 2.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-c'] min_timeout_sec: 2.0 max_timeout_sec: 180.0
+Sending keys: ['C-z'] min_timeout_sec: 0.5 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-z'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ['jobs -l\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ["pkill -9 -f '/tmp/align_examples.py'\n"] min_timeout_sec: 0.5 max_timeout_sec: 180.0
+Sending keys: ['python3 /tmp/normalize_reads.py\n'] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c'] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-cC-cC-c\n'] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-z'] min_timeout_sec: 3.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['\x03'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-bc'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-bn'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ['C-bc'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['\x1c'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c'] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-d'] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['\x1bpkill -9 -f /tmp/align_examples.py\n'] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['\x1bc'] min_timeout_sec: 2.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['\x1a\rkill -9 %1\n'] min_timeout_sec: 5.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\r'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-\\'] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-cC-c'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-bc\n'] min_timeout_sec: 3.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-c'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: [''] min_timeout_sec: 10.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Sending keys: ['C-c\n'] min_timeout_sec: 0.1 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: ['C-cC-zC-\\C-d'] min_timeout_sec: 30.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Parser warnings: - Command 1 should end with newline when followed by another command. Otherwise the two commands will be concatenated together on the same line.
+Sending keys: ['C-b'] min_timeout_sec: 1.0 max_timeout_sec: 180.0
+Sending keys: ['c'] min_timeout_sec: 2.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Sending keys: [''] min_timeout_sec: 60.0 max_timeout_sec: 180.0
+Trajectory dumped to /home/user/ale-lifesci-gym/results/jobs/minimax-m3.1-flash__amplicon-16s-s0001-l6/amplicon-16s-s0001-l6__yQ7PDYB/agent/trajectory.json
+Collecting main service artifacts
+Exception AgentTimeoutError is in exclude_exceptions, not retrying
+Not retrying trial because the exception is not in include_exceptions or the maximum number of retries has been reached

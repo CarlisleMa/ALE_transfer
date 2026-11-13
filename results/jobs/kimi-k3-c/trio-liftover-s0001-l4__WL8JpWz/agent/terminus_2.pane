@@ -1,0 +1,1729 @@
+[?2004hroot@e2a793183a12:/task# ls -la /task /task/input /task/input/resources
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 12 03:17 .
+drwxr-xr-x 1 root root 4096 Nov 12 07:58 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 03:17 input
+drwxr-xr-x 2 root root 4096 Nov 12 03:17 output
+drwxr-xr-x 1 root root 4096 Nov 12 03:17 software
+
+/task/input:
+total 88
+dr-xr-xr-x 1 root root  4096 Nov 12 03:17 .
+drwxr-xr-x 1 root root  4096 Nov 12 03:17 ..
+-r--r--r-- 1 root root  4225 Nov 12 01:24 lab_sop.md
+-r--r--r-- 1 root root   194 Nov 12 01:24 panel_genes.txt
+-r--r--r-- 1 root root   130 Nov 12 01:24 pedigree.ped
+dr-xr-xr-x 1 root root  4096 Nov 12 01:24 resources
+-r--r--r-- 1 root root 55140 Nov 12 01:24 trio.vcf.gz
+-r--r--r-- 1 root root  1722 Nov 12 01:24 trio.vcf.gz.tbi
+
+/task/input/resources:
+total 2412
+dr-xr-xr-x 1 root root    4096 Nov 12 01:24 .
+dr-xr-xr-x 1 root root    4096 Nov 12 03:17 ..
+-r--r--r-- 1 root root 1004656 Nov 12 01:24 GRCh37.chr22.fa.gz
+-r--r--r-- 1 root root      23 Nov 12 01:24 GRCh37.chr22.fa.gz.fai
+-r--r--r-- 1 root root   12792 Nov 12 01:24 GRCh37.chr22.fa.gz.gzi
+-r--r--r-- 1 root root  360082 Nov 12 01:24 GRCh38.chr22.canonical.gff3
+-r--r--r-- 1 root root  971401 Nov 12 01:24 GRCh38.chr22.fa.gz
+-r--r--r-- 1 root root      23 Nov 12 01:24 GRCh38.chr22.fa.gz.fai
+-r--r--r-- 1 root root   12664 Nov 12 01:24 GRCh38.chr22.fa.gz.gzi
+-r--r--r-- 1 root root   11735 Nov 12 01:24 hg19ToHg38.chr22.over.chain
+-r--r--r-- 1 root root   17459 Nov 12 01:24 hg38ToHg19.chr22.over.chain
+-r--r--r-- 1 root root   43979 Nov 12 01:24 popfreq.GRCh38.tsv.gz
+[?2004hroot@e2a793183a12:/task# cat /task/input/lab_sop.md
+[?2004l# SOP-GEN-017 (rev. 5) - Review of trio call sets for candidate causal variants
+
+Scope: germline joint call sets of an affected child ("proband") and both parents, restricted to the
+gene panel of the referral. All interpretation resources of the laboratory (transcript set,
+population frequencies) are kept on GRCh38 with UCSC-style contig names, and results are issued on
+GRCh38. Every rule below refers to the call set as expressed against GRCh38: "ALT allele" is an
+allele that differs from the GRCh38 reference, and "carries n copies" counts the chromosome copies
+of a family member with that allele.
+
+1. **Representation.** Variants are compared with laboratory resources and reported as one ALT
+   allele per row, left-aligned and minimal.
+2. **Usable genotypes.** A genotype is usable if `DP` >= 10 and `GQ` >= 20. A variant is reviewed
+   only if the genotypes of all three family members are usable. Genotypes that follow from a
+   provider's statement of completeness (positions without a record in the delivered file) are
+   usable.
+3. **Allele balance.** If the proband carries one copy of the ALT allele, the variant is accepted
+   only if the fraction of reads supporting the ALT allele, `AD_alt / (AD_ref + AD_alt)` with the
+   read counts of the ALT allele and of the GRCh38 reference allele, lies between 0.25 and 0.75
+   (limits included).
+4. **Population frequency.** A variant is rare if its allele frequency in the laboratory frequency
+   table is below 0.001. A variant that is absent from the table is treated as having frequency 0.
+5. **Consequence.** Consequences are taken relative to the laboratory transcript set and describe
+   what the chromosome copy of the proband that carries the variant encodes.
+   - A variant is assessed on its own, with one exception: if one chromosome copy of the proband
+     carries two or more single-nucleotide variants in the same codon, these are assessed together.
+     Each of them then has the consequence of the codon with all of these changes applied, compared
+     with the reference codon (`synonymous` if the amino acid is unchanged, `missense` if it is
+     changed, `stop_gained` if a stop codon results). Single-nucleotide variants in one codon that
+     lie on different copies are assessed separately, and so are all other combinations of variants.
+   - Which copy carries a variant follows from the trio genotypes. A variant of which the proband
+     carries two copies is on both copies. A variant of which the proband carries one copy is on
+     the copy inherited from the mother if the mother carries the allele and the father does not,
+     and on the copy inherited from the father if the father carries it and the mother does not. In
+     all other cases (neither parent or both parents carry the allele) the copy cannot be assigned;
+     such a variant is assessed together only with variants of which the proband carries two copies.
+   - All variants of the call set that the proband carries count for this, whatever their
+     frequency, genotype quality or own consequence.
+   - A variant of which the proband carries two copies qualifies only if its consequence qualifies
+     on both copies (if the two classes differ, report both joined by `&`).
+
+   Qualifying classes: `missense`, `stop_gained`, `frameshift`, `splice_acceptor`, `splice_donor`.
+   Every other consequence (synonymous, in-frame insertion/deletion, UTR, intronic, intergenic, ...)
+   does not qualify.
+6. **Panel.** Only variants with a qualifying consequence in a gene of the referral's panel are
+   reviewed.
+7. **Inheritance models.** A rare variant that passes rules 2-6 is reported if it fits one of:
+   - `de_novo` - the proband carries one copy of the ALT allele, neither parent carries it;
+   - `homozygous_recessive` - the proband carries two copies, each parent carries exactly one;
+   - `compound_het` - the proband carries one copy each of two different variants in the same gene,
+     one of them inherited from the mother only (the mother carries one copy, the father none) and
+     the other from the father only (the father carries one copy, the mother none). Both variants
+     are reported.
+   Variants that fit none of these models are not reported.
+[?2004hroot@e2a793183a12:/task# cat /task/input/pedigree.ped; echo ---; cat /task/input/panel_genes.txt
+[?2004l#family	individual	father	mother	sex	phenotype
+F3942	F3942-40	0	0	2	1
+F3942	F3942-82	0	0	1	1
+F3942	F3942-97	F3942-82	F3942-40	2	2
+---
+ADM2
+ARSA
+CCDC116
+CHCHD10
+DDT
+DGCR2
+DRICH1
+HDAC10
+HIRA
+KLHDC7B
+LMF2
+MAPK11
+MEI1
+MOV10L1
+PLXNB2
+PMM1
+PPM1F
+PRODH
+SBF1
+SCO2
+SLC25A1
+SLC2A11
+SMDT1
+SNU13
+SREBF2
+TOP3B
+TRABD
+TSSK2
+TUBGCP6
+TYMP
+YPEL1
+[?2004hroot@e2a793183a12:/task# zcat /task/input/trio.vcf.gz | head -100
+[?2004l##fileformat=VCFv4.2
+##FILTER=<ID=PASS,Description="All filters passed">
+##source=JointGenotyping
+##fileDate=20240415
+##contig=<ID=22,length=51304566>
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths for the ref and alt alleles in the order listed">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Approximate read depth">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	F3942-40	F3942-82	F3942-97
+22	18890891	.	C	G	1122	PASS	.	GT:AD:DP:GQ	0/0:39,0:39:99	0/1:16,14:30:99	0/0:47,0:47:99
+22	18890959	.	G	A	2469	PASS	.	GT:AD:DP:GQ	0/0:31,0:31:93	0/1:19,21:40:99	0/0:32,0:32:96
+22	18891977	.	T	A	1790	PASS	.	GT:AD:DP:GQ	0/0:33,0:33:99	0/1:15,13:28:99	0/0:33,0:33:99
+22	18892547	.	T	A	1058	PASS	.	GT:AD:DP:GQ	0/0:36,0:36:99	0/1:17,22:39:99	0/0:31,0:31:93
+22	18894129	.	G	C	3757	PASS	.	GT:AD:DP:GQ	0/0:20,0:20:60	0/1:14,16:30:99	0/1:22,17:39:99
+22	18894491	.	C	G	827	PASS	.	GT:AD:DP:GQ	0/1:19,28:47:99	0/0:34,0:34:99	0/1:20,15:35:99
+22	18895064	.	ACA	CCA	2428	PASS	.	GT:AD:DP:GQ	0/0:38,0:38:99	0/1:17,15:32:99	0/0:37,0:37:99
+22	18896663	.	C	A	1863	PASS	.	GT:AD:DP:GQ	0/0:40,0:40:99	0/1:18,20:38:99	0/0:35,0:35:99
+22	18898445	.	G	A	178	PASS	.	GT:AD:DP:GQ	1/1:0,40:40:99	0/1:18,16:34:99	0/1:19,17:36:99
+22	18898476	.	G	A	164	PASS	.	GT:AD:DP:GQ	0/1:12,13:25:99	0/0:40,0:40:99	0/1:17,26:43:99
+22	18901935	.	C	G	1644	PASS	.	GT:AD:DP:GQ	0/0:32,0:32:96	0/1:19,12:31:99	0/0:32,0:32:96
+22	18903774	.	T	C	3743	PASS	.	GT:AD:DP:GQ	0/0:43,0:43:99	0/1:15,19:34:99	0/1:18,21:39:99
+22	18907051	.	C	T	1178	PASS	.	GT:AD:DP:GQ	0/0:38,0:38:99	0/1:20,16:36:99	0/1:13,18:31:99
+22	18907301	.	A	G	276	PASS	.	GT:AD:DP:GQ	0/1:20,18:38:99	0/0:35,0:35:99	0/1:30,16:46:99
+22	18907421	.	T	G	1276	PASS	.	GT:AD:DP:GQ	0/1:11,12:23:99	0/0:30,0:30:90	0/0:36,0:36:99
+22	18907860	.	G	C	2621	PASS	.	GT:AD:DP:GQ	0/1:5,1:6:11	0/0:33,1:34:99	0/0:38,0:38:99
+22	18908882	.	G	C	909	PASS	.	GT:AD:DP:GQ	0/1:15,19:34:99	0/0:32,0:32:96	0/1:20,26:46:99
+22	18910357	.	G	A	2906	PASS	.	GT:AD:DP:GQ	0/0:31,0:31:93	0/1:16,14:30:99	0/1:14,17:31:99
+22	18910947	.	GC	G	3951	PASS	.	GT:AD:DP:GQ	0/1:19,19:38:99	0/0:43,0:43:99	0/1:22,16:38:99
+22	18913846	.	T	A,G	2196	PASS	.	GT:AD:DP:GQ	0/1:20,16,0:36:99	0/2:17,0,10:27:99	0/0:25,0,0:25:75
+22	18915304	.	C	A	1631	PASS	.	GT:AD:DP:GQ	0/0:39,0:39:99	0/1:14,16:30:99	0/1:19,15:34:99
+22	18915657	.	A	AGAA	2824	PASS	.	GT:AD:DP:GQ	0/1:13,19:32:99	0/0:30,0:30:90	0/1:24,17:41:99
+22	18917727	.	TGTGG	TTGG	1882	PASS	.	GT:AD:DP:GQ	0/0:21,0:21:63	0/1:14,13:27:99	0/1:16,18:34:99
+22	18918099	.	CA	C	614	PASS	.	GT:AD:DP:GQ	0/1:15,9:24:99	0/0:24,0:24:72	0/1:13,22:35:99
+22	18920057	.	CCTTACC	C	851	PASS	.	GT:AD:DP:GQ	0/1:20,13:33:99	0/0:42,0:42:99	0/1:21,18:39:99
+22	18921128	.	C	A	3208	PASS	.	GT:AD:DP:GQ	0/0:28,0:28:84	0/1:14,18:32:99	0/1:12,18:30:99
+22	18922337	.	GGCC	G,GGCA	1817	PASS	.	GT:AD:DP:GQ	0/1:20,17,0:37:99	0/2:11,0,18:29:99	0/0:32,0,0:32:96
+22	18922949	.	GCGCC	G,GCGTC	2423	PASS	.	GT:AD:DP:GQ	0/2:18,0,18:36:99	0/1:12,14,0:26:99	0/1:16,21,0:37:99
+22	18923585	.	C	G	2430	PASS	.	GT:AD:DP:GQ	0/1:22,13:35:99	0/0:29,0:29:87	0/0:23,0:23:69
+22	18924498	.	G	A	3379	PASS	.	GT:AD:DP:GQ	0/0:36,0:36:99	1/1:0,34:34:99	0/1:19,18:37:99
+22	18925288	.	G	C	473	PASS	.	GT:AD:DP:GQ	0/1:16,19:35:99	0/0:43,0:43:99	0/0:40,0:40:99
+22	18926472	.	A	C	3996	PASS	.	GT:AD:DP:GQ	0/1:15,26:41:99	0/0:22,0:22:66	0/0:28,0:28:84
+22	18926543	.	AT	A	2871	PASS	.	GT:AD:DP:GQ	0/0:4,0:4:12	0/1:15,18:33:99	0/0:36,0:36:99
+22	18928227	.	T	G	3998	PASS	.	GT:AD:DP:GQ	0/1:12,13:25:99	0/1:9,17:26:99	0/1:14,20:34:99
+22	18928267	.	C	T	1982	PASS	.	GT:AD:DP:GQ	0/0:28,0:28:84	0/1:7,11:18:99	0/0:27,0:27:81
+22	18928939	.	AAT	A,AGT	1739	PASS	.	GT:AD:DP:GQ	0/1:13,21,0:34:99	0/2:17,0,12:29:99	0/0:35,0,0:35:99
+22	18929657	.	C	G	3016	PASS	.	GT:AD:DP:GQ	0/1:23,15:38:99	0/0:30,0:30:90	0/0:27,0:27:81
+22	18933604	.	C	G	617	PASS	.	GT:AD:DP:GQ	0/1:21,19:40:99	0/0:39,0:39:99	0/1:14,23:37:99
+22	18934076	.	A	C	3031	PASS	.	GT:AD:DP:GQ	0/1:23,17:40:99	0/1:17,22:39:99	0/1:15,27:42:99
+22	18934563	.	T	G	2016	PASS	.	GT:AD:DP:GQ	0/1:19,11:30:99	0/0:35,0:35:99	0/0:27,0:27:81
+22	18936851	.	G	GGT	371	PASS	.	GT:AD:DP:GQ	0/1:19,12:31:99	0/1:18,23:41:99	1/1:0,37:37:99
+22	18939400	.	C	A	3708	PASS	.	GT:AD:DP:GQ	0/1:18,14:32:99	0/0:35,0:35:99	0/0:50,0:50:99
+22	18939441	.	T	A	3833	PASS	.	GT:AD:DP:GQ	0/0:27,0:27:81	0/1:19,23:42:99	0/1:18,11:29:99
+22	18940526	.	C	T	1491	PASS	.	GT:AD:DP:GQ	0/1:14,16:30:99	0/0:6,0:6:18	0/1:19,13:32:99
+22	18942204	.	T	C	3531	PASS	.	GT:AD:DP:GQ	0/0:34,0:34:99	0/1:17,12:29:99	0/0:33,0:33:99
+22	18944096	.	T	C	3085	PASS	.	GT:AD:DP:GQ	0/1:17,15:32:99	0/0:32,0:32:96	0/1:15,13:28:99
+22	18945323	.	G	T	1301	PASS	.	GT:AD:DP:GQ	0/1:14,15:29:99	0/0:31,0:31:93	0/1:18,23:41:99
+22	18946755	.	GTCCA	G	1106	PASS	.	GT:AD:DP:GQ	0/1:17,16:33:99	0/0:43,0:43:99	0/0:30,0:30:90
+22	18946933	.	CAGG	C,CACG	2312	PASS	.	GT:AD:DP:GQ	0/2:16,0,15:31:99	0/1:19,16,0:35:99	0/2:22,0,18:40:99
+22	18946973	.	G	T	2867	PASS	.	GT:AD:DP:GQ	0/0:48,0:48:99	0/1:21,13:34:99	0/1:21,17:38:99
+22	18948754	.	G	C,T	1091	PASS	.	GT:AD:DP:GQ	0/2:19,0,17:36:99	0/1:14,18,0:32:99	0/2:20,0,17:37:99
+22	18949372	.	CC	C	2085	PASS	.	GT:AD:DP:GQ	0/0:33,0:33:99	0/1:24,13:37:99	0/1:21,18:39:99
+22	18949610	.	ATGGAC	A,ATAGAC	945	PASS	.	GT:AD:DP:GQ	0/2:15,0,25:40:99	0/1:28,21,0:49:99	0/2:20,0,15:35:99
+22	18950641	.	C	T	1803	PASS	.	GT:AD:DP:GQ	0/1:18,20:38:99	0/1:14,20:34:99	0/1:15,22:37:99
+22	18952437	.	GCAG	GAG	1033	PASS	.	GT:AD:DP:GQ	0/1:20,17:37:99	0/1:14,16:30:99	0/0:32,0:32:96
+22	18953738	.	AA	A	3674	PASS	.	GT:AD:DP:GQ	0/1:17,21:38:99	0/1:16,21:37:99	0/1:16,12:28:99
+22	18954233	.	C	T	1271	PASS	.	GT:AD:DP:GQ	0/0:40,0:40:99	0/1:20,20:40:99	0/0:35,0:35:99
+22	18955988	.	C	T	3643	PASS	.	GT:AD:DP:GQ	0/1:18,16:34:99	0/0:32,0:32:96	0/0:33,0:33:99
+22	18956142	.	G	T	2134	PASS	.	GT:AD:DP:GQ	0/1:19,13:32:99	0/0:6,0:6:18	0/1:16,15:31:99
+22	18956395	.	G	A	1575	PASS	.	GT:AD:DP:GQ	0/0:33,0:33:99	0/1:12,15:27:99	0/0:34,0:34:99
+22	18957493	.	G	GGCCATCAG	1097	PASS	.	GT:AD:DP:GQ	0/1:17,24:41:99	0/0:37,0:37:99	0/1:19,15:34:99
+22	18957815	.	C	T	3466	PASS	.	GT:AD:DP:GQ	0/1:15,21:36:99	0/0:28,0:28:84	0/1:21,12:33:99
+22	18958324	.	G	GC	2954	PASS	.	GT:AD:DP:GQ	0/1:2,3:5:12	0/0:26,0:26:78	0/0:29,0:29:87
+22	18958937	.	G	T	3566	PASS	.	GT:AD:DP:GQ	0/1:17,17:34:99	0/1:20,13:33:99	0/1:21,16:37:99
+22	18961334	.	T	G	1005	PASS	.	GT:AD:DP:GQ	0/0:37,0:37:99	0/1:15,24:39:99	0/0:25,0:25:75
+22	18964268	.	C	T	3064	PASS	.	GT:AD:DP:GQ	0/1:25,21:46:99	0/1:20,24:44:99	0/1:18,10:28:99
+22	18965512	.	C	T	2541	PASS	.	GT:AD:DP:GQ	0/0:30,0:30:90	0/1:13,12:25:99	0/0:34,0:34:99
+22	18966548	.	C	G	1244	PASS	.	GT:AD:DP:GQ	0/1:18,14:32:99	0/0:41,0:41:99	0/0:34,0:34:99
+22	18967381	.	G	T	1271	PASS	.	GT:AD:DP:GQ	1/1:0,28:28:84	0/1:20,13:33:99	1/1:0,40:40:99
+22	18967930	.	G	C	1001	PASS	.	GT:AD:DP:GQ	0/1:17,19:36:99	0/0:28,0:28:84	0/1:19,17:36:99
+22	18968981	.	C	T	3400	PASS	.	GT:AD:DP:GQ	0/0:19,0:19:57	0/1:22,21:43:99	0/0:31,0:31:93
+22	18970899	.	ACA	A	2099	PASS	.	GT:AD:DP:GQ	0/0:32,0:32:96	0/1:17,18:35:99	0/1:21,16:37:99
+22	18970990	.	TCT	T	1222	PASS	.	GT:AD:DP:GQ	0/0:35,0:35:99	0/1:15,14:29:99	0/0:28,0:28:84
+22	18971576	.	G	T	2130	PASS	.	GT:AD:DP:GQ	0/0:38,0:38:99	1/1:0,35:35:99	0/1:15,11:26:99
+22	18971605	.	C	G	1001	PASS	.	GT:AD:DP:GQ	0/0:27,0:27:81	0/1:21,18:39:99	0/1:14,14:28:99
+22	18971912	.	T	C	3835	PASS	.	GT:AD:DP:GQ	0/0:28,0:28:84	0/1:18,21:39:99	0/0:37,0:37:99
+22	18972696	.	A	C	1425	PASS	.	GT:AD:DP:GQ	0/1:16,15:31:99	0/1:21,18:39:99	1/1:0,30:30:90
+22	18973014	.	A	T	3583	PASS	.	GT:AD:DP:GQ	0/0:28,0:28:84	0/1:14,23:37:99	0/1:17,17:34:99
+22	18973858	.	A	G	1616	PASS	.	GT:AD:DP:GQ	1/1:0,37:37:99	0/1:12,15:27:99	1/1:0,25:25:75
+22	18977674	.	T	G	2001	PASS	.	GT:AD:DP:GQ	0/0:42,0:42:99	0/1:22,16:38:99	0/1:18,23:41:99
+22	18978092	.	G	C	1371	PASS	.	GT:AD:DP:GQ	0/0:32,0:32:96	0/1:20,20:40:99	0/1:17,16:33:99
+22	18978765	.	C	A	3672	PASS	.	GT:AD:DP:GQ	0/1:20,19:39:99	0/0:27,0:27:81	0/1:13,15:28:99
+22	18978844	.	T	C	2516	PASS	.	GT:AD:DP:GQ	0/1:14,15:29:99	0/1:17,14:31:99	0/1:10,15:25:99
+22	18979928	.	A	G	3565	PASS	.	GT:AD:DP:GQ	0/0:33,0:33:99	0/1:19,13:32:99	0/0:29,0:29:87
+22	18981573	.	G	C,T	3155	PASS	.	GT:AD:DP:GQ	0/1:15,13,0:28:99	0/2:11,0,16:27:99	0/0:37,0,0:37:99
+22	18982132	.	AT	A	3319	PASS	.	GT:AD:DP:GQ	0/1:24,18:42:99	0/1:19,13:32:99	0/0:26,0:26:78
+22	18985335	.	C	G	2782	PASS	.	GT:AD:DP:GQ	0/1:18,18:36:99	0/0:40,0:40:99	0/0:30,0:30:90
+22	18985784	.	A	C	1368	PASS	.	GT:AD:DP:GQ	0/1:17,14:31:99	0/0:37,1:38:99	0/0:29,0:29:87
+22	18985959	.	A	ATAC	1318	PASS	.	GT:AD:DP:GQ	1/1:0,3:3:9	0/0:31,0:31:93	0/1:14,26:40:99
+22	18986130	.	A	T	353	PASS	.	GT:AD:DP:GQ	0/0:36,0:36:99	0/1:16,17:33:99	0/1:19,15:34:99
+[?2004hroot@e2a793183a12:/task# cat /task/input/resources/*.fai; head -5 /task/input/resources/hg19ToHg38.chr22.over.chain; head -5 /task/input/resources/hg38ToHg19.chr22.over.chain
+[?2004lchr22	51304566	7	60	61
+chr22	50818468	7	60	61
+chain 3231095979 chr22 51304566 + 16847850 51244566 chr22 50818468 + 16367188 50806138 23
+19737	40	0
+43	1	1
+47	24	0
+96	15	15
+chain 3231099988 chr22 50818468 + 16367188 50806138 chr22 51304566 + 16847850 51244566 23
+19744	0	40
+36	1	1
+31	0	24
+112	15	15
+[?2004hroot@e2a793183a12:/task# zcat /task/input/trio.vcf.gz | grep -v '^#' | head -5; zcat /task/input/trio.vcf.gz | grep -vc '^#'
+[?2004l22	18890891	.	C	G	1122	PASS	.	GT:AD:DP:GQ	0/0:39,0:39:99	0/1:16,14:30:99	0/0:47,0:47:99
+22	18890959	.	G	A	2469	PASS	.	GT:AD:DP:GQ	0/0:31,0:31:93	0/1:19,21:40:99	0/0:32,0:32:96
+22	18891977	.	T	A	1790	PASS	.	GT:AD:DP:GQ	0/0:33,0:33:99	0/1:15,13:28:99	0/0:33,0:33:99
+22	18892547	.	T	A	1058	PASS	.	GT:AD:DP:GQ	0/0:36,0:36:99	0/1:17,22:39:99	0/0:31,0:31:93
+22	18894129	.	G	C	3757	PASS	.	GT:AD:DP:GQ	0/0:20,0:20:60	0/1:14,16:30:99	0/1:22,17:39:99
+2898
+[?2004hroot@e2a793183a12:/task# head -20 /task/input/resources/GRCh38.chr22.canonical.gff3; zcat /task/input/resources/popfreq.GRCh38.tsv.gz | head -5
+[?2004l##gff-version 3
+##sequence-region   chr22 1 50818468
+#!genome-build GRCh38.p14
+#!note one canonical protein-coding transcript per gene (lab transcript set)
+###
+chr22	ensembl_havana	gene	18906028	18914238	.	+	.	ID=gene:ENSG00000183628;Name=DGCR6;biotype=protein_coding;description=DiGeorge syndrome critical region gene 6 [Source:HGNC Symbol%3BAcc:HGNC:2846];gene_id=ENSG00000183628;logic_name=ensembl_havana_gene_homo_sapiens;version=14
+chr22	ensembl_havana	mRNA	18906320	18912088	.	+	.	ID=transcript:ENST00000331444;Parent=gene:ENSG00000183628;Name=DGCR6-201;biotype=protein_coding;ccdsid=CCDS13753.1;tag=gencode_basic,gencode_primary,Ensembl_canonical,MANE_Select;transcript_id=ENST00000331444;transcript_support_level=1 (assigned to previous version 10);version=12
+chr22	ensembl_havana	five_prime_UTR	18906320	18906374	.	+	.	Parent=transcript:ENST00000331444
+chr22	ensembl_havana	exon	18906320	18906484	.	+	.	Parent=transcript:ENST00000331444;Name=ENSE00001782347;constitutive=0;ensembl_end_phase=2;ensembl_phase=-1;exon_id=ENSE00001782347;rank=1;version=2
+chr22	ensembl_havana	CDS	18906375	18906484	.	+	0	ID=CDS:ENSP00000331681;Parent=transcript:ENST00000331444;protein_id=ENSP00000331681
+chr22	ensembl_havana	exon	18906565	18906725	.	+	.	Parent=transcript:ENST00000331444;Name=ENSE00003530026;constitutive=0;ensembl_end_phase=1;ensembl_phase=2;exon_id=ENSE00003530026;rank=2;version=1
+chr22	ensembl_havana	CDS	18906565	18906725	.	+	1	ID=CDS:ENSP00000331681;Parent=transcript:ENST00000331444;protein_id=ENSP00000331681
+chr22	ensembl_havana	exon	18910172	18910272	.	+	.	Parent=transcript:ENST00000331444;Name=ENSE00003690027;constitutive=0;ensembl_end_phase=0;ensembl_phase=1;exon_id=ENSE00003690027;rank=3;version=1
+chr22	ensembl_havana	CDS	18910172	18910272	.	+	2	ID=CDS:ENSP00000331681;Parent=transcript:ENST00000331444;protein_id=ENSP00000331681
+chr22	ensembl_havana	exon	18910888	18911028	.	+	.	Parent=transcript:ENST00000331444;Name=ENSE00003687876;constitutive=0;ensembl_end_phase=0;ensembl_phase=0;exon_id=ENSE00003687876;rank=4;version=1
+chr22	ensembl_havana	CDS	18910888	18911028	.	+	0	ID=CDS:ENSP00000331681;Parent=transcript:ENST00000331444;protein_id=ENSP00000331681
+chr22	ensembl_havana	CDS	18911540	18911689	.	+	0	ID=CDS:ENSP00000331681;Parent=transcript:ENST00000331444;protein_id=ENSP00000331681
+chr22	ensembl_havana	exon	18911540	18912088	.	+	.	Parent=transcript:ENST00000331444;Name=ENSE00001705371;constitutive=0;ensembl_end_phase=-1;ensembl_phase=0;exon_id=ENSE00001705371;rank=5;version=1
+chr22	ensembl_havana	three_prime_UTR	18911690	18912088	.	+	.	Parent=transcript:ENST00000331444
+###
+chrom	pos	ref	alt	af
+chr22	18902363	G	T	4.91e-05
+chr22	18903378	C	G	0.0368
+chr22	18903446	G	A	0.000413
+chr22	18904464	T	A	0.000519
+[?2004hroot@e2a793183a12:/task# mkdir -p /tmp/work && cd /tmp/work
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/explore.py << 'EOF'
+[?2004l[?2004h> import gzip, pysam
+[?2004l[?2004h> from collections import Counter
+[?2004l[?2004h> 
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> # parse chain
+[?2004l[?2004h> chains=[]
+[?2004l[?2004h> cur=None
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         if cur: chains.append(cur)
+[?2004l[?2004h>         cur={'header':f,'blocks':[]}
+[?2004l[?2004h>         tpos=int(f[5]); qpos=int(f[10])  # 0-based starts
+[?2004l[?2004h>         cur['_t']=tpos; cur['_q']=qpos
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         size=int(f[0])
+[?2004l[?2004h>         cur['blocks'].append((cur['_t'],cur['_t']+size,cur['_q']))
+[?2004l[?2004h>         cur['_t']+=size; cur['_q']+=size
+[?2004l[?2004h>         if len(f)==3:
+[?2004l[?2004h>             cur['_t']+=int(f[1]); cur['_q']+=int(f[2])
+[?2004l[?2004h> if cur: chains.append(cur)
+[?2004l[?2004h> print('n chains:',len(chains))
+[?2004l[?2004h> for c in chains[:5]:
+[?2004l[?2004h>     print(c['header'])
+[?2004l[?2004h>     print(' blocks:',len(c['blocks']),'first:',c['blocks'][0],'last:',c['blocks'][-1])
+[?2004l[?2004h> tot=sum(b[1]-b[0] for c in chains for b in c['blocks'])
+[?2004l[?2004h> print('total aligned bases:',tot)
+[?2004l[?2004h> 
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> print(fa37.references, fa37.lengths, fa38.references, fa38.lengths)
+[?2004l[?2004h> 
+[?2004l[?2004h> # refdiff sites & N stats within blocks
+[?2004l[?2004h> ndiff=0; nN37=0; nN38=0; nNboth=0
+[?2004l[?2004h> diffs=[]
+[?2004l[?2004h> for c in chains:
+[?2004l[?2004h>     for (s,e,q) in c['blocks']:
+[?2004l[?2004h>         a=fa37.fetch('chr22',s,e).upper()
+[?2004l[?2004h>         b=fa38.fetch('chr22',q,q+(e-s)).upper()
+[?2004l[?2004h>         for i,(x,y) in enumerate(zip(a,b)):
+[?2004l[?2004h>             if x=='N' and y=='N': nNboth+=1
+[?2004l[?2004h>             elif x=='N': nN37+=1
+[?2004l[?2004h>             elif y=='N': nN38+=1
+[?2004l[?2004h>             elif x!=y:
+[?2004l[?2004h>                 ndiff+=1
+[?2004l[?2004h>                 if len(diffs)<10: diffs.append((s+i+1,x,q+i+1,y))
+[?2004l[?2004h> print('refdiff sites:',ndiff,'N37 only:',nN37,'N38 only:',nN38,'N both:',nNboth)
+[?2004l[?2004h> print('sample diffs (pos37,base37,pos38,base38):',diffs)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/explore.py
+[?2004ln chains: 12
+['chain', '3231095979', 'chr22', '51304566', '+', '16847850', '51244566', 'chr22', '50818468', '+', '16367188', '50806138', '23']
+ blocks: 1130 first: (16847850, 16867587, 16367188) last: (51042513, 51244566, 50604085)
+['chain', '61356972', 'chr22', '51304566', '+', '16050036', '16697850', 'chr22', '50818468', '-', '34890488', '35538355', '135']
+ blocks: 18 first: (16050036, 16052167, 34890488) last: (16696326, 16697850, 35536831)
+['chain', '1903041', 'chr22', '51304566', '+', '20332745', '20509431', 'chr22', '50818468', '+', '18429207', '18659564', '203']
+ blocks: 2 first: (20332745, 20333380, 18429207) last: (20333380, 20509431, 18483513)
+['chain', '1027915', 'chr22', '51304566', '+', '20609431', '20699132', 'chr22', '50818468', '+', '18339129', '18428830', '304']
+ blocks: 26 first: (20609431, 20672139, 18339129) last: (20698710, 20699132, 18428408)
+['chain', '538227', 'chr22', '51304566', '+', '20672139', '20699304', 'chr22', '50818468', '-', '29474641', '29499640', '227']
+ blocks: 50 first: (20672139, 20672526, 29474641) last: (20699132, 20699304, 29499468)
+total aligned bases: 34832250
+['chr22'] [51304566] ['chr22'] [50818468]
+refdiff sites: 178 N37 only: 13 N38 only: 4929 N both: 31833108
+sample diffs (pos37,base37,pos38,base38): [(19062460, 'G', 19074947, 'T'), (19069228, 'G', 19081715, 'A'), (19077902, 'T', 19090389, 'A'), (19078111, 'G', 19090598, 'A'), (19079119, 'C', 19091606, 'A'), (19152824, 'G', 19165311, 'A'), (19178205, 'C', 19190693, 'A'), (19370339, 'T', 19382816, 'A'), (19378255, 'A', 19390732, 'G'), (21976407, 'A', 21622118, 'G')]
+[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/explore2.py << 'EOF'
+[?2004l[?2004h> import gzip, pysam
+[?2004l[?2004h> from collections import Counter
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> chains=[]
+[?2004l[?2004h> cur=None
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         if cur: chains.append(cur)
+[?2004l[?2004h>         cur={'hdr':f,'blocks':[]}
+[?2004l[?2004h>         tpos=int(f[5]); qpos=int(f[10])
+[?2004l[?2004h>         cur['_t']=tpos; cur['_q']=qpos
+[?2004l[?2004h>         cur['qstrand']=f[9]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         size=int(f[0])
+[?2004l[?2004h>         cur['blocks'].append((cur['_t'],cur['_t']+size,cur['_q']))
+[?2004l[?2004h>         cur['_t']+=size; cur['_q']+=size
+[?2004l[?2004h>         if len(f)==3:
+[?2004l[?2004h>             cur['_t']+=int(f[1]); cur['_q']+=int(f[2])
+[?2004l[?2004h> if cur: chains.append(cur)
+[?2004l[?2004h> # target range per chain
+[?2004l[?2004h> print('chain target ranges:')
+[?2004l[?2004h> for c in chains:
+[?2004l[?2004h>     print(' ', c['hdr'][12], c['qstrand'], c['hdr'][5], c['hdr'][6], 'q:', c['hdr'][10], c['hdr'][11])
+[?2004l[?2004h> # check pairwise target overlap of blocks
+[?2004l[?2004h> import itertools
+[?2004l[?2004h> ov=0
+[?2004l[?2004h> for a,b in itertools.combinations(chains,2):
+[?2004l[?2004h>     for (s1,e1,_) in a['blocks']:
+[?2004l[?2004h>         for (s2,e2,_) in b['blocks']:
+[?2004l[?2004h>             if s1<e2 and s2<e1:
+[?2004l[?2004h>                 ov+=1
+[?2004l[?2004h>                 if ov<5: print('OVERLAP', a['hdr'][12], b['hdr'][12], s1,e1,s2,e2)
+[?2004l[?2004h> print('overlapping block pairs:', ov)
+[?2004l[?2004h> # all blocks sorted, merge check
+[?2004l[?2004h> blocks=[]
+[?2004l[?2004h> for c in chains:
+[?2004l[?2004h>     for bl in c['blocks']: blocks.append(bl+(c['qstrand'],))
+[?2004l[?2004h> blocks.sort()
+[?2004l[?2004h> print('total blocks:', len(blocks))
+[?2004l[?2004h> # coverage: any position covered twice?
+[?2004l[?2004h> cov2=0; prev_e=-1; prev_s=-1
+[?2004l[?2004h> for (s,e,q,st) in blocks:
+[?2004l[?2004h>     if s < prev_e:
+[?2004l[?2004h>         cov2 += prev_e - s
+[?2004l[?2004h>     prev_e=max(prev_e,e)
+[?2004l[?2004h> print('doubly covered bases (per block-sort scan):', cov2)
+[?2004l[?2004h> 
+[?2004l[?2004h> # VCF checks
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> import bisect
+[?2004l[?2004h> starts=[b[0] for b in blocks]
+[?2004l[?2004h> def find_block(pos0):  # 0-based pos
+[?2004l[?2004h>     i=bisect.bisect_right(starts,pos0)-1
+[?2004l[?2004h>     if i>=0 and blocks[i][0]<=pos0<blocks[i][1]: return blocks[i]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> vcf=pysam.VariantFile('/task/input/trio.vcf.gz')
+[?2004l[?2004h> nrec=0; refmis=0; types=Counter(); nalt=Counter(); outalleles=0; span=0; minus=0
+[?2004l[?2004h> examples_out=[]
+[?2004l[?2004h> for r in vcf:
+[?2004l[?2004h>     nrec+=1
+[?2004l[?2004h>     rb=fa37.fetch('chr22', r.pos-1, r.pos-1+len(r.ref)).upper()
+[?2004l[?2004h>     if rb!=r.ref.upper(): refmis+=1
+[?2004l[?2004h>     nalt[len(r.alts)]+=1
+[?2004l[?2004h>     for a in r.alts:
+[?2004l[?2004h>         if len(r.ref)==1 and len(a)==1: types['snp']+=1
+[?2004l[?2004h>         elif len(r.ref)==len(a): types['mnp/complex']+=1
+[?2004l[?2004h>         else: types['indel']+=1
+[?2004l[?2004h>     b0=find_block(r.pos-1); b1=find_block(r.pos-1+len(r.ref)-1)
+[?2004l[?2004h>     if b0 is None:
+[?2004l[?2004h>         outalleles+=len(r.alts)
+[?2004l[?2004h>         if len(examples_out)<5: examples_out.append((r.pos,r.ref,r.alts))
+[?2004l[?2004h>     if b0 is not None and b1 is not None and b0 is not b1: span+=1
+[?2004l[?2004h>     if b0 and b0[3]=='-': minus+=1
+[?2004l[?2004h> print('nrec',nrec,'ref mismatch',refmis)
+[?2004l[?2004h> print('alts by type:',types,'alts per record:',nalt)
+[?2004l[?2004h> print('records with POS outside blocks:',outalleles,'examples:',examples_out)
+[?2004l[?2004h> print('records spanning blocks:',span,'records in minus-strand blocks:',minus)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/explore2.py
+[?2004lchain target ranges:
+  23 + 16847850 51244566 q: 16367188 50806138
+  135 - 16050036 16697850 q: 34890488 35538355
+  203 + 20332745 20509431 q: 18429207 18659564
+  304 + 20609431 20699132 q: 18339129 18428830
+  227 - 20672139 20699304 q: 29474641 29499640
+  2357805 + 49780264 49780315 q: 49386246 49386297
+  1412612 + 49780250 49780332 q: 49384346 49384384
+  15160084 + 47572082 47572109 q: 47176357 47176384
+  15160085 + 47572055 47572082 q: 47176357 47176384
+  17551188 + 47572020 47572042 q: 47176376 47176398
+  735888 + 22469649 22469675 q: 20668231 20668257
+  900001 - 22275241 22280170 q: 28892671 28897600
+overlapping block pairs: 0
+total blocks: 1234
+doubly covered bases (per block-sort scan): 0
+nrec 2898 ref mismatch 0
+alts by type: Counter({'snp': 2528, 'indel': 487, 'mnp/complex': 156}) alts per record: Counter({1: 2625, 2: 273})
+records with POS outside blocks: 31 examples: [(24343906, 'A', ('C',)), (24344308, 'G', ('C',)), (24345213, 'C', ('A',)), (24349969, 'C', ('A',)), (24350904, 'G', ('T',))]
+records spanning blocks: 0 records in minus-strand blocks: 46
+[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/explore3.py << 'EOF'
+[?2004l[?2004h> import gzip, pysam, bisect
+[?2004l[?2004h> from collections import Counter
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> chains=[]; cur=None
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         if cur: chains.append(cur)
+[?2004l[?2004h>         cur={'hdr':f,'blocks':[]}
+[?2004l[?2004h>         cur['_t']=int(f[5]); cur['_q']=int(f[10]); cur['qstrand']=f[9]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         size=int(f[0])
+[?2004l[?2004h>         cur['blocks'].append((cur['_t'],cur['_t']+size,cur['_q']))
+[?2004l[?2004h>         cur['_t']+=size; cur['_q']+=size
+[?2004l[?2004h>         if len(f)==3: cur['_t']+=int(f[1]); cur['_q']+=int(f[2])
+[?2004l[?2004h> if cur: chains.append(cur)
+[?2004l[?2004h> blocks=[]
+[?2004l[?2004h> for c in chains:
+[?2004l[?2004h>     for bl in c['blocks']: blocks.append(bl+(c['qstrand'],))
+[?2004l[?2004h> blocks.sort()
+[?2004l[?2004h> starts=[b[0] for b in blocks]
+[?2004l[?2004h> def find_block(pos0):
+[?2004l[?2004h>     i=bisect.bisect_right(starts,pos0)-1
+[?2004l[?2004h>     if i>=0 and blocks[i][0]<=pos0<blocks[i][1]: return blocks[i]
+[?2004l[?2004h>     return None
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> vcf=pysam.VariantFile('/task/input/trio.vcf.gz')
+[?2004l[?2004h> extend=0; nposN37=0; nposN38=0; indel_kinds=Counter(); shared_pref=0; shared_suff=0
+[?2004l[?2004h> alteq38=0; refmis38=0
+[?2004l[?2004h> examples_ext=[]; examples_alteq=[]
+[?2004l[?2004h> def rc(s):
+[?2004l[?2004h>     return s.translate(str.maketrans('ACGTNacgtn','TGCANtgcan'))[::-1]
+[?2004l[?2004h> for r in vcf:
+[?2004l[?2004h>     p0=r.pos-1
+[?2004l[?2004h>     b0=find_block(p0); b1=find_block(p0+len(r.ref)-1)
+[?2004l[?2004h>     if b0 is None: continue
+[?2004l[?2004h>     if b1 is None or b1 is not b0:
+[?2004l[?2004h>         extend+=1; examples_ext.append((r.pos,r.ref,r.alts))
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     (s,e,q,st)=b0
+[?2004l[?2004h>     off=p0-s
+[?2004l[?2004h>     if st=='+':
+[?2004l[?2004h>         q0=q+off
+[?2004l[?2004h>         qref=fa38.fetch('chr22',q0,q0+len(r.ref)).upper()
+[?2004l[?2004h>         qalts=[a.upper() for a in r.alts]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         q0=q+off  # block stored with q as 0-based start on plus strand of GRCh38? careful
+[?2004l[?2004h>         qref=rc(fa38.fetch('chr22',q0,q0+len(r.ref)).upper())
+[?2004l[?2004h>         qalts=[rc(a.upper()) for a in r.alts]
+[?2004l[?2004h>     if 'N' in fa37.fetch('chr22',p0,p0+len(r.ref)).upper(): nposN37+=1
+[?2004l[?2004h>     if 'N' in qref: nposN38+=1
+[?2004l[?2004h>     for a,qalt in zip(r.alts,qalts):
+[?2004l[?2004h>         if qalt==qref: alteq38+=1; examples_alteq.append((r.pos,r.ref,a))
+[?2004l[?2004h>     if qref!=r.ref.upper() and st=='+': refmis38+=1
+[?2004l[?2004h>     for a in r.alts:
+[?2004l[?2004h>         if len(r.ref)==len(a): continue
+[?2004l[?2004h>         # pure ins/del?
+[?2004l[?2004h>         if len(r.ref)==1 and len(a)>1 and a.startswith(r.ref): indel_kinds['pure_ins']+=1
+[?2004l[?2004h>         elif len(a)==1 and len(r.ref)>1 and r.ref.startswith(a): indel_kinds['pure_del']+=1
+[?2004l[?2004h>         else: indel_kinds['complex']+=1
+[?2004l[?2004h>         # shared suffix?
+[?2004l[?2004h>         if len(r.ref)>1 and len(a)>1 and r.ref[-1]==a[-1]: shared_suff+=1
+[?2004l[?2004h>         if r.ref[0]==a[0] and len(r.ref)>1 and len(a)>1: shared_pref+=1
+[?2004l[?2004h> print('records extending outside their block:',extend,examples_ext[:5])
+[?2004l[?2004h> print('records at N (37):',nposN37,'mapped ref contains N (38):',nposN38)
+[?2004l[?2004h> print('indel kinds:',indel_kinds,'shared suffix:',shared_suff,'shared prefix(nonminimal):',shared_pref)
+[?2004l[?2004h> print('alt equals GRCh38 ref at mapped locus:',alteq38, examples_alteq[:5])
+[?2004l[?2004h> print('records where GRCh38 ref differs from GRCh37 ref (+ strand):',refmis38)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/explore3.py
+[?2004lrecords extending outside their block: 0 []
+records at N (37): 0 mapped ref contains N (38): 46
+indel kinds: Counter({'pure_del': 264, 'pure_ins': 126, 'complex': 97}) shared suffix: 97 shared prefix(nonminimal): 97
+alt equals GRCh38 ref at mapped locus: 75 [(19062460, 'G', 'T'), (19370339, 'T', 'A'), (21991309, 'T', 'G'), (22220538, 'T', 'C'), (22310447, 'T', 'G')]
+records where GRCh38 ref differs from GRCh37 ref (+ strand): 79
+[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/explore4.py << 'EOF'
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> chains=[]; cur=None
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         if cur: chains.append(cur)
+[?2004l[?2004h>         cur={'hdr':f,'blocks':[]}
+[?2004l[?2004h>         cur['qsize']=int(f[8]); cur['qstrand']=f[9]
+[?2004l[?2004h>         cur['_t']=int(f[5]); cur['_q']=int(f[10])
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         size=int(f[0])
+[?2004l[?2004h>         cur['blocks'].append((cur['_t'],cur['_t']+size,cur['_q'],size))
+[?2004l[?2004h>         cur['_t']+=size; cur['_q']+=size
+[?2004l[?2004h>         if len(f)==3: cur['_t']+=int(f[1]); cur['_q']+=int(f[2])
+[?2004l[?2004h> if cur: chains.append(cur)
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> def rc(s): return s.translate(str.maketrans('ACGTN','TGCAN'))[::-1]
+[?2004l[?2004h> def score(a,b):
+[?2004l[?2004h>     m=sum(1 for x,y in zip(a,b) if x==y and x!='N')
+[?2004l[?2004h>     mm=sum(1 for x,y in zip(a,b) if x!=y and x!='N' and y!='N')
+[?2004l[?2004h>     return m,mm
+[?2004l[?2004h> for c in chains:
+[?2004l[?2004h>     if c['qstrand']!='-': continue
+[?2004l[?2004h>     cid=c['hdr'][12]; qs=c['qsize']
+[?2004l[?2004h>     mA=mmA=mB=mmB=0
+[?2004l[?2004h>     for (s,e,qc,size) in c['blocks'][:8]:
+[?2004l[?2004h>         a=fa37.fetch('chr22',s,e).upper()
+[?2004l[?2004h>         # interpretation A: plus coord = qc, rc
+[?2004l[?2004h>         bA=rc(fa38.fetch('chr22',qc,qc+size).upper())
+[?2004l[?2004h>         # interpretation B: plus coord of block start = qsize - qc - size, rc
+[?2004l[?2004h>         q0B=qs-qc-size
+[?2004l[?2004h>         bB=rc(fa38.fetch('chr22',q0B,q0B+size).upper())
+[?2004l[?2004h>         m,mm=score(a,bA); mA+=m; mmA+=mm
+[?2004l[?2004h>         m,mm=score(a,bB); mB+=m; mmB+=mm
+[?2004l[?2004h>     print('chain',cid,'qsize',qs,'A match/mismatch:',mA,mmA,' B match/mismatch:',mB,mmB)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/explore4.py
+[?2004lchain 135 qsize 50818468 A match/mismatch: 0 0  B match/mismatch: 0 0
+chain 227 qsize 50818468 A match/mismatch: 0 0  B match/mismatch: 0 0
+chain 900001 qsize 50818468 A match/mismatch: 0 0  B match/mismatch: 4929 0
+[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/pipeline.py << 'EOF'
+[?2004l[?2004h> import pysam, bisect, pickle
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> OUT='/task/output/'
+[?2004l[?2004h> 
+[?2004l[?2004h> blocks=[]
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         qstrand=f[9]; qsize=int(f[8]); t=int(f[5]); q=int(f[10])
+[?2004ld'[?2004h>     else:
+[?2004l[?2004h>         size=int(f[0])
+[?2004l[?2004h>         blocks.append((t,t+size,qstrand,qsize,q))
+[?2004l[?2004h>         t+=size; q+=size
+[?2004l[?2004h>         if len(f)==3: t+=int(f[1]); q+=int(f[2])
+[?2004l[?2004h> blocks.sort()
+[?2004l[?2004h> starts=[b[0] for b in blocks]
+[?2004l[?2004h> def map37(pos0):
+[?2004l[?2004h>     i=bisect.bisect_right(starts,pos0)-1
+[?2004l[?2004h>     if i<0: return None
+[?2004l[?2004h>     s,e,st,qs,qc=blocks[i]
+[?2004l[?2004h>     if not (s<=pos0<e): return None
+[?2004l[?2004h>     d=qc+(pos0-s)
+[?2004l[?2004h>     if st=='+': return (d,'+')
+[?2004l[?2004h>     return (qs-d-1,'-')
+[?2004l[?2004h> CMP=str.maketrans('ACGTNacgtn','TGCANtgcan')
+[?2004l[?2004h> def rc(s): return s.translate(CMP)[::-1]
+[?2004l 0) for s in SAMPLES}
+        if len(REF)==1 and len(a)==1:
+            plus0,_=m0
+            b38=fa38.fetch('chr22',plus0,plus0+1).upper()
+            if b38=='N': continue
+            altb=a if st=='+' else comp(a)
+            if altb==b38: continue
+            adref={s:adref_at(s,0) for s in SAMPLES}
+            add_allele(plus0,b38,altb,counts,adalt,adref,{s:gts[s]['usable'] for s in SAMPLES},('snp',r.pos))
+        elif len(a)==L:
+            for i in range(L):
+                if a[i]=[?2004h> def comp(s): return s.translate(CMP)
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> 
+[?2004l[?2004h> def norm(pos0,ref,alt):
+[?2004l[?2004h>     while True:
+[?2004l[?2004h>         ch=False
+[?2004l[?2004h>         while len(ref)>1 and len(alt)>1 and ref[-1]==alt[-1]:
+[?2004l[?2004h>             ref=ref[:-1];alt=alt[:-1];ch=True
+[?2004l[?2004h>         while len(ref)>1 and len(alt)>1 and ref[0]==alt[0]:
+[?2004l[?2004h>             ref=ref[1:];alt=alt[1:];pos0+=1;ch=True
+[?2004l[?2004h>         if len(ref)!=len(alt) and pos0>0 and ref[-1]==alt[-1]:
+[?2004l[?2004h>             prev=fa38.fetch('chr22',pos0-1,pos0).upper()
+[?2004l[?2004h>             if prev in 'ACGT':
+[?2004l[?2004h>                 ref=prev+ref[:-1];alt=prev+alt[:-1];pos0-=1;ch=True
+[?2004l[?2004h>         if not ch: break
+[?2004l[?2004h>     return pos0,ref,alt
+[?2004l[?2004h> 
+[?2004l[?2004h> SAMPLES=['F3942-40','F3942-82','F3942-97']
+[?2004l[?2004h> vcf=pysam.VariantFile('/task/input/trio.vcf.gz')
+[?2004l[?2004h> assert list(vcf.header.samples)==SAMPLES, list(vcf.header.samples)
+[?2004l[?2004h> 
+[?2004l[?2004h> out={}
+[?2004l[?2004h> log_drop=[]; log_merge=[]
+[?2004l[?2004h> def add_allele(pos0,ref,alt,counts,adalt,adref,usable,src):
+[?2004l[?2004h>     if ref==alt:
+[?2004l[?2004h>         log_drop.append(('refeqalt',pos0,ref,alt,src)); return
+[?2004l[?2004h>     if 'N' in ref or 'N' in alt:
+[?2004l[?2004h>         log_drop.append(('N',pos0,ref,alt,src)); return
+[?2004l[?2004h>     k=(pos0,ref,alt)
+[?2004l[?2004h>     if k in out:
+[?2004l[?2004h>         e=out[k]
+[?2004l[?2004h>         for s in SAMPLES:
+[?2004l[?2004h>             e['counts'][s]=min(2,e['counts'][s]+counts[s])
+[?2004l[?2004h>             e['usable'][s]=e['usable'][s] and usable[s]
+[?2004l[?2004h>         log_merge.append((k,src))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         out[k]={'counts':dict(counts),'ad_alt':dict(adalt),'ad_ref':dict(adref),'usable':dict(usable),'src':[src]}
+[?2004l[?2004h>     
+[?2004l[?2004h> unmapped=[]
+[?2004l[?2004h> nrec=0
+[?2004l[?2004h> for r in vcf:
+[?2004l[?2004h>     nrec+=1
+[?2004l[?2004h>     p0=r.pos-1; L=len(r.ref); REF=r.ref.upper(); ALTS=[a.upper() for a in r.alts]
+[?2004l[?2004h>     m0=map37(p0)
+[?2004l[?2004h>     gts={}
+[?2004l[?2004h>     for s in SAMPLES:
+[?2004l[?2004h>         d=r.samples[s]
+[?2004l[?2004h>         gts[s]={'gt':d['GT'],'dp':d['DP'],'gq':d['GQ'],'ad':d['AD'],
+[?2004l[?2004h>                 'usable': (d['DP'] is not None and d['GQ'] is not None and d['DP']>=10 and d['GQ']>=20)}
+[?2004l[?2004h>     if m0 is None:
+[?2004l[?2004h>         for a in r.alts:
+[?2004la[?2004h>             unmapped.append(('22',str(r.pos),r.ref,a))
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     strands={map37(p0+i)[1] for i in range(L)}
+[?2004l[?2004h>     assert len(strands)==1
+[?2004l[?2004h>     st=strands.pop()
+[?2004l[?2004h>     def cnt(s,ai):
+[?2004l[?2004h>         return sum(1 for g in gts[s]['gt'] if g==ai)
+[?2004l[?2004h>     # helper: AD supporting GRCh38 ref at position i (0 if no alt matches 38ref on refdiff sites)
+[?2004l[?2004h>     def adref_at(s,i):
+[?2004l[?2004h>         plus0,_=map37(p0+i)
+[?2004l[?2004h>         b38=fa38.fetch('chr22',plus0,plus0+1).upper()
+[?2004l[?2004h>         r37b = REF[i] if st=='+' else comp(REF[i])
+[?2004l[?2004h>         if b38==r37b:
+[?2004l[?2004h>             return gts[s]['ad'][0] if gts[s]['ad'] else 0
+[?2004l[?2004h>         v=0
+[?2004l[?2004h>         for aj in range(1,len(ALTS)+1):
+[?2004l[?2004h>             a=ALTS[aj-1]
+[?2004l[?2004h>             if len(a)==L and a[i]!=REF[i] and ((a[i] if st=='+' else comp(a[i]))==b38):
+[?2004l[?2004h>                 v=gts[s]['ad'][aj] if gts[s]['ad'] else 0
+[?2004l[?2004h>         return v
+[?2004l[?2004h>     # --- refdiff-created alleles
+[?2004l[?2004h>     for i in range(L):
+[?2004l[?2004h>         plus0,_=map37(p0+i)
+[?2004l[?2004h>         b38=fa38.fetch('chr22',plus0,plus0+1).upper()
+[?2004l[?2004h>         r37b = REF[i] if st=='+' else comp(REF[i])
+[?2004l[?2004h>         if b38 in 'ACGT' and r37b in 'ACGT' and b38!=r37b:
+[?2004l[?2004h>             counts={}
+[?2004l[?2004h>             for s in SAMPLES:
+[?2004l[?2004h>                 c=2-sum(cnt(s,aj) for aj in range(1,len(ALTS)+1) if (len(ALTS[aj-1])!=L or ALTS[aj-1][i]!=REF[i]))
+[?2004l[?2004h>                 counts[s]=max(0,c)
+[?2004l[?2004h>             if any(counts[s]>0 for s in SAMPLES):
+[?2004l[?2004h>                 adalt={s:(gts[s]['ad'][0] if gts[s]['ad'] else 0) for s in SAMPLES}
+[?2004l[?2004h>                 adref={s:adref_at(s,i) for s in SAMPLES}
+[?2004l[?2004h>                 add_allele(plus0,b38,r37b,counts,adalt,adref,{s:gts[s]['usable'] for s in SAMPLES},('created',r.pos,i))
+[?2004l[?2004h>     # --- process each alt
+[?2004l[?2004h>     for ai,a in enumerate(ALTS,start=1):
+[?2004l[?2004h>         counts={s:cnt(s,ai) for s in SAMPLES}
+[?2004l[?2004h>         adalt={s:(gts[s]['ad'][ai] if gts[s]['ad'] and len(gts[s]['ad'])>ai else 0) for s in SAMPLES}
+[?2004l[?2004h>         if len(REF)==1 and len(a)==1:
+[?2004l[?2004h>             plus0,_=m0
+[?2004l[?2004h>             b38=fa38.fetch('chr22',plus0,plus0+1).upper()
+[?2004l[?2004h>             if b38=='N': continue
+[?2004l[?2004h>             altb=a if st=='+' else comp(a)
+[?2004l[?2004h>             if altb==b38: continue
+[?2004l[?2004h>             adref={s:adref_at(s,0) for s in SAMPLES}
+[?2004l[?2004h>             add_allele(plus0,b38,altb,counts,adalt,adref,{s:gts[s]['usable'] for s in SAMPLES},('snp',r.pos))
+[?2004l[?2004h>         elif len(a)==L:
+[?2004l[?2004h>             for i in range(L):
+[?2004l[?2004h>                 if a[i]==REF[i]: continue
+[?2004l[?2004h>                 plus0,_=map37(p0+i)
+[?2004l[?2004h>                 b38=fa38.fetch('chr22',plus0,plus0+1).upper()
+[?2004l[?2004h>                 if b38=='N': continue
+[?2004l[?2004h>                 altb=a[i] if st=='+' else comp(a[i])
+[?2004l[?2004h>                 if altb==b38: continue
+[?2004l[?2004h>                 adref={s:adref_at(s,i) for s in SAMPLES}
+[?2004l[?2004h>                 add_allele(plus0,b38,altb,counts,adalt,adref,{s:gts[s]['usable'] for s in SAMPLES},('mnpsplit',r.pos,i))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if st=='+':
+[?2004l[?2004h>                 q0=map37(p0)[0]; q1=map37(p0+L-1)[0]
+[?2004l[?2004h>                 ref38=fa38.fetch('chr22',q0,q1+1).upper(); alt38=a
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 qhi=map37(p0)[0]; qlo=map37(p0+L-1)[0]
+[?2004l[?2004h>                 ref38=fa38.fetch('chr22',qlo,qhi+1).upper(); alt38=rc(a); q0=qlo
+[?2004l[?2004h>             if 'N' in ref38: continue
+[?2004l[?2004h>             np0,nref,nalt=norm(q0,ref38,alt38)
+[?2004l[?2004h>             if 'N' in nref or 'N' in nalt: continue
+[?2004l[?2004h>             adref={s:(gts[s]['ad'][0] if gts[s]['ad'] else 0) for s in SAMPLES}
+[?2004l[?2004h>             add_allele(np0,nref,nalt,counts,adalt,adref,{s:gts[s]['usable'] for s in SAMPLES},('indel',r.pos))
+[?2004l[?2004h> 
+[?2004l[?2004h> keys=sorted(out.keys(), key=lambda k:(k[0],k[1],k[2]))
+[?2004l[?2004h> with open(OUT+'trio.GRCh38.vcf','w') as f:
+[?2004l[?2004h>     f.write('##fileformat=VCFv4.2\n')
+[?2004l[?2004h>     f.write('##contig=<ID=chr22,length=50818468>\n')
+[?2004l[?2004h>     f.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n')
+[?2004l[?2004h>     f.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t'+'\t'.join(SAMPLES)+'\n')
+[?2004l[?2004h>     for (pos0,ref,alt) in keys:
+[?2004l[?2004h>         e=out[(pos0,ref,alt)]
+[?2004l[?2004h>         gtstr=[{0:'0/0',1:'0/1',2:'1/1'}[e['counts'][s]] for s in SAMPLES]
+[?2004l[?2004h>         f.write('chr22\t%d\t.\t%s\t%s\t.\t.\t.\tGT\t%s\n' % (pos0+1,ref,alt,'\t'.join(gtstr)))
+[?2004l[?2004h> with open(OUT+'unmapped.tsv','w') as f:
+[?2004l[?2004h>     f.write('chrom_in\tpos_in\tref\talt\n')
+[?2004l[?2004h>     for row in unmapped:
+[?2004l[?2004h>         f.write('\t'.join(row)+'\n')
+[?2004l[?2004h> pickle.dump({'out':out,'samples':SAMPLES}, open('/tmp/work/state.pkl','wb'))
+[?2004l[?2004h> print('input records:',nrec,'output records:',len(keys),'unmapped rows:',len(unmapped))
+[?2004l[?2004h> print('dropped:',len(log_drop), log_drop[:10])
+[?2004l[?2004h> print('merges:',len(log_merge), log_merge[:10])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/pipeline.py
+[?2004linput records: 2898 output records: 3129 unmapped rows: 31
+dropped: 0 []
+merges: 0 []
+[?2004hroot@e2a793183a12:/tmp/work# cat > /tmp/work/validate.py << 'EOF'
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> fa38=pysam.FastaFile('/task/input/resources/GRCh38.chr22.fa.gz')
+[?2004l[?2004h> v=pysam.VariantFile('/task/output/trio.GRCh38.vcf')
+[?2004l[?2004h> n=0; bad=0; prev=-1; nonminimal=0
+[?2004l[?2004h> for r in v:
+[?2004l[?2004h>     n+=1
+[?2004l[?2004h>     if r.pos<=prev: print('UNSORTED at',r.pos); bad+=1
+[?2004l[?2004h>     prev=r.pos
+[?2004l[?2004h>     rb=fa38.fetch('chr22',r.pos-1,r.pos-1+len(r.ref)).upper()
+[?2004l[?2004h>     if rb!=r.ref.upper(): print('REF mismatch at',r.pos,r.ref,rb); bad+=1
+[?2004l[?2004h>     if len(r.alts)!=1: print('multi alt',r.pos); bad+=1
+[?2004l[?2004h>     a=r.alts[0]
+[?2004l[?2004h>     if a==r.ref: print('refeqalt',r.pos); bad+=1
+[?2004l[?2004h>     if len(r.ref)>1 and len(a)>1 and (r.ref[0]==a[0] or r.ref[-1]==a[-1]): nonminimal+=1; print('nonminimal',r.pos,r.ref,a)
+[?2004l[?2004h>     if len(r.ref)!=len(a) and (r.ref[-1]==a[-1]):
+[?2004l[?2004h>         # could still shift left
+[?2004l[?2004h>         print('possibly shiftable',r.pos,r.ref,a); nonminimal+=1
+[?2004l[?2004h>     if any(b not in 'ACGT' for b in r.ref+a): print('non-ACGT',r.pos); bad+=1
+[?2004l[?2004h> print('records:',n,'bad:',bad,'nonminimal:',nonminimal)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/tmp/work# python3 /tmp/work/validate.py
+[?2004lUNSORTED at 18926333
+UNSORTED at 18961241
+UNSORTED at 18994060
+UNSORTED at 19003326
+UNSORTED at 19025299
+UNSORTED at 19047859
+UNSORTED at 19065936
+UNSORTED at 19066244
+UNSORTED at 19074947
+UNSORTED at 19094092
+UNSORTED at 19112728
+UNSORTED at 19116356
+UNSORTED at 19182863
+UNSORTED at 19188258
+UNSORTED at 19230244
+UNSORTED at 19231865
+UNSORTED at 19244229
+UNSORTED at 19293611
+UNSORTED at 19304565
+UNSORTED at 19320891
+UNSORTED at 19377430
+UNSORTED at 19385817
+UNSORTED at 19413723
+UNSORTED at 19429867
+UNSORTED at 19433535
+UNSORTED at 19452542
+UNSORTED at 19479296
+UNSORTED at 19484127
+UNSORTED at 21410872
+UNSORTED at 21463193
+UNSORTED at 21488107
+UNSORTED at 21520992
+UNSORTED at 21541725
+UNSORTED at 21559265
+UNSORTED at 21561888
+UNSORTED at 21564296
+UNSORTED at 21645532
+UNSORTED at 21664389
+UNSORTED at 21739267
+UNSORTED at 21772797
+UNSORTED at 21800820
+UNSORTED at 21806978
+UNSORTED at 21825651
+UNSORTED at 21835137
+UNSORTED at 21845572
+UNSORTED at 21870718
+UNSORTED at 21874731
+UNSORTED at 21896138
+UNSORTED at 21907297
+UNSORTED at 21933685
+UNSORTED at 21950731
+UNSORTED at 21978178
+UNSORTED at 21992401
+UNSORTED at 21997641
+UNSORTED at 23639873
+UNSORTED at 23676140
+UNSORTED at 23785574
+UNSORTED at 23797661
+UNSORTED at 23807937
+UNSORTED at 23845829
+UNSORTED at 23846978
+UNSORTED at 23850811
+UNSORTED at 23868409
+UNSORTED at 23883676
+UNSORTED at 23899451
+UNSORTED at 23922526
+UNSORTED at 23927895
+UNSORTED at 23960814
+UNSORTED at 23983273
+UNSORTED at 23990657
+UNSORTED at 23993034
+UNSORTED at 23995974
+UNSORTED at 23999777
+UNSORTED at 24002141
+UNSORTED at 24015753
+UNSORTED at 24019366
+UNSORTED at 24034235
+UNSORTED at 24042599
+UNSORTED at 24044947
+UNSORTED at 24053938
+UNSORTED at 24058591
+UNSORTED at 24075568
+UNSORTED at 24089535
+UNSORTED at 24094141
+UNSORTED at 24101661
+UNSORTED at 24117587
+UNSORTED at 24121451
+UNSORTED at 24126620
+UNSORTED at 24193188
+UNSORTED at 41557140
+UNSORTED at 41568694
+UNSORTED at 41610281
+UNSORTED at 41627648
+UNSORTED at 41635887
+UNSORTED at 41639403
+UNSORTED at 41673492
+UNSORTED at 41698015
+UNSORTED at 41707143
+UNSORTED at 41716734
+UNSORTED at 41719573
+UNSORTED at 41800097
+UNSORTED at 41807772
+UNSORTED at 41816764
+UNSORTED at 41836152
+UNSORTED at 41839785
+UNSORTED at 41853375
+UNSORTED at 41854137
+UNSORTED at 41868197
+UNSORTED at 41872976
+UNSORTED at 41902828
+UNSORTED at 41905056
+UNSORTED at 41941223
+UNSORTED at 41945467
+UNSORTED at 41947244
+UNSORTED at 41974059
+UNSORTED at 41995871
+UNSORTED at 41999356
+UNSORTED at 42044151
+UNSORTED at 42074884
+UNSORTED at 42094984
+UNSORTED at 42096176
+UNSORTED at 42096749
+UNSORTED at 42122976
+UNSORTED at 42127407
+UNSORTED at 42133533
+UNSORTED at 42135783
+UNSORTED at 42138267
+UNSORTED at 42140200
+UNSORTED at 42141394
+UNSORTED at 50068967
+UNSORTED at 50087999
+UNSORTED at 50088031
+UNSORTED at 50118405
+UNSORTED at 50140678
+UNSORTED at 50150184
+UNSORTED at 50167615
+UNSORTED at 50168164
+UNSORTED at 50185185
+UNSORTED at 50208391
+UNSORTED at 50239673
+UNSORTED at 50251742
+UNSORTED at 50307233
+UNSORTED at 50327386
+UNSORTED at 50391472
+UNSORTED at 50395070
+UNSORTED at 50422056
+UNSORTED at 50422956
+UNSORTED at 50480608
+UNSORTED at 50494861
+UNSORTED at 50518362
+UNSORTED at 50541089
+UNSORTED at 50599073
+UNSORTED at 50608506
+UNSORTED at 50640860
+UNSORTED at 50646326
+records: 3129 bad: 155 nonminimal: 0
+[?2004hroot@e2a793183a12:/tmp/work# head -3 /task/output/unmapped.tsv; wc -l /task/output/unmapped.tsv
+[?2004lchrom_in	pos_in	ref	alt
+22	24343906	A	C
+22	24344308	G	C
+32 /task/output/unmapped.tsv
+[?2004hroot@e2a793183a12:/tmp/work# sed -i 's/if r.pos<=prev/if r.pos<prev/' /tmp/work/validate.py && python3 /tmp/work/validate.py
+[?2004lrecords: 3129 bad: 0 nonminimal: 0
+[?2004hroot@e2a793183a12:/tmp/work# grep -n $'18926333\|50088031' /task/output/trio.GRCh38.vcf | head
+[?2004l24:chr22	18926333	.	T	A	.	.	.	GT	0/1	0/0	0/0
+25:chr22	18926333	.	T	G	.	.	.	GT	0/0	0/1	0/0
+2597:chr22	50088031	.	C	A	.	.	.	GT	0/0	0/1	0/0
+2598:chr22	50088031	.	C	G	.	.	.	GT	0/1	0/0	0/0
+[?2004hroot@e2a793183a12:/tmp/work# cd /task/output && bgzip -f trio.GRCh38.vcf && tabix -p vcf trio.GRCh38.vcf.gz && bcftools norm -f /dev/null trio.GRCh38.vcf.gz 2>/dev/null | grep -vc '^#' ; ls -la /task/output
+[?2004l0
+total 40
+drwxr-xr-x 1 root root  4096 Nov 12 08:23 .
+drwxr-xr-x 1 root root  4096 Nov 12 03:17 ..
+-rw-rw-rw- 1 root root 19291 Nov 12 08:18 trio.GRCh38.vcf.gz
+-rw-rw-rw- 1 root root  1761 Nov 12 08:23 trio.GRCh38.vcf.gz.tbi
+-rw-rw-rw- 1 root root   520 Nov 12 08:18 unmapped.tsv
+[?2004hroot@e2a793183a12:/task/output# bcftools norm --check-ref x -f /task/input/resources/GRCh38.chr22.fa.gz trio.GRCh38.vcf.gz 2>&1 | tail -3
+[?2004lchr22	50646326	.	T	A	.	.	.	GT	0/0	0/1	0/0
+chr22	50646326	.	T	G	.	.	.	GT	0/1	0/0	0/1
+Lines   total/split/joined/realigned/removed/skipped:	3129/0/0/0/0/0
+[?2004hroot@e2a793183a12:/task/output# python3 -c "
+[?2004l[?2004h> import pickle
+[?2004l[?2004h> st=pickle.load(open('/tmp/work/state.pkl','rb'))
+[?2004l[?2004h> out=st['out']
+[?2004l[?2004h> created=[k for k,v in out.items() if any(s[0]=='created' for s in v['src'])]
+[?2004l[?2004h> print('records with created src:',len(created))
+[?2004l[?2004h> onlycreated=[k for k,v in out.items() if all(s[0]=='created' for s in v['src'])]
+[?2004l[?2004h> print('records only from created:',len(onlycreated))
+[?2004l[?2004h> import collections
+[?2004l[?2004h> c=collections.Counter(s[0] for v in out.values() for s in v['src'])
+[?2004l[?2004h> print(c)
+[?2004l[?2004h> "
+[?2004lrecords with created src: 64
+records only from created: 64
+Counter({'snp': 2422, 'indel': 487, 'mnpsplit': 156, 'created': 64})
+[?2004hroot@e2a793183a12:/task/output# cat > /tmp/work/sop.py << 'EOF'
+[?2004l[?2004h> import pickle, gzip, re
+[?2004ls[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> import pysam
+[?2004l  [?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> panel=set(l.strip() for l in open('/task/input/panel_genes.txt') if l.strip())
+[?2004l[?2004h> # parse GFF3
+[?2004l[?2004h> tx={}  # tid -> dict
+[?2004l[?2004h> gene_of={}
+[?2004l[?2004h> cur=None
+[?2004l[?2004h> for line in open(RES+'GRCh38.chr22.canonical.gff3'):
+[?2004l[?2004h>     if line.startswith('#'): continue
+[?2004l[?2004h>     f=line.rstrip('\n').split('\t')
+[?2004l[?2004h>     if len(f)<9: continue
+[?2004l[?2004h>     typ=f[2]; attrs=f[8]
+[?2004l[?2004h>     d=dict(x.split('=',1) for x in attrs.split(';') if '=' in x)
+[?2004l[?2004h>     if typ=='mRNA':
+[?2004l[?2004h>         gid=d.get('Parent','').replace('gene:','')
+[?2004l[?2004h>         cur=d.get('ID','').replace('transcript:','')
+[?2004l[?2004h>         gname=None
+[?2004l[?2004h>         tx[cur]={'gene':gid,'strand':f[6],'cds':[],'exons':[]}
+[?2004l[?2004h>         gene_of[gid]=None
+[?2004l[?2004h>     elif typ=='gene':
+[?2004l[?2004h>         gid=d.get('ID','').replace('gene:','')
+[?2004l[?2004h>         gene_of[gid]=d.get('Name')
+[?2004l[?2004h>     elif typ=='CDS' and cur:
+[?2004l[?2004h>         tx[cur]['cds'].append((int(f[3])-1,int(f[4])))
+[?2004l[?2004h>     elif typ=='exon' and cur:
+[?2004l[?2004h>         tx[cur]['exons'].append((int(f[3])-1,int(f[4])))
+[?2004l[?2004h> # gene name map for transcripts
+[?2004l[?2004h> txlist=[]
+[?2004l[?2004h> for tid,t in tx.items():
+[?2004l[?2004h>     t['name']=gene_of.get(t['gene'])
+[?2004l[?2004h>     t['cds'].sort(); t['exons'].sort()
+[?2004l[?2004h>     seq=''.join(fa38.fetch('chr22',s,e).upper() for s,e in t['cds'])
+[?2004l[?2004h>     if t['strand']=='-':
+[?2004l[?2004h>         seq=seq.translate(str.maketrans('ACGTN','TGCAN'))[::-1]
+[?2004l[?2004h>     t['seq']=seq
+[?2004l[?2004h>     txlist.append(tid)
+[?2004l[?2004h> print('transcripts:',len(txlist))
+[?2004l[?2004h> CODON={}
+[?2004l[?2004h> bases='TCAG'
+[?2004l[?2004h> aas='FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG'
+[?2004l[?2004h> i=0
+[?2004l[?2004h> for a in bases:
+[?2004l[?2004h>     for b in bases:
+[?2004l[?2004h>         for c in bases:
+[?2004l[?2004h>             CODON[a+b+c]=aas[i]; i+=1
+[?2004l[?2004h> def aa(s): return CODON.get(s,'?')
+[?2004l[?2004h> 
+[?2004l[?2004h> st=pickle.load(open('/tmp/work/state.pkl','rb'))
+[?2004l[?2004h> out=st['out']; SAMPLES=st['samples']
+[?2004l[?2004h> MOT='F3942-40'; FAT='F3942-82'; PRO='F3942-97'
+[?2004l[?2004h> 
+[?2004l[?2004h> def copy_assign(k):
+[?2004l[?2004h>     e=out[k]
+[?2004l[?2004h>     np_=e['counts'][PRO]; nm=e['counts'][MOT]; nf=e['counts'][FAT]
+[?2004l[?2004h>     if np_==2: return {'both'}
+[?2004l[?2004h>     if np_==1:
+[?2004l[?2004h>         if nm>0 and nf==0: return {'M'}
+[?2004l[?2004h>         if nf>0 and nm==0: return {'F'}
+[?2004l[?2004h>         return {'U'}
+[?2004l[?2004h>     return set()
+[?2004l[?2004h> 
+[?2004l[?2004h> def snv_consq(t,pos0,alt):
+[?2004l[?2004h>     # returns class, or None if outside cds of t
+[?2004l[?2004h>     cds=t['cds']; strand=t['strand']
+[?2004l[?2004h>     # locate in cds
+[?2004l[?2004h>     cum=0; idx=-1
+[?2004l[?2004h>     for (s,e) in cds:
+[?2004l[?2004h>         if s<=pos0<e:
+[?2004l[?2004h>             idx=cum+(pos0-s); break
+[?2004l[?2004h>         cum+=e-s
+[?2004l[?2004h>     if idx<0: return None
+[?2004l[?2004h>     if strand=='-':
+[?2004l[?2004h>         idx=len(t['seq'])-1-idx
+[?2004l[?2004h>         alt=alt.translate(str.maketrans('ACGT','TGCA'))
+[?2004l[?2004h>     c0=idx-idx%3
+[?2004l[?2004h>     refcod=t['seq'][c0:c0+3]
+[?2004l[?2004h>     altcod=refcod[:idx%3]+alt+refcod[idx%3+1:]
+[?2004l[?2004h>     if len(refcod)<3: return None
+[?2004l[?2004h>     ra,xa=aa(refcod),aa(altcod)
+[?2004l[?2004h>     if ra==xa: return 'synonymous',c0,refcod,altcod
+[?2004l[?2004h>     if xa=='*': return 'stop_gained',c0,refcod,altcod
+[?2004l[?2004h>     return 'missense',c0,refcod,altcod
+[?2004l[?2004h> 
+[?2004l[?2004h> def splices(t):
+[?2004l[?2004h>     res=[]
+[?2004l[?2004h>     ex=sorted(set(t['exons'])|set(t['cds']))
+[?2004l[?2004h>     for i in range(len(ex)-1):
+[?2004l[?2004h>         res.append((ex[i][1],ex[i+1][0]))
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> QUAL={'missense','stop_gained','frameshift','splice_acceptor','splice_donor'}
+[?2004l[?2004h> # annotate all variants in panel genes: cons per copy
+[?2004l[?2004h> ann={}  # k -> {'gene':name,'cons':{'M':..,'F':..} }
+[?2004l[?2004h> for (pos0,ref,alt),e in out.items():
+[?2004l[?2004h>     hits=[]
+[?2004l[?2004h>     for tid in txlist:
+[?2004l[?2004h>         t=tx[tid]
+[?2004l[?2004h>         gname=t['name']
+[?2004l[?2004h>         if gname not in panel: continue
+[?2004l[?2004h>         # region check
+[?2004l[?2004h>         if not any(s<=pos0<e for s,e in t['exons']) and not any(s<=pos0<e for s,e in t['cds']):
+[?2004l[?2004h>             # still could be splice (intron near exon) - check splices below anyway
+[?2004l[?2004h>             pass
+[?2004l[?2004h>         if len(ref)==1 and len(alt)==1:
+[?2004l[?2004h>             r=snv_consq(t,pos0,alt)
+[?2004l[?2004h>             if r:
+[?2004l[?2004h>                 hits.append((gname,r[0],'snv',t,r[1:]))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             p0=pos0; r_=ref; a_=alt
+[?2004l[?2004h>             if r_[0]==a_[0]: p0=p0+1; r_=r_[1:]; a_=a_[1:]
+[?2004l[?2004h>             core=(p0,p0+len(r_))
+[?2004l[?2004h>             intr=splices(t)
+[?2004l[?2004h>             don=acc=False
+[?2004l[?2004h>             for (ge,ns) in intr:
+[?2004l[?2004h>                 if len(r_)>0:
+[?2004l[?2004h>                     # deletion affecting first/last 2 bases of intron
+[?2004l[?2004h>                     if core[0] < ge+2 and core[1] > ge: don=True
+[?2004l[?2004h>                     if core[0] < ns and core[1] > ns-2: acc=True
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     if ge-2 < core[0] < ge+2: don=True
+[?2004l[?2004h>                     if ns-2 < core[0] < ns+2: acc=True
+[?2004l[?2004h>             if don: hits.append((gname,'splice_donor','indel',t,None)); continue
+[?2004l[?2004h>             if acc: hits.append((gname,'splice_acceptor','indel',t,None)); continue
+[?2004l[?2004h>             # cds overlap?
+[?2004l[?2004h>             cds=t['cds']
+[?2004l[?2004h>             # cds index range of core
+[?2004l[?2004h>             def cdsidx(x):
+[?2004l[?2004h>                 cum=0
+[?2004l[?2004h>                 for (s,e2) in cds:
+[?2004l[?2004h>                     if s<=x<e2: return cum+(x-s)
+[?2004l[?2004h>                     cum+=e2-s
+[?2004l[?2004h>                 return None
+[?2004l[?2004h>             if len(r_)>0:
+[?2004l[?2004h>                 i0=cdsidx(core[0]); i1=cdsidx(core[1]-1)
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 i0=cdsidx(core[0]-1); i1=cdsidx(core[0])
+[?2004l[?2004h>                 # insertion between cds bases
+[?2004l[?2004h>                 if i0 is not None and i1 is not None and i1==i0+1:
+[?2004l[?2004h>                     cls='inframe_insertion' if len(a_)%3==0 else 'frameshift'
+[?2004l[?2004h>                     hits.append((gname,cls,'indel',t,None))
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             if i0 is None and i1 is None: continue
+[?2004l[?2004h>             if len(r_)==len(a_):
+[?2004l[?2004h>                 # delins: translate
+[?2004l[?2004h>                 seq=t['seq']
+[?2004l[?2004h>                 if t['strand']=='-':
+[?2004l[?2004h>                     L=len(seq)
+[?2004l[?2004h>                     # map genomic cds idx to seq idx: seq idx = L-1-idx per base; region reversed
+[?2004l[?2004h>                     si0=L-1-i1; si1=L-1-i0
+[?2004l[?2004h>                     a_seq=a_.translate(str.maketrans('ACGTN','TGCAN'))[::-1]
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     si0=i0; si1=i1; a_seq=a_
+[?2004l[?2004h>                 newseq=seq[:si0]+a_seq+seq[si1+1:]
+[?2004l[?2004h>                 c0=si0-si0%3
+[?2004l[?2004h>                 def countdiff(s1,s2):
+[?2004l[?2004h>                     n=min(len(s1),len(s2))//3
+[?2004l[?2004h>                     d=0; stopnew=False
+[?2004l[?2004h>                     for j in range(n):
+[?2004l[?2004h>                         x=aa(s1[3*j:3*j+3]); y=aa(s2[3*j:3*j+3])
+[?2004l[?2004h>                         if x!=y: d+=1
+[?2004l[?2004h>                         if y=='*' and x!='*': stopnew=True
+[?2004l[?2004h>                     return d,stopnew
+[?2004l[?2004h>                 d,stopnew=countdiff(seq[c0:],newseq[c0:])
+[?2004l[?2004h>                 if d==0: cls='synonymous'
+[?2004l[?2004h>                 elif stopnew: cls='stop_gained'
+[?2004l[?2004h>                 else: cls='missense'
+[?2004l[?2004h>                 hits.append((gname,cls,'indel',t,None))
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 # deletion with net length change
+[?2004l[?2004h>                 if i0 is None or i1 is None:
+[?2004l[?2004h>                     # spans intron/utr partially; check if cds affected at all
+[?2004l[?2004h>                     hits.append((gname,'frameshift','indel',t,None)) if (i0 is not None or i1 is not None) else None
+[?2004l[?2004h>                     continue
+[?2004l[?2004h>                 if (len(r_)-len(a_))%3==0:
+[?2004l[?2004h>                     # in-frame deletion: check for stop created
+[?2004l[?2004h>                     seq=t['seq']
+[?2004l[?2004h>                     if t['strand']=='-':
+[?2004l[?2004h>                         L=len(seq); si0=L-1-i1; si1=L-1-i0
+[?2004l[?2004h>                     else:
+[?2004l[?2004h>                         si0=i0; si1=i1
+[?2004l[?2004h>                     newseq=seq[:si0]+seq[si1+1:]
+[?2004l[?2004h>                     c0=max(0,si0-2)-max(0,si0-2)%3
+[?2004l[?2004h>                     stopnew=False
+[?2004l[?2004h>                     n=min(len(seq),len(newseq))//3
+[?2004l[?2004h>                     for j in range(c0//3,n):
+[?2004l[?2004h>                         if aa(seq[3*j:3*j+3])!=aa(newseq[3*j:3*j+3]) and aa(newseq[3*j:3*j+3])=='*': stopnew=True
+[?2004l[?2004h>                     cls='stop_gained' if stopnew else 'inframe_deletion'
+[?2004l[?2004h>                 else:
+[?2004l[?2004h>                     cls='frameshift'
+[?2004l[?2004h>                 hits.append((gname,cls,'indel',t,None))
+[?2004l[?2004h>     if not hits: continue
+[?2004l[?2004h>     # one transcript per gene; if multiple genes hit (unlikely), keep first
+[?2004l[?2004h>     gname,cls,kind,t,extra=hits[0]
+[?2004l[?2004h>     if kind=='snv':
+[?2004l[?2004h>         _,c0,refcod,altcod=extra
+[?2004l[?2004h>         ann[(pos0,ref,alt)]={'gene':gname,'kind':'snv','t':t,'c0':c0,'refcod':refcod,'altcod':altcod,'copies':copy_assign((pos0,ref,alt))}
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         ann[(pos0,ref,alt)]={'gene':gname,'kind':'indel','cls':cls,'copies':copy_assign((pos0,ref,alt))}
+[?2004l[?2004h> 
+[?2004l[?2004h> # codon grouping for SNVs
+[?2004l[?2004h> from collections import defaultdict
+[?2004l[?2004h> bycodon=defaultdict(list)
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     if a['kind']=='snv' and a['copies']!={'both'}:
+[?2004l[?2004h>         t=a['t']
+[?2004l[?2004h>         if 'U' in a['copies']:
+[?2004l[?2004h>             bycodon[('U',id(t),a['c0'],a['gene'])].append(k)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             for cp in a['copies']:
+[?2004l[?2004h>                 bycodon[(cp,id(t),a['c0'],a['gene'])].append(k)
+[?2004l[?2004h> hombycodon=defaultdict(list)
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     if a['kind']=='snv' and a['copies']=={'both'}:
+[?2004l[?2004h>         t=a['t']
+[?2004l[?2004h>         hombycodon[(id(t),a['c0'],a['gene'])].append(k)
+[?2004l[?2004h> 
+[?2004l[?2004h> def group_class(members):
+[?2004l[?2004h>     # members: list of keys in same codon; compute joint alt codon
+[?2004l[?2004h>     a0=ann[members[0]]
+[?2004l[?2004h>     refcod=list(a0['refcod'])
+[?2004l[?2004h>     for k in members:
+[?2004l[?2004h>         ai=ann[k]
+[?2004l[?2004h>         idx_in=k[0]- (ai['c0'])  # not used
+[?2004l[?2004h>     # recompute: each variant's position within codon
+[?2004l[?2004h>     t=a0['t']
+[?2004l[?2004h>     altcod=list(refcod)
+[?2004l[?2004h>     for k in members:
+[?2004l[?2004h>         ai=ann[k]
+[?2004l[?2004h>         pos0=k[0]; alt=k[2]
+[?2004l[?2004h>         # find idx in coding seq
+[?2004l[?2004h>         cum=0; idx=-1
+[?2004l[?2004h>         for (s,e) in t['cds']:
+[?2004l[?2004h>             if s<=pos0<e: idx=cum+(pos0-s); break
+[?2004l[?2004h>             cum+=e-s
+[?2004l[?2004h>         if t['strand']=='-':
+[?2004l[?2004h>             idx=len(t['seq'])-1-idx
+[?2004l[?2004h>             alt=alt.translate(str.maketrans('ACGT','TGCA'))
+[?2004l[?2004h>         altcod[idx%3]=alt
+[?2004l[?2004h>     rc_=''.join(refcod); ac_=''.join(altcod)
+[?2004l[?2004h>     ra,xa=aa(rc_),aa(ac_)
+[?2004l[?2004h>     if ra==xa: return 'synonymous'
+[?2004l[?2004h>     if xa=='*': return 'stop_gained'
+[?2004l[?2004h>     return 'missense'
+[?2004l[?2004h> 
+[?2004l[?2004h> cons={}  # k -> cons string
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     if a['kind']=='indel':
+[?2004l[?2004h>         c=a['cls']
+[?2004l[?2004h>         if a['copies']=={'both'}: cons[k]=c if c in QUAL else c
+[?2004l[?2004h>         else: cons[k]=c
+[?2004l[?2004h>     elif a['copies']=={'both'}:
+[?2004l[?2004h>         # find codon group incl U
+[?2004l[?2004h>         t=a['t']; c0=a['c0']
+[?2004l[?2004h>         mem=[k]
+[?2004l[?2004h>         for kk,aa2 in ann.items():
+[?2004l[?2004h>             if kk!=k and aa2['kind']=='snv' and aa2['copies']=={'U'} and aa2['t'] is t and aa2['c0']==c0 and aa2['gene']==a['gene']:
+[?2004l[?2004h>                 mem.append(kk)
+[?2004l[?2004h>         cl=group_class(mem)
+[?2004l[?2004h>         cons[k]=cl+'&'+cl
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         res={}
+[?2004l[?2004h>         for cp in a['copies']:
+[?2004l[?2004h>             key=(cp,id(a['t']),a['c0'],a['gene'])
+[?2004l[?2004h>             mem=bycodon.get(key,[k])
+[?2004l[?2004h>             res[cp]=group_class(mem) if len(mem)>1 else group_class([k])
+[?2004l[?2004h>         cons[k]=res['M'] if 'M' in res else res['F']
+[?2004l[?2004h> 
+[?2004l[?2004h> # popfreq
+[?2004l[?2004h> af={}
+[?2004l[?2004h> with gzip.open(RES+'popfreq.GRCh38.tsv.gz','rt') as f:
+[?2004l[?2004h>     next(f)
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         c,p,r2,a2,v=line.rstrip('\n').split('\t')
+[?2004l[?2004h>         af[(int(p),r2,a2)]=float(v)
+[?2004l[?2004h> 
+[?2004l[?2004h> # SOP rules
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> reviewed={}
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     e=out[k]
+[?2004l[?2004h>     pos0,ref,alt=k
+[?2004l[?2004h>     # proband must carry
+[?2004l[?2004h>     if e['counts'][PRO]==0: continue
+[?2004l[?2004h>     c=cons[k]
+[?2004l[?2004h>     classes=set(c.split('&'))
+[?2004l[?2004h>     if not classes & QUAL: continue
+[?2004l[?2004h>     # usable
+[?2004l[?2004h>     if not all(e['usable'][s] for s in SAMPLES): continue
+[?2004l[?2004h>     # allele balance if proband het
+[?2004l[?2004h>     if e['counts'][PRO]==1:
+[?2004l[?2004h>         den=e['ad_alt'][PRO]+e['ad_ref'][PRO]
+[?2004l[?2004h>         if den==0: continue
+[?2004l[?2004h>         ab=e['ad_alt'][PRO]/den
+[?2004l[?2004h>         if not (0.25<=ab<=0.75): continue
+[?2004l[?2004h>     # rare
+[?2004l[?2004h>     freq=af.get((pos0+1,ref,alt),0.0)
+[?2004l[?2004h>     if freq>=0.001: continue
+[?2004l[?2004h>     nm=e['counts'][MOT]; nf=e['counts'][FAT]; np_=e['counts'][PRO]
+[?2004l[?2004h>     model=None
+[?2004l[?2004h>     if np_==1 and nm==0 and nf==0: model='de_novo'
+[?2004l[?2004h>     elif np_==2 and nm==1 and nf==1: model='homozygous_recessive'
+[?2004l[?2004h>     reviewed[k]={'gene':a['gene'],'cons':c,'model':model,'np':np_,'nm':nm,'nf':nf}
+[?2004l[?2004h> # compound het
+[?2004l[?2004h> bygene=defaultdict(list)
+[?2004l[?2004h> for k,r in reviewed.items():
+[?2004l[?2004h>     bygene[r['gene']].append(k)
+[?2004l[?2004h> for g,ks in bygene.items():
+[?2004l[?2004h>     for k1 in ks:
+[?2004l[?2004h>         for k2 in ks:
+[?2004l[?2004h>             if k1>=k2: continue
+[?2004l[?2004h>             r1,r2=reviewed[k1],reviewed[k2]
+[?2004l[?2004h>             if r1['np']==1 and r2['np']==1:
+[?2004l[?2004h>                 if (r1['nm']==1 and r1['nf']==0 and r2['nm']==0 and r2['nf']==1) or (r2['nm']==1 and r2['nf']==0 and r1['nm']==0 and r1['nf']==1):
+[?2004l[?2004h>                     r1['model']=r1['model'] or 'compound_het'
+[?2004l[?2004h>                     r2['model']=r2['model'] or 'compound_het'
+[?2004l[?2004h> for k in sorted(reviewed.keys()):
+[?2004l[?2004h>     r=reviewed[k]
+[?2004l[?2004h>     if r['model']:
+[?2004l[?2004h>         rows.append(('chr22',str(k[0]+1),k[1],k[2],r['gene'],r['cons'],r['model']))
+[?2004l[?2004h> with open('/task/output/candidates.tsv','w') as f:
+[?2004l[?2004h>     f.write('chrom\tpos\tref\talt\tgene\tconsequence\tmodel\n')
+[?2004l[?2004h>     for row in rows:
+[?2004l[?2004h>         f.write('\t'.join(row)+'\n')
+[?2004l[?2004h> print('candidates:',len(rows))
+[?2004l[?2004h> for row in rows: print(row)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+candidates: 0
+[?2004hroot@e2a793183a12:/task/output# cat > /tmp/work/debug.py << 'EOF'
+[?2004l[?2004h> exec(open('/tmp/work/sop.py').read().split("# popfreq")[0])
+[?2004l[?2004h> from collections import Counter
+[?2004l[?2004h> cnt=Counter()
+[?2004l[?2004h> print('annotated variants in panel genes:', len(ann))
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     cnt[a.get('cls', a['kind'])]+=1
+[?2004l[?2004h> print(cnt)
+[?2004l[?2004h> # funnel
+[?2004l[?2004h> af={}
+[?2004l[?2004h> import gzip
+[?2004l[?2004h> with gzip.open(RES+'popfreq.GRCh38.tsv.gz','rt') as f:
+[?2004l[?2004h>     next(f)
+[?2004l[?2004h>     for line in f:
+[?2004l[?2004h>         c,p,r2,a2,v=line.rstrip('\n').split('\t')
+[?2004l[?2004h>         af[(int(p),r2,a2)]=float(v)
+[?2004l[?2004h> step=Counter()
+[?2004l[?2004h> near=[]
+[?2004l[?2004h> for k,a in ann.items():
+[?2004l[?2004h>     e=out[k]
+[?2004l[?2004h>     if e['counts'][PRO]==0: step['nocarry']+=1; continue
+[?2004l[?2004h>     c=cons[k]
+[?2004l[?2004h>     if not (set(c.split('&')) & QUAL): step['noqual:'+c]+=1; continue
+[?2004l[?2004h>     if not all(e['usable'][s] for s in SAMPLES): step['unusable']+=1; near.append(('unusable',k,c,a['gene'],dict(e['counts']),{s:(e['ad_alt'][s],e['ad_ref'][s],e['usable'][s]) for s in SAMPLES})); continue
+[?2004l[?2004h>     if e['counts'][PRO]==1:
+[?2004l[?2004h>         den=e['ad_alt'][PRO]+e['ad_ref'][PRO]
+[?2004l[?2004h>         ab=e['ad_alt'][PRO]/den if den else 0
+[?2004l[?2004h>         if not (0.25<=ab<=0.75): step['ab']+=1; near.append(('ab',k,c,a['gene'],ab,dict(e['counts']))); continue
+[?2004l[?2004h>     freq=af.get((k[0]+1,k[1],k[2]),0.0)
+[?2004l[?2004h>     if freq>=0.001: step['freq']+=1; near.append(('freq',k,c,a['gene'],freq)); continue
+[?2004l[?2004h>     step['pass']+=1
+[?2004l[?2004h>     nm=e['counts'][MOT]; nf=e['counts'][FAT]; np_=e['counts'][PRO]
+[?2004l[?2004h>     near.append(('PASS',k,c,a['gene'],(np_,nm,nf)))
+[?2004l[?2004h> print(step)
+[?2004l[?2004h> for x in near[:30]: print(x)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/debug.py
+[?2004ltranscripts: 88
+annotated variants in panel genes: 0
+Counter()
+Counter()
+[?2004hroot@e2a793183a12:/task/output# cat > /tmp/work/debug2.py << 'EOF'
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> panel=set(l.strip() for l in open('/task/input/panel_genes.txt') if l.strip())
+[?2004l[?2004h> names=set()
+[?2004l[?2004h> import re
+[?2004l[?2004h> for line in open(RES+'GRCh38.chr22.canonical.gff3'):
+[?2004l[?2004h>     if line.startswith('#'): continue
+[?2004l[?2004h>     f=line.rstrip('\n').split('\t')
+[?2004l[?2004h>     if len(f)<9: continue
+[?2004l[?2004h>     m=re.search(r'Name=([^;]+)', f[8])
+[?2004l[?2004h>     if f[2]=='gene' and m: names.add(m.group(1))
+[?2004l[?2004h> print('gff gene names count:', len(names))
+[?2004l[?2004h> print('panel not in gff:', sorted(panel-names))
+[?2004l[?2004h> print('sample names:', sorted(names)[:10])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/debug2.py
+[?2004lgff gene names count: 88
+panel not in gff: []
+sample names: ['ADM2', 'ARSA', 'C22orf15', 'C22orf39', 'CABIN1', 'CCDC116', 'CCDC134', 'CENPM', 'CHCHD10', 'CHKB']
+[?2004hroot@e2a793183a12:/task/output# sed -i 's/^        gname=None\n//; /gname=None/d; /^        gene_of\[gid\]=None$/d' /tmp/work/sop.py && grep -n 'gene_of' /tmp/work/sop.py
+[?2004l8:gene_of={}
+22:        gene_of[gid]=d.get('Name')
+30:    t['name']=gene_of.get(t['gene'])
+[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+Traceback (most recent call last):
+  File "/tmp/work/sop.py", line 195, in <module>
+    _,c0,refcod,altcod=extra
+    ^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 4, got 3)
+[?2004hroot@e2a793183a12:/task/output# sed -i 's/_,c0,refcod,altcod=extra/c0,refcod,altcod=extra/' /tmp/work/sop.py && python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+Traceback (most recent call last):
+  File "/tmp/work/sop.py", line 266, in <module>
+    cons[k]=res['M'] if 'M' in res else res['F']
+                                        ~~~^^^^^
+KeyError: 'F'
+[?2004hroot@e2a793183a12:/task/output# sed -i "s/cons\[k\]=res\['M'\] if 'M' in res else res\['F'\]/cons[k]=next(iter(res.values()))/" /tmp/work/sop.py && python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+Traceback (most recent call last):
+  File "/tmp/work/sop.py", line 266, in <module>
+    cons[k]=next(iter(res.values()))
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration
+[?2004hroot@e2a793183a12:/task/output# python3 - << 'EOF'
+[?2004l[?2004h> src=open('/tmp/work/sop.py').read()
+[?2004l[?2004h> src=src.replace("for k,a in ann.items():\n    if a['kind']=='indel':", "for k,a in ann.items():\n    if not a['copies']:\n        cons[k]='none'\n        continue\n    if a['kind']=='indel':")
+[?2004l[?2004h> open('/tmp/work/sop.py','w').write(src)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+candidates: 12
+('chr22', '21634728', 'G', 'A', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21637020', 'G', 'T', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21923145', 'C', 'A', 'PPM1F', 'missense', 'compound_het')
+('chr22', '21923204', 'T', 'TCA', 'PPM1F', 'frameshift', 'compound_het')
+('chr22', '23767405', 'C', 'G', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23767406', 'T', 'A', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23974357', 'C', 'A', 'DDT', 'stop_gained', 'de_novo')
+('chr22', '41675013', 'A', 'T', 'SNU13', 'missense', 'de_novo')
+('chr22', '41770841', 'A', 'T', 'MEI1', 'missense', 'de_novo')
+('chr22', '50266583', 'C', 'A', 'MAPK11', 'missense', 'compound_het')
+('chr22', '50266955', 'A', 'AGG', 'MAPK11', 'frameshift', 'compound_het')
+('chr22', '50506864', 'G', 'T', 'LMF2', 'missense&missense', 'homozygous_recessive')
+[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/debug.py 2>&1 | tail -40
+[?2004ltranscripts: 88
+annotated variants in panel genes: 94
+Counter({'snv': 89, 'frameshift': 4, 'stop_gained': 1})
+Counter({'noqual:synonymous': 38, 'nocarry': 24, 'pass': 20, 'freq': 10, 'unusable': 2})
+('PASS', (18919787, 'A', 'G'), 'missense', 'PRODH', (1, 1, 0))
+('freq', (19122135, 'A', 'C'), 'missense', 'DGCR2', 0.0856)
+('freq', (21634403, 'C', 'T'), 'missense', 'CCDC116', 0.192)
+('PASS', (21634727, 'G', 'A'), 'stop_gained', 'CCDC116', (1, 0, 1))
+('PASS', (21637019, 'G', 'T'), 'stop_gained', 'CCDC116', (1, 1, 0))
+('freq', (21701181, 'C', 'G'), 'missense', 'YPEL1', 0.0916)
+('PASS', (21923203, 'T', 'TCA'), 'frameshift', 'PPM1F', (1, 1, 0))
+('PASS', (21923144, 'C', 'A'), 'missense', 'PPM1F', (1, 0, 1))
+('freq', (23631885, 'A', 'AGG'), 'frameshift', 'DRICH1', 0.0256)
+('PASS', (23767404, 'C', 'G'), 'missense', 'CHCHD10', (1, 0, 1))
+('PASS', (23767405, 'T', 'A'), 'missense', 'CHCHD10', (1, 1, 0))
+('unusable', (23868600, 'G', 'T'), 'stop_gained', 'SLC2A11', {'F3942-40': 0, 'F3942-82': 0, 'F3942-97': 1}, {'F3942-40': (0, 6, False), 'F3942-82': (0, 32, True), 'F3942-97': (14, 12, True)})
+('freq', (23973887, 'T', 'C'), 'missense', 'DDT', 0.216)
+('PASS', (23974356, 'C', 'A'), 'stop_gained', 'DDT', (1, 0, 0))
+('PASS', (41583997, 'G', 'T'), 'stop_gained', 'PMM1', (1, 1, 0))
+('PASS', (41584352, 'C', 'G'), 'missense', 'PMM1', (1, 1, 0))
+('PASS', (41675012, 'A', 'T'), 'missense', 'SNU13', (1, 0, 0))
+('PASS', (41770840, 'A', 'T'), 'missense', 'MEI1', (1, 0, 0))
+('PASS', (41878073, 'C', 'G'), 'missense', 'SREBF2', (1, 1, 0))
+('PASS', (42079844, 'G', 'GT'), 'frameshift', 'SMDT1', (1, 0, 1))
+('PASS', (50194372, 'T', 'C'), 'missense', 'TRABD', (1, 0, 1))
+('PASS', (50198405, 'G', 'A'), 'missense', 'TRABD', (1, 0, 1))
+('freq', (50220553, 'G', 'T'), 'missense', 'TUBGCP6', 0.0364)
+('freq', (50265388, 'T', 'G'), 'missense', 'MAPK11', 0.038)
+('PASS', (50266582, 'C', 'A'), 'missense', 'MAPK11', (1, 0, 1))
+('PASS', (50266954, 'A', 'AGG'), 'frameshift', 'MAPK11', (1, 1, 0))
+('freq', (50504624, 'C', 'A'), 'missense&missense', 'LMF2', 0.173)
+('PASS', (50506863, 'G', 'T'), 'missense&missense', 'LMF2', (2, 1, 1))
+('unusable', (50546884, 'G', 'A'), 'stop_gained', 'KLHDC7B', {'F3942-40': 0, 'F3942-82': 0, 'F3942-97': 1}, {'F3942-40': (0, 33, True), 'F3942-82': (2, 10, False), 'F3942-97': (16, 17, True)})
+('freq', (50547815, 'G', 'A'), 'missense', 'KLHDC7B', 0.234)
+[?2004hroot@e2a793183a12:/task/output# cat > /tmp/work/verify.py << 'EOF'
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> def rc(s): return s.translate(str.maketrans('ACGTN','TGCAN'))[::-1]
+[?2004l[?2004h> # minus chain 900001: t 22275241-22280170 (1-based t start 22275242), q plus 28892671-28897600
+[?2004l[?2004h> # check an input record in that range
+[?2004l[?2004h> v37=pysam.VariantFile('/task/input/trio.vcf.gz')
+[?2004l[?2004h> v38=pysam.VariantFile('/task/output/trio.GRCh38.vcf.gz')
+[?2004l[?2004h> import collections
+[?2004l[?2004h> out={}
+[?2004l[?2004h> for r in v38:
+[?2004l[?2004h>     out[(r.pos,r.ref,r.alts[0])]=(r.samples['F3942-40']['GT'],r.samples['F3942-82']['GT'],r.samples['F3942-97']['GT'])
+[?2004l[?2004h> n=0
+[?2004l[?2004h> for r in v37:
+[?2004l[?2004h>     if 22275241<=r.pos-1<22280170 and n<3 and len(r.ref)==1 and len(r.alts[0])==1:
+[?2004l[?2004h>         q=28892671+((r.pos-1)-22275241)  # wait: minus chain: plus q0 = qsize? no; for chain 900001 qStart..; blocks: q plus start = qsize - qc - size
+[?2004l[?2004h>         n+=1
+[?2004l[?2004h> print('chain900001 blocks:')
+[?2004l[?2004h> blocks=[]
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain': cur_id=f[12]; qs=int(f[8]); t=int(f[5]); q=int(f[10]); st=f[9]
+[?2004l[?2004h>     elif cur_id=='900001':
+[?2004l[?2004h>         size=int(f[0]); blocks.append((t,t+size,qs-q-size)); t+=size; q+=size
+[?2004l[?2004h>         if len(f)==3: t+=int(f[1]); q+=int(f[2])
+[?2004l[?2004h> for b in blocks[:5]: print(b, fa37.fetch('chr22',b[0],b[0]+10).upper(), rc(fa38.fetch('chr22',b[2],b[2]+10).upper()))
+[?2004l[?2004h> v37=pysam.VariantFile('/task/input/trio.vcf.gz')
+[?2004l[?2004h> shown=0
+[?2004l[?2004h> for r in v37:
+[?2004l[?2004h>     p0=r.pos-1
+[?2004l[?2004h>     for (s,e,q0) in blocks:
+[?2004l[?2004h>         if s<=p0<e and shown<3 and len(r.ref)==1 and len(r.alts[0])==1:
+[?2004l[?2004h>             plus=q0+(p0-s)
+[?2004l[?2004h>             altc=r.alts[0].translate(str.maketrans('ACGT','TGCA'))
+[?2004l[?2004h>             refc=r.ref.translate(str.maketrans('ACGT','TGCA'))
+[?2004l[?2004h>             print('input',r.pos,r.ref,r.alts[0],'-> expect chr22',plus+1,refc,altc,'in output:',out.get((plus+1,refc,altc)),'input GTs:',[r.samples[x]['GT'] for x in ['F3942-40','F3942-82','F3942-97']])
+[?2004l[?2004h>             shown+=1
+[?2004l[?2004h>             break
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/verify.py
+[?2004lchain900001 blocks:
+(22275241, 22280170, 21920868) TCCTGGCTTT GTGGGCATAA
+input 22275612 C A -> expect chr22 21921239 G T in output: None input GTs: [(0, 1), (0, 0), (0, 1)]
+input 22275667 T G -> expect chr22 21921294 A C in output: None input GTs: [(0, 0), (0, 1), (0, 0)]
+input 22275724 A C -> expect chr22 21921351 T G in output: None input GTs: [(0, 0), (0, 1), (0, 1)]
+[?2004hroot@e2a793183a12:/task/output# python3 -c "
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> v=pysam.VariantFile('/task/output/trio.GRCh38.vcf.gz')
+[?2004l[?2004h> for r in v:
+[?2004l[?2004h>     if r.pos in (19074947,19081715,19090389):
+[?2004l[?2004h>         print(r.pos,r.ref,r.alts[0],[r.samples[s]['GT'] for s in r.samples])
+[?2004l[?2004h> "
+[?2004l19074947 T C [(0, 1), (0, 0), (0, 1)]
+19074947 T G [(0, 0), (0, 1), (0, 1)]
+[?2004hroot@e2a793183a12:/task/output# zcat /task/input/trio.vcf.gz | awk '\$2==19062460 || \$2==19069228 || \$2==19077902'
+[?2004lawk: 0: unexpected character '\'
+awk: 1: unexpected character '\'
+awk: 1: unexpected character '\'
+[?2004hroot@e2a793183a12:/task/output# cat > /tmp/work/verify2.py << 'EOF'
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> RES='/task/input/resources/'
+[?2004l[?2004h> fa37=pysam.FastaFile(RES+'GRCh37.chr22.fa.gz')
+[?2004l[?2004h> fa38=pysam.FastaFile(RES+'GRCh38.chr22.fa.gz')
+[?2004l[?2004h> def rc(s): return s.translate(str.maketrans('ACGTN','TGCAN'))[::-1]
+[?2004l[?2004h> qsize=50818468
+[?2004l[?2004h> # chain 900001: header qStart 28892671 qEnd 28897600 on '-'
+[?2004l[?2004h> t0=22275241; size=4929
+[?2004l[?2004h> qc=28892671
+[?2004l[?2004h> a=fa37.fetch('chr22',t0,t0+size).upper()
+[?2004l[?2004h> print('A: plus=qc direct, rc:', rc(fa38.fetch('chr22',qc,qc+20).upper()), 'vs 37:', a[:20])
+[?2004l[?2004h> q0B=qsize-qc-size
+[?2004l[?2004h> print('q0B',q0B)
+[?2004l[?2004h> b=fa38.fetch('chr22',q0B,q0B+size).upper()
+[?2004l[?2004h> print('B: rc:', rc(b)[:20], 'vs 37:', a[:20])
+[?2004l[?2004h> print('B match count:', sum(1 for x,y in zip(a,rc(b)) if x==y))
+[?2004l[?2004h> # also try: plus = qEnd - size? that's same as q0B? qEnd=28897600 -> 28897600-4929=28892671=qc. no
+[?2004l[?2004h> # interpretation C: plus start = qsize - qEnd + (qc - qStart)? = qsize-qEnd=21920868 same as B for single block
+[?2004l[?2004h> # print raw chain lines for 900001
+[?2004l[?2004h> started=False
+[?2004l[?2004h> for line in open(RES+'hg19ToHg38.chr22.over.chain'):
+[?2004l[?2004h>     f=line.split()
+[?2004l[?2004h>     if not f: continue
+[?2004l[?2004h>     if f[0]=='chain':
+[?2004l[?2004h>         started=(f[12]=='900001')
+[?2004l[?2004h>         if started: print(line.strip())
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     if started: print(line.strip())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/verify2.py
+[?2004lA: plus=qc direct, rc: NNNNNNNNNNNNNNNNNNNN vs 37: TCCTGGCTTTGTTCCAGTGC
+q0B 21920868
+B: rc: TCCTGGCTTTGTTCCAGTGC vs 37: TCCTGGCTTTGTTCCAGTGC
+B match count: 4929
+chain 246450 chr22 51304566 + 22275241 22280170 chr22 50818468 - 28892671 28897600 900001
+4929
+[?2004hroot@e2a793183a12:/task/output# python3 -c "
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> v=pysam.VariantFile('/task/output/trio.GRCh38.vcf.gz')
+[?2004l[?2004h> fa=pysam.FastaFile('/task/input/resources/GRCh38.chr22.fa.gz')
+[?2004l[?2004h> for p in (21921239,21921294,21921351):
+[?2004l[?2004h>     print('38 base at',p,':',fa.fetch('chr22',p-1,p))
+[?2004l[?2004h> for r in v:
+[?2004l[?2004h>     if r.pos in (21921239,21921294,21921351):
+[?2004l[?2004h>         print(r.pos,r.ref,r.alts[0],[str(r.samples[s]['GT']) for s in r.samples])
+[?2004l[?2004h> "
+[?2004l38 base at 21921239 : C
+38 base at 21921294 : C
+38 base at 21921351 : T
+[?2004hroot@e2a793183a12:/task/output# zcat /task/input/trio.vcf.gz | grep -P '^22\t2227561[27]\t|^22\t22275724\t'
+[?2004l22	22275612	.	C	A	3720	PASS	.	GT:AD:DP:GQ	0/1:23,13:36:99	0/0:41,0:41:99	0/1:21,20:41:99
+22	22275724	.	A	C	2583	PASS	.	GT:AD:DP:GQ	0/0:35,0:35:99	0/1:13,15:28:99	0/1:19,14:33:99
+[?2004hroot@e2a793183a12:/task/output# python3 -c "
+[?2004l[?2004h> import pysam
+[?2004l[?2004h> v=pysam.VariantFile('/task/output/trio.GRCh38.vcf.gz')
+[?2004l[?2004h> fa=pysam.FastaFile('/task/input/resources/GRCh38.chr22.fa.gz')
+[?2004l[?2004h> q0=21920868; size=4929; t0=22275241
+[?2004l[?2004h> for p37 in (22275612,22275667,22275724):
+[?2004l[?2004h>     d=p37-1-t0
+[?2004l[?2004h>     plus=q0+size-1-d
+[?2004l[?2004h>     print('37pos',p37,'-> 38pos',plus+1,'38base',fa.fetch('chr22',plus,plus+1))
+[?2004l[?2004h> for r in v:
+[?2004l[?2004h>     if 21921200<r.pos<21921750 and r.pos in (21921425,21474839,21921423):
+[?2004l[?2004h>         print(r.pos,r.ref,r.alts)
+[?2004l[?2004h> import itertools
+[?2004l[?2004h> v2=pysam.VariantFile('/task/output/trio.GRCh38.vcf.gz')
+[?2004l[?2004h> recs={r.pos:(r.ref,r.alts[0],[str(r.samples[s]['GT']) for s in r.samples]) for r in v2}
+[?2004l[?2004h> for p37 in (22275612,22275667,22275724):
+[?2004l[?2004h>     d=p37-1-t0; plus=q0+size-1-d
+[?2004l[?2004h>     print(plus+1, recs.get(plus+1))
+[?2004l[?2004h> "
+[?2004l37pos 22275612 -> 38pos 21925427 38base G
+37pos 22275667 -> 38pos 21925372 38base A
+37pos 22275724 -> 38pos 21925315 38base T
+21925427 ('G', 'T', ['(0, 1)', '(0, 0)', '(0, 1)'])
+21925372 ('A', 'C', ['(0, 0)', '(0, 1)', '(0, 0)'])
+21925315 ('T', 'G', ['(0, 0)', '(0, 1)', '(0, 1)'])
+[?2004hroot@e2a793183a12:/task/output# zcat /task/input/trio.vcf.gz | grep -P '^22\t(19062460|19069228|19077902)\t'
+[?2004l22	19062460	.	G	T,C	1134	PASS	.	GT:AD:DP:GQ	1/2:0,20,18:38:99	0/1:22,18,0:40:99	0/2:17,0,11:28:99
+[?2004hroot@e2a793183a12:/task/output# cat /task/output/candidates.tsv; echo ---; python3 -c "
+[?2004l[?2004h> import pickle
+[?2004l[?2004h> st=pickle.load(open('/tmp/work/state.pkl','rb'))
+[?2004l[?2004h> out=st['out']
+[?2004l[?2004h> # show created records
+[?2004l[?2004h> n=0
+[?2004l[?2004h> for k,v in out.items():
+[?2004l[?2004h>     if any(s[0]=='created' for s in v['src']) and n<5:
+[?2004l[?2004h>         print(k, v['counts'], v['src']); n+=1
+[?2004l[?2004h> "
+[?2004lchrom	pos	ref	alt	gene	consequence	model
+chr22	21634728	G	A	CCDC116	stop_gained	compound_het
+chr22	21637020	G	T	CCDC116	stop_gained	compound_het
+chr22	21923145	C	A	PPM1F	missense	compound_het
+chr22	21923204	T	TCA	PPM1F	frameshift	compound_het
+chr22	23767405	C	G	CHCHD10	missense	compound_het
+chr22	23767406	T	A	CHCHD10	missense	compound_het
+chr22	23974357	C	A	DDT	stop_gained	de_novo
+chr22	41675013	A	T	SNU13	missense	de_novo
+chr22	41770841	A	T	MEI1	missense	de_novo
+chr22	50266583	C	A	MAPK11	missense	compound_het
+chr22	50266955	A	AGG	MAPK11	frameshift	compound_het
+chr22	50506864	G	T	LMF2	missense&missense	homozygous_recessive
+---
+(19074946, 'T', 'G') {'F3942-40': 0, 'F3942-82': 1, 'F3942-97': 1} [('created', 19062460, 0)]
+(19382815, 'A', 'T') {'F3942-40': 1, 'F3942-82': 0, 'F3942-97': 1} [('created', 19370339, 0)]
+(21637019, 'G', 'T') {'F3942-40': 1, 'F3942-82': 0, 'F3942-97': 1} [('created', 21991309, 0)]
+(21866247, 'C', 'T') {'F3942-40': 0, 'F3942-82': 1, 'F3942-97': 0} [('created', 22220538, 0)]
+(21956074, 'G', 'T') {'F3942-40': 1, 'F3942-82': 1, 'F3942-97': 1} [('created', 22310447, 0)]
+[?2004hroot@e2a793183a12:/task/output# python3 -c "
+[?2004l[?2004h> cur=None; bad=0; ncds=0
+[?2004l[?2004h> for line in open('/task/input/resources/GRCh38.chr22.canonical.gff3'):
+[?2004l[?2004h>     if line.startswith('#'): continue
+[?2004l[?2004h>     f=line.rstrip().split('\t')
+[?2004l[?2004h>     if len(f)<9: continue
+[?2004l[?2004h>     d=dict(x.split('=',1) for x in f[8].split(';') if '=' in x)
+[?2004l[?2004h>     if f[2]=='mRNA': cur=d.get('ID')
+[?2004l[?2004h>     elif f[2]=='gene':
+[?2004l[?2004h>         if cur is not None: pass
+[?2004l[?2004h>         cur=None
+[?2004l[?2004h>     elif f[2] in ('CDS','exon'):
+[?2004l[?2004h>         if cur is None: bad+=1
+[?2004l[?2004h>         else: ncds+=1
+[?2004l[?2004h> print('cds/exon lines:',ncds,'orphan:',bad)
+[?2004l[?2004h> import re
+[?2004l[?2004h> n=0
+[?2004l[?2004h> for line in open('/task/input/resources/GRCh38.chr22.canonical.gff3'):
+[?2004l[?2004h>     if '\tmRNA\t' in line: n+=1
+[?2004l[?2004h> print('mRNA lines:',n)
+[?2004l[?2004h> "
+[?2004lcds/exon lines: 1758 orphan: 0
+mRNA lines: 88
+[?2004hroot@e2a793183a12:/task/output# zcat /task/input/trio.vcf.gz | grep -P '^22\t21991309\t'; zcat /task/output/trio.GRCh38.vcf.gz | grep -P '^chr22\t21637020\t'
+[?2004l22	21991309	.	T	G	3445	PASS	.	GT:AD:DP:GQ	0/1:13,22:35:99	1/1:0,32:32:96	0/1:18,17:35:99
+chr22	21637020	.	G	T	.	.	.	GT	0/1	0/0	0/1
+[?2004hroot@e2a793183a12:/task/output# python3 - << 'EOF'
+[?2004l[?2004h> src=open('/tmp/work/pipeline.py').read()
+[?2004l[?2004h> old="""                adalt={s:(gts[s]['ad'][0] if gts[s]['ad'] else 0) for s in SAMPLES}
+[?2004l[?2004h>                 adref={s:adref_at(s,i) for s in SAMPLES}"""
+[?2004l[?2004h> new="""                adalt={s:adref_at(s,i) for s in SAMPLES}
+[?2004l[?2004h>                 adref={s:(gts[s]['ad'][0] if gts[s]['ad'] else 0) for s in SAMPLES}"""
+[?2004l[?2004h> assert old in src
+[?2004l[?2004h> src=src.replace(old,new)
+[?2004l[?2004h> open('/tmp/work/pipeline.py','w').write(src)
+[?2004l[?2004h> print('patched')
+[?2004l[?2004h> EOF
+[?2004lpatched
+[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/pipeline.py && cd /task/output && bgzip -f trio.GRCh38.vcf && tabix -f -p vcf trio.GRCh38.vcf.gz && python3 /tmp/work/sop.py
+[?2004linput records: 2898 output records: 3129 unmapped rows: 31
+dropped: 0 []
+merges: 0 []
+transcripts: 88
+candidates: 12
+('chr22', '21634728', 'G', 'A', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21637020', 'G', 'T', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21923145', 'C', 'A', 'PPM1F', 'missense', 'compound_het')
+('chr22', '21923204', 'T', 'TCA', 'PPM1F', 'frameshift', 'compound_het')
+('chr22', '23767405', 'C', 'G', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23767406', 'T', 'A', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23974357', 'C', 'A', 'DDT', 'stop_gained', 'de_novo')
+('chr22', '41675013', 'A', 'T', 'SNU13', 'missense', 'de_novo')
+('chr22', '41770841', 'A', 'T', 'MEI1', 'missense', 'de_novo')
+('chr22', '50266583', 'C', 'A', 'MAPK11', 'missense', 'compound_het')
+('chr22', '50266955', 'A', 'AGG', 'MAPK11', 'frameshift', 'compound_het')
+('chr22', '50506864', 'G', 'T', 'LMF2', 'missense&missense', 'homozygous_recessive')
+[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/validate.py && bcftools norm --check-ref x -f /task/input/resources/GRCh38.chr22.fa.gz /task/output/trio.GRCh38.vcf.gz 2>&1 | tail -1 && ls -la /task/output && head -4 /task/output/unmapped.tsv
+[?2004l[E::hts_open_format] Failed to open file "/task/output/trio.GRCh38.vcf" : No such file or directory
+Traceback (most recent call last):
+  File "/tmp/work/validate.py", line 3, in <module>
+    v=pysam.VariantFile('/task/output/trio.GRCh38.vcf')
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pysam/libcbcf.pyx", line 4113, in pysam.libcbcf.VariantFile.__init__
+  File "pysam/libcbcf.pyx", line 4338, in pysam.libcbcf.VariantFile.open
+FileNotFoundError: [Errno 2] could not open variant file `b'/task/output/trio.GRCh38.vcf'`: No such file or directory
+[?2004hroot@e2a793183a12:/task/output# sed -i 's|/task/output/trio.GRCh38.vcf|/task/output/trio.GRCh38.vcf.gz|' /tmp/work/validate.py && python3 /tmp/work/validate.py && bcftools norm --check-ref x -f /task/input/resources/GRCh38.chr22.fa.gz /task/output/trio.GRCh38.vcf.gz 2>&1 | tail -1 && ls -la /task/output
+[?2004lrecords: 3129 bad: 0 nonminimal: 0
+Lines   total/split/joined/realigned/removed/skipped:	3129/0/0/0/0/0
+total 44
+drwxr-xr-x 1 root root  4096 Nov 12 08:43 .
+drwxr-xr-x 1 root root  4096 Nov 12 03:17 ..
+-rw-rw-rw- 1 root root   630 Nov 12 08:43 candidates.tsv
+-rw-rw-rw- 1 root root 19291 Nov 12 08:43 trio.GRCh38.vcf.gz
+-rw-rw-rw- 1 root root  1761 Nov 12 08:43 trio.GRCh38.vcf.gz.tbi
+-rw-rw-rw- 1 root root   520 Nov 12 08:43 unmapped.tsv
+[?2004hroot@e2a793183a12:/task/output# python3 - << 'EOF'
+[?2004l[?2004h> src=open('/tmp/work/sop.py').read()
+[?2004l[?2004h> old="        cl=group_class(mem)\n        cons[k]=cl+'&'+cl"
+[?2004l[?2004h> new="        cl=group_class(mem)\n        cons[k]=cl"
+[?2004l[?2004h> assert old in src
+[?2004l[?2004h> src=src.replace(old,new)
+[?2004l[?2004h> open('/tmp/work/sop.py','w').write(src)
+[?2004l[?2004h> print('patched')
+[?2004l[?2004h> EOF
+[?2004lpatched
+[?2004hroot@e2a793183a12:/task/output# python3 /tmp/work/sop.py
+[?2004ltranscripts: 88
+candidates: 12
+('chr22', '21634728', 'G', 'A', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21637020', 'G', 'T', 'CCDC116', 'stop_gained', 'compound_het')
+('chr22', '21923145', 'C', 'A', 'PPM1F', 'missense', 'compound_het')
+('chr22', '21923204', 'T', 'TCA', 'PPM1F', 'frameshift', 'compound_het')
+('chr22', '23767405', 'C', 'G', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23767406', 'T', 'A', 'CHCHD10', 'missense', 'compound_het')
+('chr22', '23974357', 'C', 'A', 'DDT', 'stop_gained', 'de_novo')
+('chr22', '41675013', 'A', 'T', 'SNU13', 'missense', 'de_novo')
+('chr22', '41770841', 'A', 'T', 'MEI1', 'missense', 'de_novo')
+('chr22', '50266583', 'C', 'A', 'MAPK11', 'missense', 'compound_het')
+('chr22', '50266955', 'A', 'AGG', 'MAPK11', 'frameshift', 'compound_het')
+('chr22', '50506864', 'G', 'T', 'LMF2', 'missense', 'homozygous_recessive')
+[?2004hroot@e2a793183a12:/task/output# cat /task/output/candidates.tsv
+[?2004lchrom	pos	ref	alt	gene	consequence	model
+chr22	21634728	G	A	CCDC116	stop_gained	compound_het
+chr22	21637020	G	T	CCDC116	stop_gained	compound_het
+chr22	21923145	C	A	PPM1F	missense	compound_het
+chr22	21923204	T	TCA	PPM1F	frameshift	compound_het
+chr22	23767405	C	G	CHCHD10	missense	compound_het
+chr22	23767406	T	A	CHCHD10	missense	compound_het
+chr22	23974357	C	A	DDT	stop_gained	de_novo
+chr22	41675013	A	T	SNU13	missense	de_novo
+chr22	41770841	A	T	MEI1	missense	de_novo
+chr22	50266583	C	A	MAPK11	missense	compound_het
+chr22	50266955	A	AGG	MAPK11	frameshift	compound_het
+chr22	50506864	G	T	LMF2	missense	homozygous_recessive
+[?2004hroot@e2a793183a12:/task/output# tabix /task/output/trio.GRCh38.vcf.gz chr22:50506864-50506864; tabix /task/output/trio.GRCh38.vcf.gz chr22:23767405-23767406; wc -l /task/output/candidates.tsv /task/output/unmapped.tsv
+[?2004lchr22	50506864	.	G	T	.	.	.	GT	0/1	0/1	1/1
+chr22	23767405	.	C	G	.	.	.	GT	0/0	0/1	0/1
+chr22	23767406	.	T	A	.	.	.	GT	0/1	0/0	0/1
+  13 /task/output/candidates.tsv
+  32 /task/output/unmapped.tsv
+  45 total
+[?2004hroot@e2a793183a12:/task/output# 

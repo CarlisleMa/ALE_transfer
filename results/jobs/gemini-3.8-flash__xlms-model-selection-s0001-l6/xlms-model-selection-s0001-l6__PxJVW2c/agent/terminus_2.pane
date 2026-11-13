@@ -1,0 +1,1873 @@
+[?2004hroot@b7f307384b32:/task# ls -la /task/input
+[?2004ltotal 32
+dr-xr-xr-x 1 root root 4096 Nov 12 16:00 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:00 ..
+-r--r--r-- 1 root root 1903 Nov 12 16:00 crosslinks.csv
+dr-xr-xr-x 1 root root 4096 Nov 12 16:00 models
+-r--r--r-- 1 root root  689 Nov 12 16:00 ranking.json
+-r--r--r-- 1 root root  830 Nov 12 16:00 sequences.fasta
+-r--r--r-- 1 root root 4160 Nov 12 16:00 xlms_notes.md
+[?2004hroot@b7f307384b32:/task# cat /task/input/xlms_notes.md
+[?2004l# XL-MS hand-over notes
+
+## Sample and cross-linking
+- Sample: complex of XLCQ5E and XLMBQL (identities blinded for this hand-over), both full-length, co-expressed, purified by affinity and size-exclusion chromatography. SEC-MALS and native MS give a 2:2 assembly: two copies of each protein.
+- Cross-linker: BS3 (bis(sulfosuccinimidyl) suberate), amine-reactive, spacer arm 11.4 A. Only Lys-Lys cross-links are reported (protein N-termini, Ser/Thr/Tyr side reactions and mono-links were not considered).
+- Digest: trypsin, SCX enrichment of cross-linked peptides, LC-MS/MS on an Orbitrap instrument.
+
+## Identification
+- Database: the two sequences in `sequences.fasta` plus common contaminants. Positions in `crosslinks.csv` are positions in these sequences.
+- The table is collapsed to unique residue pairs. `n_csm` = number of cross-link spectrum matches supporting the pair, `score` = best match score (higher is better).
+- A row with the same protein and the same position on both sides comes from two linked peptides that cover the same lysine.
+- Error control: target-decoy, list cut at 5% FDR on the spectrum-match level, which the facility estimates to correspond to about 19% FDR on the residue-pair level. Decoy hits have been removed from the table; there was no manual validation.
+
+## How the group evaluates a cross-link against a structure
+- Distance measure. The cross-linker cannot pass through protein, so the group does not use the straight-line distance between the two lysines. It uses the surface distance defined below, measured between the CA atoms of the two linked lysines on the complete structure (all chains present). For BS3 a pair of residues is within range if its surface distance is at most 34.0 A.
+- Surface distance between two CA atoms P and Q of a structure:
+  1. Lattice. The lattice points are the points whose x, y and z coordinates are all whole numbers of angstrom, in the coordinate frame of the structure file as it is. The lattice is not bounded.
+  2. Blocked points. A lattice point is blocked if its distance to the centre of at least one non-hydrogen atom of the model is less than 3.0 A (every atom of every chain counts, the two linked lysines included). All other lattice points are open.
+  3. Paths. A path is a sequence of open lattice points in which consecutive points differ by at most 1 in each of x, y and z (a point has up to 26 neighbours). The length of a path is the sum of the straight-line distances between consecutive points (1, sqrt(2) or sqrt(3) A per step). A path may consist of a single point and then has length 0.
+  4. Tethers. P is joined to the first point of the path and Q to the last point of the path by straight segments. Each of the two segments may be at most 7.0 A long and is not tested against the protein (it stands for the lysine side chain).
+  5. The surface distance is the smallest value of (segment at P) + (path length) + (segment at Q) over all choices of an open first point, an open last point and a path between them. If there is no such choice, the surface distance is infinite and the pair is out of range.
+- Copies. The mass spectrometer cannot tell the two copies of a protein apart. A cross-link between position i of one protein and position j of a protein (the same or the other one) is satisfied by a structure if at least one assignment of the two positions to chains of the structure gives a pair of residues that is within range. The two ends of a cross-link are always two different residues, so for a row with the same protein and the same position on both sides the only assignment is that position in the two different copies.
+- A cross-link to a position that is absent from a structure cannot be evaluated for that structure; the group leaves it out of both the satisfied count and the total.
+- The group ranks structures by the number of cross-links they satisfy.
+
+## Models
+- The models come from the group's structure-prediction pipeline.
+- The model files are the unmodified output of the pipeline.
+- `ranking.json` holds the pipeline's ranking confidence (0.8 x ipTM + 0.2 x pTM); the model files are named in the order of that confidence.
+[?2004hroot@b7f307384b32:/task# cat /task/input/sequences.fasta; echo '---'; head -n 20 /task/input/crosslinks.csv; echo '---'; cat /task/input/ranking.json
+[?2004l>XLCQ5E blinded protein, full length, 346 aa
+MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+>XLMBQL blinded protein, full length, 381 aa
+MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+KAALAHPFFQDVTKPVPHLRL
+---
+xl_id,protein_a,position_a,protein_b,position_b,n_csm,score
+XL001,XLMBQL,139,XLMBQL,139,5,142.6
+XL002,XLCQ5E,166,XLMBQL,103,8,112.6
+XL003,XLCQ5E,108,XLCQ5E,108,4,118.8
+XL004,XLCQ5E,140,XLMBQL,261,6,87.0
+XL005,XLMBQL,212,XLMBQL,188,3,64.3
+XL006,XLCQ5E,214,XLCQ5E,214,5,88.3
+XL007,XLCQ5E,106,XLMBQL,261,2,102.0
+XL008,XLMBQL,92,XLMBQL,171,6,56.2
+XL009,XLMBQL,117,XLMBQL,89,8,119.9
+XL010,XLCQ5E,108,XLCQ5E,302,7,128.1
+XL011,XLCQ5E,166,XLMBQL,89,7,122.1
+XL012,XLCQ5E,180,XLMBQL,117,4,125.6
+XL013,XLMBQL,261,XLCQ5E,203,2,88.1
+XL014,XLCQ5E,110,XLMBQL,356,1,41.0
+XL015,XLMBQL,361,XLCQ5E,106,2,127.4
+XL016,XLMBQL,361,XLCQ5E,293,5,67.6
+XL017,XLCQ5E,242,XLMBQL,261,2,115.9
+XL018,XLMBQL,374,XLMBQL,148,6,118.0
+XL019,XLMBQL,325,XLMBQL,356,5,127.0
+---
+{
+ "description": "ranking confidence = 0.8*ipTM + 0.2*pTM",
+ "order": [
+  "model_01",
+  "model_02",
+  "model_03",
+  "model_04",
+  "model_05",
+  "model_06",
+  "model_07",
+  "model_08",
+  "model_09",
+  "model_10",
+  "model_11",
+  "model_12",
+  "model_13",
+  "model_14",
+  "model_15",
+  "model_16",
+  "model_17"
+ ],
+ "confidence": {
+  "model_01": 0.856,
+  "model_02": 0.831,
+  "model_03": 0.795,
+  "model_04": 0.794,
+  "model_05": 0.752,
+  "model_06": 0.688,
+  "model_07": 0.659,
+  "model_08": 0.649,
+  "model_09": 0.598,
+  "model_10": 0.504,
+  "model_11": 0.493,
+  "model_12": 0.477,
+  "model_13": 0.47,
+  "model_14": 0.458,
+  "model_15": 0.444,
+  "model_16": 0.42,
+  "model_17": 0.398
+ }
+}[?2004hroot@b7f307384b32:/task# cat << 'EOF' > inspect_models.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> xl = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> print(f'Total crosslinks: {len(xl)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> for chain in s.get_chains():
+[?2004l[?2004h>     res = [r for r in chain.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>     seq = ''.join(seq1(r.get_resname()) for r in res)
+[?2004l[?2004h>     print(f'Chain {chain.id}: len={len(res)}, first={res[0].id}, last={res[-1].id}, seq={seq[:15]}...{seq[-15:]}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 inspect_models.py
+[?2004lTotal crosslinks: 52
+Chain A: len=285, first=(' ', 1, ' '), last=(' ', 285, ' '), seq=MENFQKVEKIGEGTY...PFFQDVTKPVPHLRL
+Chain C: len=253, first=(' ', 1, ' '), last=(' ', 253, ' '), seq=NEVPDYHEDIHTYLR...YHGVSLLNPPETLNL
+Chain B: len=285, first=(' ', 1, ' '), last=(' ', 285, ' '), seq=MENFQKVEKIGEGTY...PFFQDVTKPVPHLRL
+Chain D: len=253, first=(' ', 1, ' '), last=(' ', 253, ' '), seq=NEVPDYHEDIHTYLR...YHGVSLLNPPETLNL
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > check_alignments.py
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> import glob
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> for k, v in fastas.items():
+[?2004l[?2004h>     print(f'FASTA {k}: length {len(v)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> models = sorted(glob.glob('/task/input/models/model_*.pdb'))
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> for m_path in models:
+[?2004l[?2004h>     m_id = m_path.split('/')[-1]
+[?2004l[?2004h>     s = parser.get_structure(m_id, m_path)
+[?2004l[?2004h>     chains = list(s.get_chains())
+[?2004l[?2004h>     info = []
+[?2004l[?2004h>     for c in chains:
+[?2004l[?2004h>         res = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>         c_seq = ''.join(seq1(r.get_resname()) for r in res)
+[?2004l[?2004h>         matches = []
+[?2004l[?2004h>         for prot_id, full_seq in fastas.items():
+[?2004l[?2004h>             pos = full_seq.find(c_seq)
+[?2004l[?2004h>             if pos != -1:
+[?2004l[?2004h>                 matches.append((prot_id, pos + 1))
+[?2004l[?2004h>         info.append((c.id, len(res), res[0].id[1], res[-1].id[1], matches))
+[?2004l[?2004h>     print(f'{m_id}: {info}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 check_alignments.py
+[?2004lFASTA XLCQ5E: length 346
+FASTA XLMBQL: length 381
+model_01.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_02.pdb: [('A', 253, 1, 253, []), ('C', 285, 1, 285, []), ('B', 253, 1, 253, []), ('D', 285, 1, 285, [])]
+model_03.pdb: [('A', 285, 1, 285, []), ('C', 285, 1, 285, []), ('B', 253, 1, 253, []), ('D', 253, 1, 253, [])]
+model_04.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_05.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_06.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_07.pdb: [('B', 253, 1, 253, []), ('C', 253, 1, 253, []), ('D', 285, 1, 285, []), ('E', 285, 1, 285, [])]
+model_08.pdb: [('A', 253, 1, 253, []), ('B', 253, 1, 253, []), ('C', 285, 1, 285, []), ('D', 285, 1, 285, [])]
+model_09.pdb: [('A', 285, 1, 285, []), ('B', 253, 1, 253, []), ('C', 253, 1, 253, []), ('D', 285, 1, 285, [])]
+model_10.pdb: [('A', 253, 1, 253, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 285, 1, 285, [])]
+model_11.pdb: [('A', 253, 1, 253, []), ('B', 253, 1, 253, []), ('C', 285, 1, 285, []), ('D', 285, 1, 285, [])]
+model_12.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_13.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_14.pdb: [('A', 253, 1, 253, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 285, 1, 285, [])]
+model_15.pdb: [('B', 253, 1, 253, []), ('C', 253, 1, 253, []), ('D', 285, 1, 285, []), ('E', 285, 1, 285, [])]
+model_16.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+model_17.pdb: [('A', 285, 1, 285, []), ('C', 253, 1, 253, []), ('B', 285, 1, 285, []), ('D', 253, 1, 253, [])]
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > debug_seq.py
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> for c in s.get_chains():
+[?2004l[?2004h>     res = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>     c_seq = ''.join(seq1(r.get_resname()) for r in res)
+[?2004l[?2004h>     print(f'Chain {c.id}: {c_seq[:30]}...{c_seq[-30:]}')
+[?2004l[?2004h>     for k, v in fastas.items():
+[?2004l[?2004h>         if c_seq in v:
+[?2004l[?2004h>             print(f'  Found exact match in {k} at {v.find(c_seq)}')
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             # try first 20 aa
+[?2004l[?2004h>             pos = v.find(c_seq[:20])
+[?2004l[?2004h>             print(f'  Subseq(20) in {k}: pos {pos}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 debug_seq.py
+[?2004lChain A: MENFQKVEKIGEGTYGVVYKARNKLTGEVV...YDPNKRISAKAALAHPFFQDVTKPVPHLRL
+  Subseq(20) in XLCQ5E: pos -1
+  Subseq(20) in XLMBQL: pos 83
+Chain C: NEVPDYHEDIHTYLREMEVKCKPKVGYMKK...QHAQQSIREKYKNSKYHGVSLLNPPETLNL
+  Subseq(20) in XLCQ5E: pos 86
+  Subseq(20) in XLMBQL: pos -1
+Chain B: MENFQKVEKIGEGTYGVVYKARNKLTGEVV...YDPNKRISAKAALAHPFFQDVTKPVPHLRL
+  Subseq(20) in XLCQ5E: pos -1
+  Subseq(20) in XLMBQL: pos 83
+Chain D: NEVPDYHEDIHTYLREMEVKCKPKVGYMKK...QHAQQSIREKYKNSKYHGVSLLNPPETLNL
+  Subseq(20) in XLCQ5E: pos 86
+  Subseq(20) in XLMBQL: pos -1
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > debug_align2.py
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Chain A vs XLMBQL
+[?2004l[?2004h> chain_a_seq = ''.join(seq1(r.get_resname()) for r in s[' ']['A'].get_residues() if r.id[0] == ' ')
+[?2004l[?2004h> xlmbql = fastas['XLMBQL']
+[?2004l[?2004h> print('XLMBQL from 83:', xlmbql[83:83+len(chain_a_seq)])
+[?2004l[?2004h> print('Chain A:        ', chain_a_seq)
+[?2004l[?2004h> print('Diffs:', [(i, a, b) for i, (a, b) in enumerate(zip(chain_a_seq, xlmbql[83:83+len(chain_a_seq)])) if a != b])
+[?2004l[?2004h> print('Remaining XLMBQL after chain A len:', len(xlmbql) - (83 + len(chain_a_seq)))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Chain C vs XLCQ5E
+[?2004l[?2004h> chain_c_seq = ''.join(seq1(r.get_resname()) for r in s[' ']['C'].get_residues() if r.id[0] == ' ')
+[?2004l[?2004h> xlcq5e = fastas['XLCQ5E']
+[?2004l[?2004h> print('XLCQ5E from 86:', xlcq5e[86:86+len(chain_c_seq)])
+[?2004l[?2004h> print('Chain C:        ', chain_c_seq)
+[?2004l[?2004h> print('Diffs C:', [(i, a, b) for i, (a, b) in enumerate(zip(chain_c_seq, xlcq5e[86:86+len(chain_c_seq)])) if a != b])
+[?2004l[?2004h> print('Remaining XLCQ5E after chain C len:', len(xlcq5e) - (86 + len(chain_c_seq)))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 debug_align2.py
+[?2004lTraceback (most recent call last):
+  File "/task/debug_align2.py", line 10, in <module>
+    chain_a_seq = ''.join(seq1(r.get_resname()) for r in s[' ']['A'].get_residues() if r.id[0] == ' ')
+                                                         ~^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/Bio/PDB/Entity.py", line 65, in __getitem__
+    return self.child_dict[id]
+           ~~~~~~~~~~~~~~~^^^^
+KeyError: ' '
+[?2004hroot@b7f307384b32:/task# sed -i "s/s\[' '\]/s[0]/g" debug_align2.py && python3 debug_align2.py
+[?2004lXLMBQL from 83: MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPF
+Chain A:         MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL
+Diffs: [(92, 'S', 'A'), (93, 'Y', 'S'), (94, 'L', 'A'), (95, 'F', 'L'), (96, 'Q', 'T'), (97, 'L', 'G'), (98, 'L', 'I'), (99, 'Q', 'P'), (100, 'G', 'L'), (101, 'L', 'P'), (102, 'A', 'L'), (103, 'F', 'I'), (104, 'C', 'K'), (105, 'H', 'S'), (106, 'S', 'Y'), (107, 'H', 'L'), (108, 'R', 'F'), (109, 'V', 'Q'), (111, 'H', 'L'), (112, 'R', 'Q'), (113, 'D', 'G'), (115, 'K', 'A'), (116, 'P', 'F'), (117, 'Q', 'C'), (118, 'N', 'H'), (119, 'L', 'S'), (120, 'L', 'H'), (121, 'I', 'R'), (122, 'N', 'V'), (123, 'T', 'L'), (124, 'E', 'H'), (125, 'G', 'R'), (126, 'A', 'D'), (127, 'I', 'L'), (129, 'L', 'P'), (130, 'A', 'Q'), (131, 'D', 'N'), (132, 'F', 'L'), (133, 'G', 'L'), (134, 'L', 'I'), (135, 'A', 'N'), (136, 'R', 'T'), (137, 'A', 'E'), (138, 'F', 'G'), (139, 'G', 'A'), (140, 'V', 'I'), (141, 'P', 'K'), (142, 'V', 'L'), (143, 'R', 'A'), (144, 'T', 'D'), (145, 'Y', 'F'), (146, 'T', 'G'), (147, 'H', 'L'), (148, 'E', 'A'), (149, 'V', 'R'), (150, 'V', 'A'), (151, 'T', 'F'), (152, 'L', 'G'), (153, 'W', 'V'), (154, 'Y', 'P'), (155, 'R', 'V'), (156, 'A', 'R'), (157, 'P', 'T'), (158, 'E', 'Y'), (159, 'I', 'T'), (160, 'L', 'H'), (161, 'L', 'E'), (162, 'G', 'V'), (163, 'C', 'V'), (164, 'K', 'T'), (165, 'Y', 'L'), (166, 'Y', 'W'), (167, 'S', 'Y'), (168, 'T', 'R'), (170, 'V', 'P'), (171, 'D', 'E'), (173, 'W', 'L'), (174, 'S', 'L'), (175, 'L', 'G'), (176, 'G', 'C'), (177, 'C', 'K'), (178, 'I', 'Y'), (179, 'F', 'Y'), (180, 'A', 'S'), (181, 'E', 'T'), (182, 'M', 'A'), (184, 'T', 'D'), (185, 'R', 'I'), (186, 'R', 'W'), (187, 'A', 'S'), (189, 'F', 'G'), (190, 'P', 'C'), (191, 'G', 'I'), (192, 'D', 'F'), (193, 'S', 'A'), (195, 'I', 'M'), (196, 'D', 'V'), (197, 'Q', 'T'), (198, 'L', 'R'), (199, 'F', 'R'), (200, 'R', 'A'), (201, 'I', 'L'), (203, 'R', 'P'), (204, 'T', 'G'), (205, 'L', 'D'), (206, 'G', 'S'), (207, 'T', 'E'), (208, 'P', 'I'), (210, 'E', 'Q'), (211, 'V', 'L'), (212, 'V', 'F'), (213, 'W', 'R'), (214, 'P', 'I'), (215, 'G', 'F'), (216, 'V', 'R'), (218, 'S', 'L'), (219, 'M', 'G'), (220, 'P', 'T'), (221, 'D', 'P'), (222, 'Y', 'D'), (223, 'K', 'E'), (224, 'P', 'V'), (225, 'S', 'V'), (226, 'F', 'W'), (228, 'K', 'G'), (229, 'W', 'V'), (230, 'A', 'T'), (231, 'R', 'S'), (232, 'Q', 'M'), (233, 'D', 'P'), (234, 'F', 'D'), (235, 'S', 'Y'), (237, 'V', 'P'), (238, 'V', 'S'), (239, 'P', 'F'), (241, 'L', 'K'), (242, 'D', 'W'), (243, 'E', 'A'), (244, 'D', 'R'), (245, 'G', 'Q'), (246, 'R', 'D'), (247, 'S', 'F'), (248, 'L', 'S'), (249, 'L', 'K'), (250, 'S', 'V'), (251, 'Q', 'V'), (252, 'M', 'P'), (253, 'L', 'P'), (254, 'H', 'L'), (255, 'Y', 'D'), (256, 'D', 'E'), (257, 'P', 'D'), (258, 'N', 'G'), (259, 'K', 'R'), (260, 'R', 'S'), (261, 'I', 'L'), (262, 'S', 'L'), (263, 'A', 'S'), (264, 'K', 'Q'), (265, 'A', 'M'), (266, 'A', 'L'), (267, 'L', 'H'), (268, 'A', 'Y'), (269, 'H', 'D'), (271, 'F', 'N'), (272, 'F', 'K'), (273, 'Q', 'R'), (274, 'D', 'I'), (275, 'V', 'S'), (276, 'T', 'A'), (278, 'P', 'A'), (279, 'V', 'A'), (280, 'P', 'L'), (281, 'H', 'A'), (282, 'L', 'H'), (283, 'R', 'P'), (284, 'L', 'F')]
+Remaining XLMBQL after chain A len: 13
+XLCQ5E from 86: NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASKFEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPANCKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLESLKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLN
+Chain C:         NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASKFEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLESLKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+Diffs C: [(149, 'V', 'Q'), (150, 'E', 'Q'), (151, 'S', 'P'), (152, 'L', 'A'), (153, 'A', 'N'), (154, 'M', 'C'), (155, 'F', 'K'), (156, 'L', 'V'), (157, 'G', 'E'), (158, 'E', 'S'), (160, 'S', 'A'), (161, 'L', 'M'), (162, 'I', 'F'), (163, 'D', 'L'), (164, 'A', 'G'), (165, 'D', 'E'), (166, 'P', 'L'), (167, 'Y', 'S'), (169, 'K', 'I'), (170, 'Y', 'D'), (171, 'L', 'A'), (172, 'P', 'D'), (173, 'S', 'P'), (174, 'V', 'Y'), (175, 'I', 'L'), (176, 'A', 'K'), (177, 'G', 'Y'), (178, 'A', 'L'), (179, 'A', 'P'), (180, 'F', 'S'), (181, 'H', 'V'), (182, 'L', 'I'), (184, 'L', 'G'), (185, 'Y', 'A'), (186, 'T', 'A'), (187, 'V', 'F'), (188, 'T', 'H'), (189, 'G', 'L'), (190, 'Q', 'A'), (191, 'S', 'L'), (192, 'W', 'Y'), (193, 'P', 'T'), (194, 'E', 'V'), (195, 'S', 'T'), (196, 'L', 'G'), (197, 'I', 'Q'), (198, 'R', 'S'), (199, 'K', 'W'), (200, 'T', 'P'), (201, 'G', 'E'), (202, 'Y', 'S'), (203, 'T', 'L'), (204, 'L', 'I'), (205, 'E', 'R'), (206, 'S', 'K'), (207, 'L', 'T'), (208, 'K', 'G'), (209, 'P', 'Y'), (210, 'C', 'T'), (212, 'M', 'E'), (213, 'D', 'S'), (215, 'H', 'K'), (216, 'Q', 'P'), (217, 'T', 'C'), (218, 'Y', 'L'), (219, 'L', 'M'), (220, 'K', 'D'), (221, 'A', 'L'), (222, 'P', 'H'), (224, 'H', 'T'), (225, 'A', 'Y'), (226, 'Q', 'L'), (227, 'Q', 'K'), (228, 'S', 'A'), (229, 'I', 'P'), (230, 'R', 'Q'), (231, 'E', 'H'), (232, 'K', 'A'), (233, 'Y', 'Q'), (234, 'K', 'Q'), (235, 'N', 'S'), (236, 'S', 'I'), (237, 'K', 'R'), (238, 'Y', 'E'), (239, 'H', 'K'), (240, 'G', 'Y'), (241, 'V', 'K'), (242, 'S', 'N'), (243, 'L', 'S'), (244, 'L', 'K'), (245, 'N', 'Y'), (246, 'P', 'H'), (247, 'P', 'G'), (248, 'E', 'V'), (249, 'T', 'S'), (251, 'N', 'L'), (252, 'L', 'N')]
+Remaining XLCQ5E after chain C len: 7
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > inspect_pdb.py
+[?2004l[?2004h> with open('/task/input/models/model_01.pdb') as f:
+[?2004l[?2004h>     lines = [line for line in f if line.startswith(('ATOM', 'HETATM', 'SEQRES', 'REMARK'))]
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Header remarks/seqres:')
+[?2004l[?2004h> for l in lines[:15]:
+[?2004l[?2004h>     print(l.strip())
+[?2004l[?2004h> 
+[?2004l[?2004h> seen = set()
+[?2004l[?2004h> chain_res = {}
+[?2004l[?2004h> for l in lines:
+[?2004l[?2004h>     if l.startswith('ATOM'):
+[?2004l[?2004h>         ch = l[21]
+[?2004l[?2004h>         resseq = int(l[22:26])
+[?2004l[?2004h>         resname = l[17:20]
+[?2004l[?2004h>         key = (ch, resseq, resname)
+[?2004l[?2004h>         if key not in seen:
+[?2004l[?2004h>             seen.add(key)
+[?2004l[?2004h>             chain_res.setdefault(ch, []).append((resseq, resname))
+[?2004l[?2004h> 
+[?2004l[?2004h> for ch, rlist in chain_res.items():
+[?2004l[?2004h>     print(f'Chain {ch}: {len(rlist)} residues, min={rlist[0]}, max={rlist[-1]}')
+[?2004l[?2004h>     resnums = [r[0] for r in rlist]
+[?2004l[?2004h>     gaps = [resnums[i+1] - resnums[i] for i in range(len(resnums)-1) if resnums[i+1] - resnums[i] != 1]
+[?2004l[?2004h>     print(f'  Gaps in resseq: {gaps[:10]}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 inspect_pdb.py
+[?2004lHeader remarks/seqres:
+ATOM      1  N   MET A   1      20.652  -2.924  22.139  1.00 69.03           N
+ATOM      2  CA  MET A   1      21.702  -2.116  22.799  1.00 69.03           C
+ATOM      3  C   MET A   1      22.835  -2.903  23.547  1.00 69.03           C
+ATOM      4  O   MET A   1      23.895  -2.343  23.867  1.00 69.03           O
+ATOM      5  CB  MET A   1      21.059  -1.042  23.687  1.00 69.03           C
+ATOM      6  CG  MET A   1      21.763   0.314  23.686  1.00 69.03           C
+ATOM      7  SD  MET A   1      22.027   0.963  22.026  1.00 69.03           S
+ATOM      8  CE  MET A   1      20.462   0.633  21.344  1.00 69.03           C
+ATOM      9  N   GLU A   2      22.610  -4.198  23.802  1.00 68.27           N
+ATOM     10  CA  GLU A   2      23.570  -5.053  24.510  1.00 68.27           C
+ATOM     11  C   GLU A   2      24.869  -5.328  23.765  1.00 68.27           C
+ATOM     12  O   GLU A   2      25.844  -5.786  24.370  1.00 68.27           O
+ATOM     13  CB  GLU A   2      22.945  -6.389  24.915  1.00 68.27           C
+ATOM     14  CG  GLU A   2      21.454  -6.367  25.043  1.00 68.27           C
+ATOM     15  CD  GLU A   2      20.751  -6.518  23.699  1.00 68.27           C
+Chain A: 285 residues, min=(1, 'MET'), max=(285, 'LEU')
+  Gaps in resseq: []
+Chain C: 253 residues, min=(1, 'ASN'), max=(253, 'LEU')
+  Gaps in resseq: []
+Chain B: 285 residues, min=(1, 'MET'), max=(285, 'LEU')
+  Gaps in resseq: []
+Chain D: 253 residues, min=(1, 'ASN'), max=(253, 'LEU')
+  Gaps in resseq: []
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > align_test.py
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> from Bio import pairwise2
+[?2004l[?2004h> from Bio.pairwise2 import format_alignment
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> 
+[?2004l[?2004h> for ch in ['A', 'C']:
+[?2004l[?2004h>     res = [r for r in s[0][ch].get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>     c_seq = ''.join(seq1(r.get_resname()) for r in res)
+[?2004l[?2004h>     for prot, f_seq in fastas.items():
+[?2004l[?2004h>         alns = pairwise2.align.localms(c_seq, f_seq, 2, -1, -5, -1)
+[?2004l[?2004h>         if alns and alns[0].score > 200:
+[?2004l[?2004h>             print(f'Chain {ch} aligned to {prot}: score={alns[0].score}')
+[?2004l[?2004h>             print(format_alignment(*alns[0]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 align_test.py
+[?2004l/opt/tools/lib/python3.12/site-packages/Bio/pairwise2.py:278: BiopythonDeprecationWarning: Bio.pairwise2 has been deprecated, and we intend to remove it in a future release of Biopython. As an alternative, please consider using Bio.Align.PairwiseAligner as a replacement, and contact the Biopython developers if you still need the Bio.pairwise2 module.
+  warnings.warn(
+Chain A aligned to XLMBQL: score=553.0
+ 1 MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMD-------------SYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL
+   ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||             |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+84 MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRLDTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALTGIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVRTYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFRTLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISAKAALAHPFFQDVTKPVPHLRL
+  Score=553
+
+Chain C aligned to XLCQ5E: score=495.0
+ 1 NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASKFEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLH-------VESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLESLKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+   |||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||       ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+87 NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDITNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASKFEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPANCKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLESLKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL
+  Score=495
+
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > check_all_seqs.py
+[?2004l[?2004h> import glob
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> models = sorted(glob.glob('/task/input/models/model_*.pdb'))
+[?2004l[?2004h> 
+[?2004l[?2004h> for m_path in models:
+[?2004l[?2004h>     m_name = m_path.split('/')[-1]
+[?2004l[?2004h>     s = parser.get_structure(m_name, m_path)
+[?2004l[?2004h>     chains = list(s.get_chains())
+[?2004l[?2004h>     c_info = []
+[?2004l[?2004h>     for c in chains:
+[?2004l[?2004h>         res = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>         seq = ''.join(seq1(r.get_resname()) for r in res)
+[?2004l[?2004h>         c_info.append((c.id, len(seq), seq[:10], seq[-10:]))
+[?2004l[?2004h>     print(f'{m_name}: {c_info}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 check_all_seqs.py
+[?2004lmodel_01.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_02.pdb: [('A', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_03.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_04.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_05.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_06.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_07.pdb: [('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('E', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_08.pdb: [('A', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_09.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_10.pdb: [('A', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_11.pdb: [('A', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_12.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_13.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_14.pdb: [('A', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_15.pdb: [('B', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('D', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('E', 285, 'MENFQKVEKI', 'VTKPVPHLRL')]
+model_16.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+model_17.pdb: [('A', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('C', 253, 'NEVPDYHEDI', 'LLNPPETLNL'), ('B', 285, 'MENFQKVEKI', 'VTKPVPHLRL'), ('D', 253, 'NEVPDYHEDI', 'LLNPPETLNL')]
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > map_sequences.py
+[?2004l[?2004h> import glob
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect model_01 chain A (len 285) and chain C (len 253)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> res_A = [r for r in s[0]['A'].get_residues() if r.id[0] == ' ']
+[?2004l[?2004h> seq_A = ''.join(seq1(r.get_resname()) for r in res_A)
+[?2004l[?2004h> res_C = [r for r in s[0]['C'].get_residues() if r.id[0] == ' ']
+[?2004l[?2004h> seq_C = ''.join(seq1(r.get_resname()) for r in res_C)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check if all 285-chains in all models are identical to seq_A
+[?2004l[?2004h> # and all 253-chains are identical to seq_C
+[?2004l[?2004h> models = sorted(glob.glob('/task/input/models/model_*.pdb'))
+[?2004l[?2004h> for m in models:
+[?2004l[?2004h>     st = parser.get_structure(m, m)
+[?2004l[?2004h>     for c in st.get_chains():
+[?2004l[?2004h>         rlist = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>         s_c = ''.join(seq1(r.get_resname()) for r in rlist)
+[?2004l[?2004h>         if len(s_c) == 285:
+[?2004l[?2004h>             assert s_c == seq_A, f'Mismatch in 285 chain in {m} {c.id}'
+[?2004l[?2004h>         elif len(s_c) == 253:
+[?2004l[?2004h>             assert s_c == seq_C, f'Mismatch in 253 chain in {m} {c.id}'
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             raise ValueError(f'Unknown length {len(s_c)}')
+[?2004l[?2004h> print('All chains across all models match seq_A (285) or seq_C (253)!')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Now let's see how seq_A matches XLMBQL and seq_C matches XLCQ5E
+[?2004l[?2004h> # Is there internal deletion, or what?
+[?2004l[?2004h> xlmbql = fastas['XLMBQL']
+[?2004l[?2004h> xlcq5e = fastas['XLCQ5E']
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's inspect where the parts of seq_A come from:
+[?2004l[?2004h> part1_A = seq_A[:60]
+[?2004l[?2004h> part2_A = seq_A[60:]
+[?2004l[?2004h> print(f'seq_A part 1 (60): in xlmbql at {xlmbql.find(part1_A)}')
+[?2004l[?2004h> print(f'seq_A part 2 ({len(part2_A)}): in xlmbql at {xlmbql.find(part2_A)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> # For seq_C:
+[?2004l[?2004h> part1_C = seq_C[:149]
+[?2004l[?2004h> part2_C = seq_C[149:]
+[?2004l[?2004h> print(f'seq_C part 1 (149): in xlcq5e at {xlcq5e.find(part1_C)}')
+[?2004l[?2004h> print(f'seq_C part 2 ({len(part2_C)}): in xlcq5e at {xlcq5e.find(part2_C)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 map_sequences.py
+[?2004lAll chains across all models match seq_A (285) or seq_C (253)!
+seq_A part 1 (60): in xlmbql at 83
+seq_A part 2 (225): in xlmbql at -1
+seq_C part 1 (149): in xlcq5e at 86
+seq_C part 2 (104): in xlcq5e at 242
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > align_exact.py
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> from Bio.Align import PairwiseAligner
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> seq_A = ''.join(seq1(r.get_resname()) for r in s[0]['A'].get_residues() if r.id[0] == ' ')
+[?2004l[?2004h> seq_C = ''.join(seq1(r.get_resname()) for r in s[0]['C'].get_residues() if r.id[0] == ' ')
+[?2004l[?2004h> 
+[?2004l[?2004h> aligner = PairwiseAligner()
+[?2004l[?2004h> aligner.mode = 'global'
+[?2004l[?2004h> aligner.open_gap_score = -10
+[?2004l[?2004h> aligner.extend_gap_score = -0.5
+[?2004l[?2004h> 
+[?2004l[?2004h> for name, s_mod, f_seq in [('XLMBQL', seq_A, fastas['XLMBQL']), ('XLCQ5E', seq_C, fastas['XLCQ5E'])]:
+[?2004l[?2004h>     alignments = aligner.align(s_mod, f_seq)
+[?2004l[?2004h>     aln = alignments[0]
+[?2004l[?2004h>     print(f'=== {name} ===')
+[?2004l[?2004h>     print(aln)
+[?2004l[?2004h>     # Map model index (1-based, 1..len(s_mod)) to fasta index (1-based, 1..len(f_seq))
+[?2004l[?2004h>     aligned_mod, aligned_ref = aln[0], aln[1]
+[?2004l[?2004h>     mod_to_ref = {}
+[?2004l[?2004h>     ref_to_mod = {}
+[?2004l[?2004h>     m_idx = 0
+[?2004l[?2004h>     r_idx = 0
+[?2004l[?2004h>     for char_m, char_r in zip(aligned_mod, aligned_ref):
+[?2004l[?2004h>         if char_m != '-':
+[?2004l[?2004h>             m_idx += 1
+[?2004l[?2004h>         if char_r != '-':
+[?2004l[?2004h>             r_idx += 1
+[?2004l[?2004h>         if char_m != '-' and char_r != '-':
+[?2004l[?2004h>             assert char_m == char_r, f'Mismatch {char_m} vs {char_r}'
+[?2004l[?2004h>             mod_to_ref[m_idx] = r_idx
+[?2004l[?2004h>             ref_to_mod[r_idx] = m_idx
+[?2004l[?2004h>     print(f'{name}: mapped {len(mod_to_ref)} residues')
+[?2004l[?2004h>     # check unmapped ranges in ref
+[?2004l[?2004h>     missing_in_mod = [i for i in range(1, len(f_seq)+1) if i not in ref_to_mod]
+[?2004l[?2004h>     print(f'Ref residues missing in model ({len(missing_in_mod)}): {missing_in_mod[:10]}...{missing_in_mod[-10:] if len(missing_in_mod)>10 else ""}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 align_exact.py
+[?2004l=== XLMBQL ===
+target            0 ------------------------------------------------------------
+                  0 ------------------------------------------------------------
+query             0 MTSSQQLLSQPEDAKEPLKPGLEKPEREKPDSDESKGQPESESAPELNQKSGDDSVPQGD
+
+target            0 -----------------------MENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+                 60 -----------------------|||||||||||||||||||||||||||||||||||||
+query            60 ATLQQKTNNQDEGKLSKKGVPAKMENFQKVEKIGEGTYGVVYKARNKLTGEVVALKKIRL
+
+target           37 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMD-----
+                120 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query           120 DTETEGVPSTAIREISLLKELNHPNIVKLLDVIHTENKLYLVFEFLHQDLKKFMDASALT
+
+target           92 --------SYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+                180 --------||||||||||||||||||||||||||||||||||||||||||||||||||||
+query           180 GIPLPLIKSYLFQLLQGLAFCHSHRVLHRDLKPQNLLINTEGAIKLADFGLARAFGVPVR
+
+target          144 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+                240 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query           240 TYTHEVVTLWYRAPEILLGCKYYSTAVDIWSLGCIFAEMVTRRALFPGDSEIDQLFRIFR
+
+target          204 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+                300 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query           300 TLGTPDEVVWPGVTSMPDYKPSFPKWARQDFSKVVPPLDEDGRSLLSQMLHYDPNKRISA
+
+target          264 KAALAHPFFQDVTKPVPHLRL 285
+                360 ||||||||||||||||||||| 381
+query           360 KAALAHPFFQDVTKPVPHLRL 381
+
+XLMBQL: mapped 285 residues
+Ref residues missing in model (96): [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]...[179, 180, 181, 182, 183, 184, 185, 186, 187, 188]
+=== XLCQ5E ===
+target            0 ------------------------------------------------------------
+                  0 ------------------------------------------------------------
+query             0 MANNEEGSAQPSGQELDQEVEGSSPEGELGREPREDSAPRPERNPPTESAAKTQQSGPSD
+
+target            0 --------------------------NEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+                 60 --------------------------||||||||||||||||||||||||||||||||||
+query            60 QVSEANKDATKTKKDTEKEQNDTELNNEVPDYHEDIHTYLREMEVKCKPKVGYMKKQPDI
+
+target           34 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+                120 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query           120 TNSMRAILVDWLVEVGEEYKLQNETLHLAVNYIDRFLSSMSVLRGKLQLVGTAAMLLASK
+
+target           94 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLH-----
+                180 |||||||||||||||||||||||||||||||||||||||||||||||||||||||-----
+query           180 FEEIYPPEVAEFVYITDDTYTKKQVLRMEHLVLKVLTFDLAAPTVNQFLTQYFLHQQPAN
+
+target          149 --VESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+                240 --||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query           240 CKVESLAMFLGELSLIDADPYLKYLPSVIAGAAFHLALYTVTGQSWPESLIRKTGYTLES
+
+target          207 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 253
+                300 |||||||||||||||||||||||||||||||||||||||||||||| 346
+query           300 LKPCLMDLHQTYLKAPQHAQQSIREKYKNSKYHGVSLLNPPETLNL 346
+
+XLCQ5E: mapped 253 residues
+Ref residues missing in model (93): [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]...[84, 85, 86, 236, 237, 238, 239, 240, 241, 242]
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > check_crosslinks.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def xlmbql_pos_to_model(p):
+[?2004l[?2004h>     if 84 <= p <= 175:
+[?2004l[?2004h>         return p - 83
+[?2004l[?2004h>     elif 189 <= p <= 381:
+[?2004l[?2004h>         return p - 189 + 93
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def xlcq5e_pos_to_model(p):
+[?2004l[?2004h>     if 87 <= p <= 235:
+[?2004l[?2004h>         return p - 86
+[?2004l[?2004h>     elif 243 <= p <= 346:
+[?2004l[?2004h>         return p - 243 + 150
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> xl = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> print(f'Total crosslinks: {len(xl)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> evaluable = []
+[?2004l[?2004h> not_eval = []
+[?2004l[?2004h> for idx, row in xl.iterrows():
+[?2004l[?2004h>     p_a = xlmbql_pos_to_model(row['position_a']) if row['protein_a'] == 'XLMBQL' else xlcq5e_pos_to_model(row['position_a'])
+[?2004l[?2004h>     p_b = xlmbql_pos_to_model(row['position_b']) if row['protein_b'] == 'XLMBQL' else xlcq5e_pos_to_model(row['position_b'])
+[?2004l[?2004h>     is_eval = (p_a is not None) and (p_b is not None)
+[?2004l[?2004h>     is_inter = (row['protein_a'] != row['protein_b'])
+[?2004l[?2004h>     if is_eval:
+[?2004l[?2004h>         evaluable.append((row['xl_id'], row['protein_a'], row['position_a'], p_a, row['protein_b'], row['position_b'], p_b, is_inter))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         not_eval.append((row['xl_id'], row['protein_a'], row['position_a'], p_a, row['protein_b'], row['position_b'], p_b, is_inter))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Evaluable crosslinks: {len(evaluable)}')
+[?2004l[?2004h> print(f'Not evaluable crosslinks: {len(not_eval)}')
+[?2004l[?2004h> print('Not evaluable details:')
+[?2004l[?2004h> for item in not_eval:
+[?2004l[?2004h>     print(item)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 check_crosslinks.py
+[?2004lTotal crosslinks: 52
+Evaluable crosslinks: 48
+Not evaluable crosslinks: 4
+Not evaluable details:
+('XL005', 'XLMBQL', 212, 116, 'XLMBQL', 188, None, False)
+('XL017', 'XLCQ5E', 242, None, 'XLMBQL', 261, 165, True)
+('XL024', 'XLCQ5E', 314, 221, 'XLCQ5E', 242, None, False)
+('XL030', 'XLCQ5E', 331, 238, 'XLMBQL', 15, None, True)
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > verify_lysines.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from Bio import SeqIO
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> fastas = {rec.id: str(rec.seq) for rec in SeqIO.parse('/task/input/sequences.fasta', 'fasta')}
+[?2004l[?2004h> xl = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> for idx, row in xl.iterrows():
+[?2004l[?2004h>     pa = row['protein_a']
+[?2004l[?2004h>     pb = row['protein_b']
+[?2004l[?2004h>     pos_a = row['position_a']
+[?2004l[?2004h>     pos_b = row['position_b']
+[?2004l[?2004h>     res_a = fastas[pa][pos_a - 1]
+[?2004l[?2004h>     res_b = fastas[pb][pos_b - 1]
+[?2004l[?2004h>     assert res_a == 'K', f'{row["xl_id"]} a is not K: {res_a}'
+[?2004l[?2004h>     assert res_b == 'K', f'{row["xl_id"]} b is not K: {res_b}'
+[?2004l[?2004h> 
+[?2004l[?2004h> print('All positions in crosslinks.csv are Lysines in FASTA!')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Also check in model_01
+[?2004l[?2004h> from check_crosslinks import xlmbql_pos_to_model, xlcq5e_pos_to_model
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> 
+[?2004l[?2004h> for idx, row in xl.iterrows():
+[?2004l[?2004h>     p_a = xlmbql_pos_to_model(row['position_a']) if row['protein_a'] == 'XLMBQL' else xlcq5e_pos_to_model(row['position_a'])
+[?2004l[?2004h>     p_b = xlmbql_pos_to_model(row['position_b']) if row['protein_b'] == 'XLMBQL' else xlcq5e_pos_to_model(row['position_b'])
+[?2004l[?2004h>     if p_a is not None:
+[?2004l[?2004h>         # check chain A (if XLMBQL) or chain C (if XLCQ5E)
+[?2004l[?2004h>         ch = 'A' if row['protein_a'] == 'XLMBQL' else 'C'
+[?2004l[?2004h>         r = s[0][ch][p_a]
+[?2004l[?2004h>         assert r.resname == 'LYS', f'Model pos {p_a} in {ch} is {r.resname}'
+[?2004l[?2004h>     if p_b is not None:
+[?2004l[?2004h>         ch = 'A' if row['protein_b'] == 'XLMBQL' else 'C'
+[?2004l[?2004h>         r = s[0][ch][p_b]
+[?2004l[?2004h>         assert r.resname == 'LYS', f'Model pos {p_b} in {ch} is {r.resname}'
+[?2004l[?2004h> print('All mapped residues in model_01 are LYS!')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 verify_lysines.py
+[?2004lAll positions in crosslinks.csv are Lysines in FASTA!
+Total crosslinks: 52
+Evaluable crosslinks: 48
+Not evaluable crosslinks: 4
+Not evaluable details:
+('XL005', 'XLMBQL', 212, 116, 'XLMBQL', 188, None, False)
+('XL017', 'XLCQ5E', 242, None, 'XLMBQL', 261, 165, True)
+('XL024', 'XLCQ5E', 314, 221, 'XLCQ5E', 242, None, False)
+('XL030', 'XLCQ5E', 331, 238, 'XLMBQL', 15, None, True)
+All mapped residues in model_01 are LYS!
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > check_grid_size.py
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Total non-H atoms: {len(coords)}')
+[?2004l[?2004h> print(f'Min coords: {coords.min(axis=0)}')
+[?2004l[?2004h> print(f'Max coords: {coords.max(axis=0)}')
+[?2004l[?2004h> print(f'Span: {coords.max(axis=0) - coords.min(axis=0)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 check_grid_size.py
+[?2004lTotal non-H atoms: 8708
+Min coords: [-24.982 -53.181 -32.386]
+Max coords: [50.646 54.308 48.932]
+Span: [ 75.628 107.489  81.318]
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_euclidean.py
+[?2004l[?2004h> # Check how many pairs have ||P - Q|| <= 34.0
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from check_crosslinks import xlmbql_pos_to_model, xlcq5e_pos_to_model
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> 
+[?2004l[?2004h> # Identify which chains are which protein
+[?2004l[?2004h> # Model 01: A=XLMBQL, B=XLMBQL, C=XLCQ5E, D=XLCQ5E
+[?2004l[?2004h> chains_map = {
+[?2004l[?2004h>     'XLMBQL': ['A', 'B'],
+[?2004l[?2004h>     'XLCQ5E': ['C', 'D']
+[?2004l[?2004h> }
+[?2004l[?2004h> 
+[?2004l[?2004h> xl = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> candidates_count = 0
+[?2004l[?2004h> for idx, row in xl.iterrows():
+[?2004l[?2004h>     pa = row['protein_a']
+[?2004l[?2004h>     pb = row['protein_b']
+[?2004l[?2004h>     pos_a = row['position_a']
+[?2004l[?2004h>     pos_b = row['position_b']
+[?2004l[?2004h>     m_a = xlmbql_pos_to_model(pos_a) if pa == 'XLMBQL' else xlcq5e_pos_to_model(pos_a)
+[?2004l[?2004h>     m_b = xlmbql_pos_to_model(pos_b) if pb == 'XLMBQL' else xlcq5e_pos_to_model(pos_b)
+[?2004l[?2004h>     if m_a is None or m_b is None:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     
+[?2004l[?2004h>     chains_a = chains_map[pa]
+[?2004l[?2004h>     chains_b = chains_map[pb]
+[?2004l[?2004h>     
+[?2004l[?2004h>     min_dist = 1e9
+[?2004l[?2004h>     for ca in chains_a:
+[?2004l[?2004h>         for cb in chains_b:
+[?2004l[?2004h>             if pa == pb and pos_a == pos_b and ca == cb:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             coord_a = s[0][ca][m_a]['CA'].coord
+[?2004l[?2004h>             coord_b = s[0][cb][m_b]['CA'].coord
+[?2004l[?2004h>             d = np.linalg.norm(coord_a - coord_b)
+[?2004l[?2004h>             if d < min_dist:
+[?2004l[?2004h>                 min_dist = d
+[?2004l[?2004h>     if min_dist <= 34.0:
+[?2004l[?2004h>         candidates_count += 1
+[?2004l[?2004h>     print(f"{row['xl_id']}: min Euclidean CA-CA = {min_dist:.2f} A")
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Candidates with Euclidean dist <= 34.0: {candidates_count} / 48')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_euclidean.py
+[?2004lTotal crosslinks: 52
+Evaluable crosslinks: 48
+Not evaluable crosslinks: 4
+Not evaluable details:
+('XL005', 'XLMBQL', 212, 116, 'XLMBQL', 188, None, False)
+('XL017', 'XLCQ5E', 242, None, 'XLMBQL', 261, 165, True)
+('XL024', 'XLCQ5E', 314, 221, 'XLCQ5E', 242, None, False)
+('XL030', 'XLCQ5E', 331, 238, 'XLMBQL', 15, None, True)
+XL001: min Euclidean CA-CA = 25.65 A
+XL002: min Euclidean CA-CA = 38.26 A
+XL003: min Euclidean CA-CA = 18.57 A
+XL004: min Euclidean CA-CA = 17.36 A
+XL006: min Euclidean CA-CA = 25.36 A
+XL007: min Euclidean CA-CA = 32.13 A
+XL008: min Euclidean CA-CA = 18.07 A
+XL009: min Euclidean CA-CA = 11.58 A
+XL010: min Euclidean CA-CA = 17.61 A
+XL011: min Euclidean CA-CA = 38.39 A
+XL012: min Euclidean CA-CA = 19.16 A
+XL013: min Euclidean CA-CA = 36.07 A
+XL014: min Euclidean CA-CA = 32.13 A
+XL015: min Euclidean CA-CA = 26.26 A
+XL016: min Euclidean CA-CA = 20.31 A
+XL018: min Euclidean CA-CA = 20.44 A
+XL019: min Euclidean CA-CA = 21.64 A
+XL020: min Euclidean CA-CA = 19.95 A
+XL021: min Euclidean CA-CA = 5.50 A
+XL022: min Euclidean CA-CA = 19.43 A
+XL023: min Euclidean CA-CA = 12.34 A
+XL025: min Euclidean CA-CA = 33.46 A
+XL026: min Euclidean CA-CA = 34.47 A
+XL027: min Euclidean CA-CA = 18.95 A
+XL028: min Euclidean CA-CA = 12.74 A
+XL029: min Euclidean CA-CA = 13.79 A
+XL031: min Euclidean CA-CA = 14.29 A
+XL032: min Euclidean CA-CA = 31.04 A
+XL033: min Euclidean CA-CA = 41.49 A
+XL034: min Euclidean CA-CA = 11.29 A
+XL035: min Euclidean CA-CA = 32.90 A
+XL036: min Euclidean CA-CA = 14.04 A
+XL037: min Euclidean CA-CA = 32.68 A
+XL038: min Euclidean CA-CA = 17.95 A
+XL039: min Euclidean CA-CA = 19.50 A
+XL040: min Euclidean CA-CA = 19.95 A
+XL041: min Euclidean CA-CA = 21.44 A
+XL042: min Euclidean CA-CA = 17.03 A
+XL043: min Euclidean CA-CA = 9.77 A
+XL044: min Euclidean CA-CA = 32.39 A
+XL045: min Euclidean CA-CA = 18.22 A
+XL046: min Euclidean CA-CA = 32.43 A
+XL047: min Euclidean CA-CA = 20.58 A
+XL048: min Euclidean CA-CA = 18.66 A
+XL049: min Euclidean CA-CA = 8.73 A
+XL050: min Euclidean CA-CA = 24.38 A
+XL051: min Euclidean CA-CA = 13.86 A
+XL052: min Euclidean CA-CA = 21.16 A
+Candidates with Euclidean dist <= 34.0: 43 / 48
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > count_lysines.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from check_crosslinks import xlmbql_pos_to_model, xlcq5e_pos_to_model
+[?2004l[?2004h> 
+[?2004l[?2004h> xl = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> all_pairs = []
+[?2004l[?2004h> for idx, row in xl.iterrows():
+[?2004l[?2004h>     pa = row['protein_a']
+[?2004l[?2004h>     pb = row['protein_b']
+[?2004l[?2004h>     pos_a = row['position_a']
+[?2004l[?2004h>     pos_b = row['position_b']
+[?2004l[?2004h>     m_a = xlmbql_pos_to_model(pos_a) if pa == 'XLMBQL' else xlcq5e_pos_to_model(pos_a)
+[?2004l[?2004h>     m_b = xlmbql_pos_to_model(pos_b) if pb == 'XLMBQL' else xlcq5e_pos_to_model(pos_b)
+[?2004l[?2004h>     if m_a is None or m_b is None:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     all_pairs.append((pa, m_a, pb, m_b))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Total evaluable crosslinks: {len(all_pairs)}')
+[?2004l[?2004h> unique_prot_pos = set()
+[?2004l[?2004h> for pa, ma, pb, mb in all_pairs:
+[?2004l[?2004h>     unique_prot_pos.add((pa, ma))
+[?2004l[?2004h>     unique_prot_pos.add((pb, mb))
+[?2004l[?2004h> print(f'Unique (protein, residue) pairs: {len(unique_prot_pos)}')
+[?2004l[?2004h> print(f'Total physical Lysine CA atoms per model: {len(unique_prot_pos) * 2}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 count_lysines.py
+[?2004lTotal crosslinks: 52
+Evaluable crosslinks: 48
+Not evaluable crosslinks: 4
+Not evaluable details:
+('XL005', 'XLMBQL', 212, 116, 'XLMBQL', 188, None, False)
+('XL017', 'XLCQ5E', 242, None, 'XLMBQL', 261, 165, True)
+('XL024', 'XLCQ5E', 314, 221, 'XLCQ5E', 242, None, False)
+('XL030', 'XLCQ5E', 331, 238, 'XLMBQL', 15, None, True)
+Total evaluable crosslinks: 48
+Unique (protein, residue) pairs: 32
+Total physical Lysine CA atoms per model: 64
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_dijkstra_speed.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import time
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> from scipy.spatial import KDTree
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> tree = KDTree(coords)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let's pick one Lysine CA atom
+[?2004l[?2004h> ca_coord = s[0]['A'][1]['CA'].coord
+[?2004l[?2004h> print('Testing Lysine CA at:', ca_coord)
+[?2004l[?2004h> 
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> # Check bounding box around ca_coord within 35 A
+[?2004l[?2004h> min_b = np.floor(ca_coord - 35.0).astype(int)
+[?2004l[?2004h> max_b = np.ceil(ca_coord + 35.0).astype(int)
+[?2004l[?2004h> 
+[?2004l[?2004h> x = np.arange(min_b[0], max_b[0] + 1)
+[?2004l[?2004h> y = np.arange(min_b[1], max_b[1] + 1)
+[?2004l[?2004h> z = np.arange(min_b[2], max_b[2] + 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Grid size
+[?2004l[?2004h> grid_shape = (len(x), len(y), len(z))
+[?2004l[?2004h> print('Subgrid shape around CA:', grid_shape, 'total voxels:', grid_shape[0]*grid_shape[1]*grid_shape[2])
+[?2004l[?2004h> 
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_dijkstra_speed.py
+[?2004lTesting Lysine CA at: [21.702 -2.116 22.799]
+Subgrid shape around CA: (72, 72, 72) total voxels: 373248
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_grid_open.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import time
+[?2004l[?2004h> from scipy.spatial import KDTree
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> 
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> margin = 8
+[?2004l[?2004h> min_int = np.floor(coords.min(axis=0) - margin).astype(int)
+[?2004l[?2004h> max_int = np.ceil(coords.max(axis=0) + margin).astype(int)
+[?2004l[?2004h> 
+[?2004l[?2004h> x_range = np.arange(min_int[0], max_int[0] + 1)
+[?2004l[?2004h> y_range = np.arange(min_int[1], max_int[1] + 1)
+[?2004l[?2004h> z_range = np.arange(min_int[2], max_int[2] + 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> shape = (len(x_range), len(y_range), len(z_range))
+[?2004l[?2004h> print(f'Grid shape: {shape}, total: {shape[0]*shape[1]*shape[2]}')
+[?2004l[?2004h> 
+[?2004l[?2004h> is_open = np.ones(shape, dtype=bool)
+[?2004l[?2004h> 
+[?2004l[?2004h> for c in coords:
+[?2004l[?2004h>     ix_min = max(0, int(np.ceil(c[0] - 3.0 + 1e-9)) - min_int[0])
+[?2004l[?2004h>     ix_max = min(shape[0] - 1, int(np.floor(c[0] + 3.0 - 1e-9)) - min_int[0])
+[?2004l[?2004h>     iy_min = max(0, int(np.ceil(c[1] - 3.0 + 1e-9)) - min_int[1])
+[?2004l[?2004h>     iy_max = min(shape[1] - 1, int(np.floor(c[1] + 3.0 - 1e-9)) - min_int[1])
+[?2004l[?2004h>     iz_min = max(0, int(np.ceil(c[2] - 3.0 + 1e-9)) - min_int[2])
+[?2004l[?2004h>     iz_max = min(shape[2] - 1, int(np.floor(c[2] + 3.0 - 1e-9)) - min_int[2])
+[?2004l[?2004h>     
+[?2004l[?2004h>     if ix_min > ix_max or iy_min > iy_max or iz_min > iz_max:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     
+[?2004l[?2004h>     xs = x_range[ix_min:ix_max+1][:, None, None]
+[?2004l[?2004h>     ys = y_range[iy_min:iy_max+1][None, :, None]
+[?2004l[?2004h>     zs = z_range[iz_min:iz_max+1][None, None, :]
+[?2004l[?2004h>     
+[?2004l[?2004h>     d2 = (xs - c[0])**2 + (ys - c[1])**2 + (zs - c[2])**2
+[?2004l[?2004h>     blocked_mask = (d2 < 9.0)
+[?2004l[?2004h>     is_open[ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] &= ~blocked_mask
+[?2004l[?2004h> 
+[?2004l[?2004h> t1 = time.time()
+[?2004l[?2004h> print(f'Rasterization took: {t1 - t0:.2f} s')
+[?2004l[?2004h> print(f'Open points: {np.sum(is_open)}, Blocked points: {np.sum(~is_open)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_grid_open.py
+[?2004lGrid shape: (93, 126, 99), total: 1160082
+Rasterization took: 0.32 s
+Open points: 962576, Blocked points: 197506
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_dijkstra.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import time
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> 
+[?2004l[?2004h> margin = 8
+[?2004l[?2004h> min_int = np.floor(coords.min(axis=0) - margin).astype(int)
+[?2004l[?2004h> max_int = np.ceil(coords.max(axis=0) + margin).astype(int)
+[?2004l[?2004h> 
+[?2004l[?2004h> x_range = np.arange(min_int[0], max_int[0] + 1)
+[?2004l[?2004h> y_range = np.arange(min_int[1], max_int[1] + 1)
+[?2004l[?2004h> z_range = np.arange(min_int[2], max_int[2] + 1)
+[?2004l[?2004h> 
+[?2004l[?2004h> shape = (len(x_range), len(y_range), len(z_range))
+[?2004l[?2004h> is_open = np.ones(shape, dtype=bool)
+[?2004l[?2004h> 
+[?2004l[?2004h> for c in coords:
+[?2004l[?2004h>     ix_min = max(0, int(np.ceil(c[0] - 3.0 + 1e-9)) - min_int[0])
+[?2004l[?2004h>     ix_max = min(shape[0] - 1, int(np.floor(c[0] + 3.0 - 1e-9)) - min_int[0])
+[?2004l[?2004h>     iy_min = max(0, int(np.ceil(c[1] - 3.0 + 1e-9)) - min_int[1])
+[?2004l[?2004h>     iy_max = min(shape[1] - 1, int(np.floor(c[1] + 3.0 - 1e-9)) - min_int[1])
+[?2004l[?2004h>     iz_min = max(0, int(np.ceil(c[2] - 3.0 + 1e-9)) - min_int[2])
+[?2004l[?2004h>     iz_max = min(shape[2] - 1, int(np.floor(c[2] + 3.0 - 1e-9)) - min_int[2])
+[?2004l[?2004h>     if ix_min > ix_max or iy_min > iy_max or iz_min > iz_max:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     xs = x_range[ix_min:ix_max+1][:, None, None]
+[?2004l[?2004h>     ys = y_range[iy_min:iy_max+1][None, :, None]
+[?2004l[?2004h>     zs = z_range[iz_min:iz_max+1][None, None, :]
+[?2004l[?2004h>     d2 = (xs - c[0])**2 + (ys - c[1])**2 + (zs - c[2])**2
+[?2004l[?2004h>     is_open[ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] &= ~(d2 < 9.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> neighbors = []
+[?2004l[?2004h> for dx in [-1, 0, 1]:
+[?2004l[?2004h>     for dy in [-1, 0, 1]:
+[?2004l[?2004h>         for dz in [-1, 0, 1]:
+[?2004l[?2004h>             if dx == 0 and dy == 0 and dz == 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             w = float(np.sqrt(dx*dx + dy*dy + dz*dz))
+[?2004l[?2004h>             neighbors.append((dx, dy, dz, w))
+[?2004l[?2004h> 
+[?2004l[?2004h> P = s[0]['A'][1]['CA'].coord
+[?2004l[?2004h> p_min = np.maximum(0, np.floor(P - 7.0).astype(int) - min_int)
+[?2004l[?2004h> p_max = np.minimum(np.array(shape) - 1, np.ceil(P + 7.0).astype(int) - min_int)
+[?2004l[?2004h> 
+[?2004l[?2004h> t0 = time.time()
+[?2004l[?2004h> pq = []
+[?2004l[?2004h> dist = np.full(shape, np.inf, dtype=np.float32)
+[?2004l[?2004h> for ix in range(p_min[0], p_max[0] + 1):
+[?2004l[?2004h>     for iy in range(p_min[1], p_max[1] + 1):
+[?2004l[?2004h>         for iz in range(p_min[2], p_max[2] + 1):
+[?2004l[?2004h>             if is_open[ix, iy, iz]:
+[?2004l[?2004h>                 pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                 d = float(np.linalg.norm(pt - P))
+[?2004l[?2004h>                 if d <= 7.0:
+[?2004l[?2004h>                     dist[ix, iy, iz] = d
+[?2004l[?2004h>                     heapq.heappush(pq, (d, ix, iy, iz))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'S_P size: {len(pq)}')
+[?2004l[?2004h> 
+[?2004l[?2004h> count = 0
+[?2004l[?2004h> while pq:
+[?2004l[?2004h>     d, cx, cy, cz = heapq.heappop(pq)
+[?2004l[?2004h>     if d > dist[cx, cy, cz]:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     if d > 34.0:
+[?2004l[?2004h>         break
+[?2004l[?2004h>     count += 1
+[?2004l[?2004h>     for dx, dy, dz, w in neighbors:
+[?2004l[?2004h>         nx, ny, nz = cx + dx, cy + dy, cz + dz
+[?2004l[?2004h>         if 0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]:
+[?2004l[?2004h>             if is_open[nx, ny, nz]:
+[?2004l[?2004h>                 nd = d + w
+[?2004l[?2004h>                 if nd < dist[nx, ny, nz] and nd <= 34.0:
+[?2004l[?2004h>                     dist[nx, ny, nz] = nd
+[?2004l[?2004h>                     heapq.heappush(pq, (nd, nx, ny, nz))
+[?2004l[?2004h> 
+[?2004l[?2004h> t1 = time.time()
+[?2004l[?2004h> print(f'Dijkstra finished: {t1 - t0:.3f} s, expanded {count} nodes')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_dijkstra.py
+[?2004lS_P size: 309
+Dijkstra finished: 1.819 s, expanded 55786 nodes
+[?2004hroot@b7f307384b32:/task# which gcc
+[?2004l[?2004hroot@b7f307384b32:/task# which cc clang; python3 -c 'import numba; print(numba.__file__)' 2>&1 | head -n 3
+[?2004lTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+ModuleNotFoundError: No module named 'numba'
+[?2004hroot@b7f307384b32:/task# pip list
+[?2004lPackage         Version
+--------------- -------
+biopython       1.85
+numpy           2.5.4
+packaging       26.3
+pandas          3.1.1
+pip             26.2.2
+python-dateutil 4.0.0
+scipy           1.18.1
+setuptools      84.2.1
+tzdata          2026.6
+wheel           0.48.0
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_astar.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import time
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> 
+[?2004l[?2004h> margin = 8
+[?2004l[?2004h> min_int = np.floor(coords.min(axis=0) - margin).astype(int)
+[?2004l[?2004h> max_int = np.ceil(coords.max(axis=0) + margin).astype(int)
+[?2004l[?2004h> 
+[?2004l[?2004h> x_range = np.arange(min_int[0], max_int[0] + 1)
+[?2004l[?2004h> y_range = np.arange(min_int[1], max_int[1] + 1)
+[?2004l[?2004h> z_range = np.arange(min_int[2], max_int[2] + 1)
+[?2004l[?2004h> shape = (len(x_range), len(y_range), len(z_range))
+[?2004l[?2004h> is_open = np.ones(shape, dtype=bool)
+[?2004l[?2004h> 
+[?2004l[?2004h> for c in coords:
+[?2004l[?2004h>     ix_min = max(0, int(np.ceil(c[0] - 3.0 + 1e-9)) - min_int[0])
+[?2004l[?2004h>     ix_max = min(shape[0] - 1, int(np.floor(c[0] + 3.0 - 1e-9)) - min_int[0])
+[?2004l[?2004h>     iy_min = max(0, int(np.ceil(c[1] - 3.0 + 1e-9)) - min_int[1])
+[?2004l[?2004h>     iy_max = min(shape[1] - 1, int(np.floor(c[1] + 3.0 - 1e-9)) - min_int[1])
+[?2004l[?2004h>     iz_min = max(0, int(np.ceil(c[2] - 3.0 + 1e-9)) - min_int[2])
+[?2004l[?2004h>     iz_max = min(shape[2] - 1, int(np.floor(c[2] + 3.0 - 1e-9)) - min_int[2])
+[?2004l[?2004h>     if ix_min > ix_max or iy_min > iy_max or iz_min > iz_max:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     xs = x_range[ix_min:ix_max+1][:, None, None]
+[?2004l[?2004h>     ys = y_range[iy_min:iy_max+1][None, :, None]
+[?2004l[?2004h>     zs = z_range[iz_min:iz_max+1][None, None, :]
+[?2004l[?2004h>     d2 = (xs - c[0])**2 + (ys - c[1])**2 + (zs - c[2])**2
+[?2004l[?2004h>     is_open[ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] &= ~(d2 < 9.0)
+[?2004l[?2004h> 
+[?2004l[?2004h> neighbors = []
+[?2004l[?2004h> for dx in [-1, 0, 1]:
+[?2004l[?2004h>     for dy in [-1, 0, 1]:
+[?2004l[?2004h>         for dz in [-1, 0, 1]:
+[?2004l[?2004h>             if dx == 0 and dy == 0 and dz == 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             w = float(np.sqrt(dx*dx + dy*dy + dz*dz))
+[?2004l[?2004h>             neighbors.append((dx, dy, dz, w))
+[?2004l[?2004h> 
+[?2004l[?2004h> def astar_distance(P, Q, max_dist=34.0):
+[?2004l[?2004h>     euc = np.linalg.norm(P - Q)
+[?2004l[?2004h>     if euc > max_dist:
+[?2004l[?2004h>         return np.inf, 0
+[?2004l[?2004h>     p_min = np.maximum(0, np.floor(P - 7.0).astype(int) - min_int)
+[?2004l[?2004h>     p_max = np.minimum(np.array(shape) - 1, np.ceil(P + 7.0).astype(int) - min_int)
+[?2004l[?2004h>     pq = []
+[?2004l[?2004h>     g_score = {}
+[?2004l[?2004h>     best_dist = np.inf
+[?2004l[?2004h>     for ix in range(p_min[0], p_max[0] + 1):
+[?2004l[?2004h>         for iy in range(p_min[1], p_max[1] + 1):
+[?2004l[?2004h>             for iz in range(p_min[2], p_max[2] + 1):
+[?2004l[?2004h>                 if is_open[ix, iy, iz]:
+[?2004l[?2004h>                     pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                     dP = float(np.linalg.norm(pt - P))
+[?2004l[?2004h>                     if dP <= 7.0:
+[?2004l[?2004h>                         dQ = float(np.linalg.norm(pt - Q))
+[?2004l[?2004h>                         if dQ <= 7.0:
+[?2004l[?2004h>                             best_dist = min(best_dist, dP + dQ)
+[?2004l[?2004h>                         h = dQ
+[?2004l[?2004h>                         f = dP + h
+[?2004l[?2004h>                         if f <= max_dist:
+[?2004l[?2004h>                             g_score[(ix, iy, iz)] = dP
+[?2004l[?2004h>                             heapq.heappush(pq, (f, dP, ix, iy, iz))
+[?2004l[?2004h>     nodes_expanded = 0
+[?2004l[?2004h>     while pq:
+[?2004l[?2004h>         f, g, cx, cy, cz = heapq.heappop(pq)
+[?2004l[?2004h>         if g > g_score.get((cx, cy, cz), np.inf):
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if f >= best_dist or f > max_dist:
+[?2004l[?2004h>             break
+[?2004l[?2004h>         nodes_expanded += 1
+[?2004l[?2004h>         for dx, dy, dz, w in neighbors:
+[?2004l[?2004h>             nx, ny, nz = cx + dx, cy + dy, cz + dz
+[?2004l[?2004h>             if 0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]:
+[?2004l[?2004h>                 if is_open[nx, ny, nz]:
+[?2004l[?2004h>                     ng = g + w
+[?2004l[?2004h>                     pos = (nx, ny, nz)
+[?2004l[?2004h>                     if ng < g_score.get(pos, np.inf):
+[?2004l[?2004h>                         pt = np.array([x_range[nx], y_range[ny], z_range[nz]])
+[?2004l[?2004h>                         dQ = float(np.linalg.norm(pt - Q))
+[?2004l[?2004h>                         if dQ <= 7.0:
+[?2004l[?2004h>                             best_dist = min(best_dist, ng + dQ)
+[?2004l[?2004h>                         h = dQ
+[?2004l[?2004h>                         nf = ng + h
+[?2004l[?2004h>                         if nf < best_dist and nf <= max_dist:
+[?2004l[?2004h>                             g_score[pos] = ng
+[?2004l[?2004h>                             heapq.heappush(pq, (nf, ng, nx, ny, nz))
+[?2004l[?2004h>     return best_dist, nodes_expanded
+[?2004l[?2004h> 
+[?2004l[?2004h> P = s[0]['A'][1]['CA'].coord
+[?2004l[?2004h> for target_ch, target_res in [('A', 26), ('C', 20), ('B', 1)]:
+[?2004l[?2004h>     Q = s[0][target_ch][target_res]['CA'].coord
+[?2004l[?2004h>     t0 = time.time()
+[?2004l[?2004h>     dist, count = astar_distance(P, Q)
+[?2004l[?2004h>     t1 = time.time()
+[?2004l[?2004h>     print(f'CA A:1 to {target_ch}:{target_res}: dist={dist:.3f}, euc={np.linalg.norm(P-Q):.3f}, expanded {count} in {t1-t0:.4f} s')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_astar.py
+[?2004lCA A:1 to A:26: dist=16.133, euc=13.672, expanded 22 in 0.0079 s
+CA A:1 to C:20: dist=32.391, euc=29.843, expanded 530 in 0.0224 s
+CA A:1 to B:1: dist=20.147, euc=17.814, expanded 14 in 0.0146 s
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_margin.py
+[?2004l[?2004h> # Let's compare A* with full Dijkstra on a couple of pairs to verify that A* yields exact distance
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h> 
+[?2004l[?2004h> def build_grid(margin):
+[?2004l[?2004h>     min_int = np.floor(coords.min(axis=0) - margin).astype(int)
+[?2004l[?2004h>     max_int = np.ceil(coords.max(axis=0) + margin).astype(int)
+[?2004l[?2004h>     x_range = np.arange(min_int[0], max_int[0] + 1)
+[?2004l[?2004h>     y_range = np.arange(min_int[1], max_int[1] + 1)
+[?2004l[?2004h>     z_range = np.arange(min_int[2], max_int[2] + 1)
+[?2004l[?2004h>     shape = (len(x_range), len(y_range), len(z_range))
+[?2004l[?2004h>     is_open = np.ones(shape, dtype=bool)
+[?2004l[?2004h>     for c in coords:
+[?2004l[?2004h>         ix_min = max(0, int(np.ceil(c[0] - 3.0 + 1e-9)) - min_int[0])
+[?2004l[?2004h>         ix_max = min(shape[0] - 1, int(np.floor(c[0] + 3.0 - 1e-9)) - min_int[0])
+[?2004l[?2004h>         iy_min = max(0, int(np.ceil(c[1] - 3.0 + 1e-9)) - min_int[1])
+[?2004l[?2004h>         iy_max = min(shape[1] - 1, int(np.floor(c[1] + 3.0 - 1e-9)) - min_int[1])
+[?2004l[?2004h>         iz_min = max(0, int(np.ceil(c[2] - 3.0 + 1e-9)) - min_int[2])
+[?2004l[?2004h>         iz_max = min(shape[2] - 1, int(np.floor(c[2] + 3.0 - 1e-9)) - min_int[2])
+[?2004l[?2004h>         if ix_min > ix_max or iy_min > iy_max or iz_min > iz_max:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         xs = x_range[ix_min:ix_max+1][:, None, None]
+[?2004l[?2004h>         ys = y_range[iy_min:iy_max+1][None, :, None]
+[?2004l[?2004h>         zs = z_range[iz_min:iz_max+1][None, None, :]
+[?2004l[?2004h>         d2 = (xs - c[0])**2 + (ys - c[1])**2 + (zs - c[2])**2
+[?2004l[?2004h>         is_open[ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] &= ~(d2 < 9.0)
+[?2004l[?2004h>     return min_int, shape, is_open, x_range, y_range, z_range
+[?2004l[?2004h> 
+[?2004l[?2004h> min_int, shape, is_open, x_range, y_range, z_range = build_grid(8)
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check A* on a pair
+[?2004l[?2004h> from test_astar import astar_distance
+[?2004l[?2004h> P = s[0]['A'][1]['CA'].coord
+[?2004l[?2004h> Q = s[0]['C'][20]['CA'].coord
+[?2004l[?2004h> d_astar, _ = astar_distance(P, Q)
+[?2004l[?2004h> print(f'A* dist: {d_astar:.4f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_margin.py
+[?2004lCA A:1 to A:26: dist=16.133, euc=13.672, expanded 22 in 0.0054 s
+CA A:1 to C:20: dist=32.391, euc=29.843, expanded 530 in 0.0160 s
+CA A:1 to B:1: dist=20.147, euc=17.814, expanded 14 in 0.0052 s
+A* dist: 32.3912
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > compare_dijkstra.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> from test_margin import build_grid
+[?2004l[?2004h> 
+[?2004l[?2004h> parser = PDBParser(QUIET=True)
+[?2004l[?2004h> s = parser.get_structure('m1', '/task/input/models/model_01.pdb')
+[?2004l[?2004h> min_int, shape, is_open, x_range, y_range, z_range = build_grid(8)
+[?2004l[?2004h> 
+[?2004l[?2004h> P = s[0]['A'][1]['CA'].coord
+[?2004l[?2004h> Q = s[0]['C'][20]['CA'].coord
+[?2004l[?2004h> 
+[?2004l[?2004h> neighbors = []
+[?2004l[?2004h> for dx in [-1, 0, 1]:
+[?2004l[?2004h>     for dy in [-1, 0, 1]:
+[?2004l[?2004h>         for dz in [-1, 0, 1]:
+[?2004l[?2004h>             if dx == 0 and dy == 0 and dz == 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             w = float(np.sqrt(dx*dx + dy*dy + dz*dz))
+[?2004l[?2004h>             neighbors.append((dx, dy, dz, w))
+[?2004l[?2004h> 
+[?2004l[?2004h> p_min = np.maximum(0, np.floor(P - 7.0).astype(int) - min_int)
+[?2004l[?2004h> p_max = np.minimum(np.array(shape) - 1, np.ceil(P + 7.0).astype(int) - min_int)
+[?2004l[?2004h> 
+[?2004l[?2004h> pq = []
+[?2004l[?2004h> dist = np.full(shape, np.inf, dtype=np.float32)
+[?2004l[?2004h> for ix in range(p_min[0], p_max[0] + 1):
+[?2004l[?2004h>     for iy in range(p_min[1], p_max[1] + 1):
+[?2004l[?2004h>         for iz in range(p_min[2], p_max[2] + 1):
+[?2004l[?2004h>             if is_open[ix, iy, iz]:
+[?2004l[?2004h>                 pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                 d = float(np.linalg.norm(pt - P))
+[?2004l[?2004h>                 if d <= 7.0:
+[?2004l[?2004h>                     dist[ix, iy, iz] = d
+[?2004l[?2004h>                     heapq.heappush(pq, (d, ix, iy, iz))
+[?2004l[?2004h> 
+[?2004l[?2004h> while pq:
+[?2004l[?2004h>     d, cx, cy, cz = heapq.heappop(pq)
+[?2004l[?2004h>     if d > dist[cx, cy, cz]:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     if d > 34.0:
+[?2004l[?2004h>         break
+[?2004l[?2004h>     for dx, dy, dz, w in neighbors:
+[?2004l[?2004h>         nx, ny, nz = cx + dx, cy + dy, cz + dz
+[?2004l[?2004h>         if 0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]:
+[?2004l[?2004h>             if is_open[nx, ny, nz]:
+[?2004l[?2004h>                 nd = d + w
+[?2004l[?2004h>                 if nd < dist[nx, ny, nz] and nd <= 34.0:
+[?2004l[?2004h>                     dist[nx, ny, nz] = nd
+[?2004l[?2004h>                     heapq.heappush(pq, (nd, nx, ny, nz))
+[?2004l[?2004h> 
+[?2004l[?2004h> # Now find min over S_Q
+[?2004l[?2004h> q_min = np.maximum(0, np.floor(Q - 7.0).astype(int) - min_int)
+[?2004l[?2004h> q_max = np.minimum(np.array(shape) - 1, np.ceil(Q + 7.0).astype(int) - min_int)
+[?2004l[?2004h> best_dijkstra = np.inf
+[?2004l[?2004h> for ix in range(q_min[0], q_max[0] + 1):
+[?2004l[?2004h>     for iy in range(q_min[1], q_max[1] + 1):
+[?2004l[?2004h>         for iz in range(q_min[2], q_max[2] + 1):
+[?2004l[?2004h>             if is_open[ix, iy, iz]:
+[?2004l[?2004h>                 pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                 dQ = float(np.linalg.norm(pt - Q))
+[?2004l[?2004h>                 if dQ <= 7.0:
+[?2004l[?2004h>                     best_dijkstra = min(best_dijkstra, dist[ix, iy, iz] + dQ)
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Dijkstra result: {best_dijkstra:.4f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 compare_dijkstra.py
+[?2004lCA A:1 to A:26: dist=16.133, euc=13.672, expanded 22 in 0.0053 s
+CA A:1 to C:20: dist=32.391, euc=29.843, expanded 530 in 0.0241 s
+CA A:1 to B:1: dist=20.147, euc=17.814, expanded 14 in 0.0053 s
+A* dist: 32.3912
+Dijkstra result: 32.3912
+[?2004hroot@b7f307384b32:/task# python3 -c "from test_margin import build_grid; print(build_grid(10)[1])"
+[?2004lCA A:1 to A:26: dist=16.133, euc=13.672, expanded 22 in 0.0262 s
+CA A:1 to C:20: dist=32.391, euc=29.843, expanded 530 in 0.0299 s
+CA A:1 to B:1: dist=20.147, euc=17.814, expanded 14 in 0.0069 s
+A* dist: 32.3912
+(97, 130, 103)
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > evaluate_model.py
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import time
+[?2004l[?2004h> import heapq
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> from Bio.SeqUtils import seq1
+[?2004l[?2004h> 
+[?2004l[?2004h> def xlmbql_pos_to_model(p):
+[?2004l[?2004h>     if 84 <= p <= 175:
+[?2004l[?2004h>         return p - 83
+[?2004l[?2004h>     elif 189 <= p <= 381:
+[?2004l[?2004h>         return p - 189 + 93
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> def xlcq5e_pos_to_model(p):
+[?2004l[?2004h>     if 87 <= p <= 235:
+[?2004l[?2004h>         return p - 86
+[?2004l[?2004h>     elif 243 <= p <= 346:
+[?2004l[?2004h>         return p - 243 + 150
+[?2004l[?2004h>     return None
+[?2004l[?2004h> 
+[?2004l[?2004h> neighbors = []
+[?2004l[?2004h> for dx in [-1, 0, 1]:
+[?2004l[?2004h>     for dy in [-1, 0, 1]:
+[?2004l[?2004h>         for dz in [-1, 0, 1]:
+[?2004l[?2004h>             if dx == 0 and dy == 0 and dz == 0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             w = float(np.sqrt(dx*dx + dy*dy + dz*dz))
+[?2004l[?2004h>             neighbors.append((dx, dy, dz, w))
+[?2004l[?2004h> 
+[?2004l[?2004h> def build_grid(coords, margin=8):
+[?2004l[?2004h>     min_int = np.floor(coords.min(axis=0) - margin).astype(int)
+[?2004l[?2004h>     max_int = np.ceil(coords.max(axis=0) + margin).astype(int)
+[?2004l[?2004h>     x_range = np.arange(min_int[0], max_int[0] + 1)
+[?2004l[?2004h>     y_range = np.arange(min_int[1], max_int[1] + 1)
+[?2004l[?2004h>     z_range = np.arange(min_int[2], max_int[2] + 1)
+[?2004l[?2004h>     shape = (len(x_range), len(y_range), len(z_range))
+[?2004l[?2004h>     is_open = np.ones(shape, dtype=bool)
+[?2004l[?2004h>     
+[?2004l[?2004h>     for c in coords:
+[?2004l[?2004h>         ix_min = max(0, int(np.ceil(c[0] - 3.0 + 1e-9)) - min_int[0])
+[?2004l[?2004h>         ix_max = min(shape[0] - 1, int(np.floor(c[0] + 3.0 - 1e-9)) - min_int[0])
+[?2004l[?2004h>         iy_min = max(0, int(np.ceil(c[1] - 3.0 + 1e-9)) - min_int[1])
+[?2004l[?2004h>         iy_max = min(shape[1] - 1, int(np.floor(c[1] + 3.0 - 1e-9)) - min_int[1])
+[?2004l[?2004h>         iz_min = max(0, int(np.ceil(c[2] - 3.0 + 1e-9)) - min_int[2])
+[?2004l[?2004h>         iz_max = min(shape[2] - 1, int(np.floor(c[2] + 3.0 - 1e-9)) - min_int[2])
+[?2004l[?2004h>         if ix_min > ix_max or iy_min > iy_max or iz_min > iz_max:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         xs = x_range[ix_min:ix_max+1][:, None, None]
+[?2004l[?2004h>         ys = y_range[iy_min:iy_max+1][None, :, None]
+[?2004l[?2004h>         zs = z_range[iz_min:iz_max+1][None, None, :]
+[?2004l[?2004h>         d2 = (xs - c[0])**2 + (ys - c[1])**2 + (zs - c[2])**2
+[?2004l[?2004h>         is_open[ix_min:ix_max+1, iy_min:iy_max+1, iz_min:iz_max+1] &= ~(d2 < 9.0)
+[?2004l[?2004h>     return min_int, shape, is_open, x_range, y_range, z_range
+[?2004l[?2004h> 
+[?2004l[?2004h> def astar_distance(P, Q, min_int, shape, is_open, x_range, y_range, z_range, max_dist=34.0):
+[?2004l[?2004h>     euc = np.linalg.norm(P - Q)
+[?2004l[?2004h>     if euc > max_dist:
+[?2004l[?2004h>         return np.inf
+[?2004l[?2004h>     
+[?2004l[?2004h>     p_min = np.maximum(0, np.floor(P - 7.0).astype(int) - min_int)
+[?2004l[?2004h>     p_max = np.minimum(np.array(shape) - 1, np.ceil(P + 7.0).astype(int) - min_int)
+[?2004l[?2004h>     
+[?2004l[?2004h>     q_min = np.maximum(0, np.floor(Q - 7.0).astype(int) - min_int)
+[?2004l[?2004h>     q_max = np.minimum(np.array(shape) - 1, np.ceil(Q + 7.0).astype(int) - min_int)
+[?2004l[?2004h>     
+[?2004l[?2004h>     has_open_q = False
+[?2004l[?2004h>     for ix in range(q_min[0], q_max[0] + 1):
+[?2004l[?2004h>         for iy in range(q_min[1], q_max[1] + 1):
+[?2004l[?2004h>             for iz in range(q_min[2], q_max[2] + 1):
+[?2004l[?2004h>                 if is_open[ix, iy, iz]:
+[?2004l[?2004h>                     pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                     if np.linalg.norm(pt - Q) <= 7.0:
+[?2004l[?2004h>                         has_open_q = True
+[?2004l[?2004h>                         break
+[?2004l[?2004h>             if has_open_q: break
+[?2004l[?2004h>         if has_open_q: break
+[?2004l[?2004h>     
+[?2004l[?2004h>     if not has_open_q:
+[?2004l[?2004h>         return np.inf
+[?2004l[?2004h>         
+[?2004l[?2004h>     pq = []
+[?2004l[?2004h>     g_score = {}
+[?2004l[?2004h>     best_dist = np.inf
+[?2004l[?2004h>     
+[?2004l[?2004h>     for ix in range(p_min[0], p_max[0] + 1):
+[?2004l[?2004h>         for iy in range(p_min[1], p_max[1] + 1):
+[?2004l[?2004h>             for iz in range(p_min[2], p_max[2] + 1):
+[?2004l[?2004h>                 if is_open[ix, iy, iz]:
+[?2004l[?2004h>                     pt = np.array([x_range[ix], y_range[iy], z_range[iz]])
+[?2004l[?2004h>                     dP = float(np.linalg.norm(pt - P))
+[?2004l[?2004h>                     if dP <= 7.0:
+[?2004l[?2004h>                         dQ = float(np.linalg.norm(pt - Q))
+[?2004l[?2004h>                         if dQ <= 7.0:
+[?2004l[?2004h>                             best_dist = min(best_dist, dP + dQ)
+[?2004l[?2004h>                         h = dQ
+[?2004l[?2004h>                         f = dP + h
+[?2004l[?2004h>                         if f <= max_dist:
+[?2004l[?2004h>                             g_score[(ix, iy, iz)] = dP
+[?2004l[?2004h>                             heapq.heappush(pq, (f, dP, ix, iy, iz))
+[?2004l[?2004h>                             
+[?2004l[?2004h>     while pq:
+[?2004l[?2004h>         f, g, cx, cy, cz = heapq.heappop(pq)
+[?2004l[?2004h>         if g > g_score.get((cx, cy, cz), np.inf):
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if f >= best_dist or f > max_dist:
+[?2004l[?2004h>             break
+[?2004l[?2004h>             
+[?2004l[?2004h>         for dx, dy, dz, w in neighbors:
+[?2004l[?2004h>             nx, ny, nz = cx + dx, cy + dy, cz + dz
+[?2004l[?2004h>             if 0 <= nx < shape[0] and 0 <= ny < shape[1] and 0 <= nz < shape[2]:
+[?2004l[?2004h>                 if is_open[nx, ny, nz]:
+[?2004l[?2004h>                     ng = g + w
+[?2004l[?2004h>                     pos = (nx, ny, nz)
+[?2004l[?2004h>                     if ng < g_score.get(pos, np.inf):
+[?2004l[?2004h>                         pt = np.array([x_range[nx], y_range[ny], z_range[nz]])
+[?2004l[?2004h>                         dQ = float(np.linalg.norm(pt - Q))
+[?2004l[?2004h>                         if dQ <= 7.0:
+[?2004l[?2004h>                             best_dist = min(best_dist, ng + dQ)
+[?2004l[?2004h>                         h = dQ
+[?2004l[?2004h>                         nf = ng + h
+[?2004l[?2004h>                         if nf < best_dist and nf <= max_dist:
+[?2004l[?2004h>                             g_score[pos] = ng
+[?2004l[?2004h>                             heapq.heappush(pq, (nf, ng, nx, ny, nz))
+[?2004l[?2004h>     return best_dist
+[?2004l[?2004h> 
+[?2004l[?2004h> def evaluate_model(pdb_path, xl_df):
+[?2004l[?2004h>     parser = PDBParser(QUIET=True)
+[?2004l[?2004h>     m_id = pdb_path.split('/')[-1].replace('.pdb', '')
+[?2004l[?2004h>     s = parser.get_structure(m_id, pdb_path)
+[?2004l[?2004h>     
+[?2004l[?2004h>     chains_map = {'XLMBQL': [], 'XLCQ5E': []}
+[?2004l[?2004h>     for c in s.get_chains():
+[?2004l[?2004h>         res = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>         if len(res) == 285:
+[?2004l[?2004h>             chains_map['XLMBQL'].append(c.id)
+[?2004l[?2004h>         elif len(res) == 253:
+[?2004l[?2004h>             chains_map['XLCQ5E'].append(c.id)
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             raise ValueError(f'Unexpected chain length {len(res)} in {pdb_path} chain {c.id}')
+[?2004l[?2004h>             
+[?2004l[?2004h>     coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h>     min_int, shape, is_open, x_range, y_range, z_range = build_grid(coords, margin=8)
+[?2004l[?2004h>     
+[?2004l[?2004h>     results = {}
+[?2004l[?2004h>     inter_sat = 0
+[?2004l[?2004h>     inter_tot = 0
+[?2004l[?2004h>     intra_sat = 0
+[?2004l[?2004h>     intra_tot = 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     for idx, row in xl_df.iterrows():
+[?2004l[?2004h>         xl_id = row['xl_id']
+[?2004l[?2004h>         pa = row['protein_a']
+[?2004l[?2004h>         pb = row['protein_b']
+[?2004l[?2004h>         pos_a = row['position_a']
+[?2004l[?2004h>         pos_b = row['position_b']
+[?2004l[?2004h>         is_inter = (pa != pb)
+[?2004l[?2004h>         
+[?2004l[?2004h>         m_a = xlmbql_pos_to_model(pos_a) if pa == 'XLMBQL' else xlcq5e_pos_to_model(pos_a)
+[?2004l[?2004h>         m_b = xlmbql_pos_to_model(pos_b) if pb == 'XLMBQL' else xlcq5e_pos_to_model(pos_b)
+[?2004l[?2004h>         
+[?2004l[?2004h>         if m_a is None or m_b is None:
+[?2004l[?2004h>             results[xl_id] = 'not_evaluable'
+[?2004l[?2004h>             continue
+[?2004l[?2004h>             
+[?2004l[?2004h>         if is_inter:
+[?2004l[?2004h>             inter_tot += 1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             intra_tot += 1
+[?2004l[?2004h>             
+[?2004l[?2004h>         chains_a = chains_map[pa]
+[?2004l[?2004h>         chains_b = chains_map[pb]
+[?2004l[?2004h>         
+[?2004l[?2004h>         assignments = []
+[?2004l[?2004h>         if is_inter:
+[?2004l[?2004h>             for ca in chains_a:
+[?2004l[?2004h>                 for cb in chains_b:
+[?2004l[?2004h>                     assignments.append((ca, cb))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if pos_a == pos_b:
+[?2004l[?2004h>                 assignments.append((chains_a[0], chains_a[1]))
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 assignments.append((chains_a[0], chains_a[0]))
+[?2004l[?2004h>                 assignments.append((chains_a[1], chains_a[1]))
+[?2004l[?2004h>                 assignments.append((chains_a[0], chains_a[1]))
+[?2004l[?2004h>                 assignments.append((chains_a[1], chains_a[0]))
+[?2004l[?2004h>                 
+[?2004l[?2004h>         asgn_with_dist = []
+[?2004l[?2004h>         for ca, cb in assignments:
+[?2004l[?2004h>             coord_a = s[0][ca][m_a]['CA'].coord
+[?2004l[?2004h>             coord_b = s[0][cb][m_b]['CA'].coord
+[?2004l[?2004h>             euc = np.linalg.norm(coord_a - coord_b)
+[?2004l[?2004h>             asgn_with_dist.append((euc, ca, cb, coord_a, coord_b))
+[?2004l[?2004h>         asgn_with_dist.sort(key=lambda x: x[0])
+[?2004l[?2004h>         
+[?2004l[?2004h>         satisfied = False
+[?2004l[?2004h>         for euc, ca, cb, coord_a, coord_b in asgn_with_dist:
+[?2004l[?2004h>             if euc > 34.0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             surf_dist = astar_distance(coord_a, coord_b, min_int, shape, is_open, x_range, y_range, z_range, max_dist=34.0)
+[?2004l[?2004h>             if surf_dist <= 34.0:
+[?2004l[?2004h>                 satisfied = True
+[?2004l[?2004h>                 break
+[?2004l[?2004h>                 
+[?2004l[?2004h>         if satisfied:
+[?2004l[?2004h>             results[xl_id] = 'satisfied'
+[?2004l[?2004h>             if is_inter:
+[?2004l[?2004h>                 inter_sat += 1
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 intra_sat += 1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             results[xl_id] = 'violated'
+[?2004l[?2004h>             
+[?2004l[?2004h>     return results, inter_sat, inter_tot, intra_sat, intra_tot
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__ == '__main__':
+[?2004l[?2004h>     xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h>     t0 = time.time()
+[?2004l[?2004h>     res, inter_sat, inter_tot, intra_sat, intra_tot = evaluate_model('/task/input/models/model_01.pdb', xl_df)
+[?2004l[?2004h>     t1 = time.time()
+[?2004l[?2004h>     print(f'Model 01 evaluated in {t1 - t0:.2f} s')
+[?2004l[?2004h>     print(f'Inter: {inter_sat} / {inter_tot}, Intra: {intra_sat} / {intra_tot}, Total: {inter_sat + intra_sat} / {inter_tot + intra_tot}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 evaluate_model.py
+[?2004lModel 01 evaluated in 0.76 s
+Inter: 10 / 17, Intra: 25 / 31, Total: 35 / 48
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > test_margin_eval.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import evaluate_model
+[?2004l[?2004h> 
+[?2004l[?2004h> xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> res8, inter_sat8, _, intra_sat8, _ = evaluate_model.evaluate_model('/task/input/models/model_01.pdb', xl_df)
+[?2004l[?2004h> 
+[?2004l[?2004h> # temporarily modify margin in evaluate_model
+[?2004l[?2004h> orig_build = evaluate_model.build_grid
+[?2004l[?2004h> evaluate_model.build_grid = lambda coords, margin=10: orig_build(coords, margin=10)
+[?2004l[?2004h> res10, inter_sat10, _, intra_sat10, _ = evaluate_model.evaluate_model('/task/input/models/model_01.pdb', xl_df)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Diffs between margin 8 and 10:', [(k, res8[k], res10[k]) for k in res8 if res8[k] != res10[k]])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 test_margin_eval.py
+[?2004lDiffs between margin 8 and 10: []
+[?2004hroot@b7f307384b32:/task# python3 -c "import glob; het = [p for p in glob.glob('/task/input/models/*.pdb') if any(l.startswith('HETATM') for l in open(p))]; print('HETATM found:', het)"
+[?2004lHETATM found: []
+[?2004hroot@b7f307384b32:/task# python3 -c "import glob; from Bio.PDB import PDBParser; p = PDBParser(QUIET=True); [print(f, {a.element for a in p.get_structure('m', f).get_atoms()}) for f in sorted(glob.glob('/task/input/models/*.pdb'))[:2]]"
+[?2004l/task/input/models/model_01.pdb {'S', 'N', 'O', 'C'}
+/task/input/models/model_02.pdb {'S', 'N', 'O', 'C'}
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > run_all_models.py
+[?2004l[?2004h> import os, glob, time, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from evaluate_model import evaluate_model
+[?2004l[?2004h> 
+[?2004l[?2004h> xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> models = sorted(glob.glob('/task/input/models/model_*.pdb'))
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f'Starting evaluation of {len(models)} models...')
+[?2004l[?2004h> t_start = time.time()
+[?2004l[?2004h> 
+[?2004l[?2004h> all_restraints = []
+[?2004l[?2004h> all_link_status = []
+[?2004l[?2004h> 
+[?2004l[?2004h> for m_path in models:
+[?2004l[?2004h>     m_name = os.path.basename(m_path).replace('.pdb', '')
+[?2004l[?2004h>     t0 = time.time()
+[?2004l[?2004h>     res, inter_sat, inter_tot, intra_sat, intra_tot = evaluate_model(m_path, xl_df)
+[?2004l[?2004h>     t1 = time.time()
+[?2004l[?2004h>     total_sat = inter_sat + intra_sat
+[?2004l[?2004h>     total_eval = inter_tot + intra_tot
+[?2004l[?2004h>     print(f'{m_name}: inter={inter_sat}/{inter_tot}, intra={intra_sat}/{intra_tot}, total={total_sat}/{total_eval} in {t1-t0:.2f}s')
+[?2004l[?2004h>     
+[?2004l[?2004h>     all_restraints.append({
+[?2004l[?2004h>         'model': m_name,
+[?2004l[?2004h>         'inter_satisfied': inter_sat,
+[?2004l[?2004h>         'inter_total': inter_tot,
+[?2004l[?2004h>         'intra_satisfied': intra_sat,
+[?2004l[?2004h>         'intra_total': intra_tot,
+[?2004l[?2004h>         'total_satisfied': total_sat
+[?2004l[?2004h>     })
+[?2004l[?2004h>     
+[?2004l[?2004h>     for idx, row in xl_df.iterrows():
+[?2004l[?2004h>         xl_id = row['xl_id']
+[?2004l[?2004h>         all_link_status.append({
+[?2004l[?2004h>             'model': m_name,
+[?2004l[?2004h>             'xl_id': xl_id,
+[?2004l[?2004h>             'status': res[xl_id]
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> t_end = time.time()
+[?2004l[?2004h> print(f'All models evaluated in {t_end - t_start:.2f}s')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 run_all_models.py
+[?2004lStarting evaluation of 17 models...
+model_01: inter=10/17, intra=25/31, total=35/48 in 0.75s
+model_02: inter=10/17, intra=22/31, total=32/48 in 0.69s
+model_03: inter=10/17, intra=21/31, total=31/48 in 0.69s
+model_04: inter=10/17, intra=21/31, total=31/48 in 0.77s
+model_05: inter=10/17, intra=21/31, total=31/48 in 0.85s
+model_06: inter=10/17, intra=21/31, total=31/48 in 0.74s
+model_07: inter=13/17, intra=26/31, total=39/48 in 0.75s
+model_08: inter=10/17, intra=21/31, total=31/48 in 0.97s
+model_09: inter=13/17, intra=26/31, total=39/48 in 0.85s
+model_10: inter=11/17, intra=23/31, total=34/48 in 0.96s
+model_11: inter=10/17, intra=21/31, total=31/48 in 0.72s
+model_12: inter=10/17, intra=21/31, total=31/48 in 0.65s
+model_13: inter=10/17, intra=20/31, total=30/48 in 0.99s
+model_14: inter=13/17, intra=26/31, total=39/48 in 0.81s
+model_15: inter=10/17, intra=21/31, total=31/48 in 0.99s
+model_16: inter=10/17, intra=21/31, total=31/48 in 0.76s
+model_17: inter=14/17, intra=21/31, total=35/48 in 1.27s
+All models evaluated in 14.25s
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > inspect_top_models.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> from evaluate_model import xlmbql_pos_to_model, xlcq5e_pos_to_model, build_grid, astar_distance
+[?2004l[?2004h> from Bio.PDB import PDBParser
+[?2004l[?2004h> 
+[?2004l[?2004h> xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> 
+[?2004l[?2004h> for m_name in ['model_07', 'model_09', 'model_14']:
+[?2004l[?2004h>     pdb_path = f'/task/input/models/{m_name}.pdb'
+[?2004l[?2004h>     parser = PDBParser(QUIET=True)
+[?2004l[?2004h>     s = parser.get_structure(m_name, pdb_path)
+[?2004l[?2004h>     chains_map = {'XLMBQL': [], 'XLCQ5E': []}
+[?2004l[?2004h>     for c in s.get_chains():
+[?2004l[?2004h>         res = [r for r in c.get_residues() if r.id[0] == ' ']
+[?2004l[?2004h>         if len(res) == 285: chains_map['XLMBQL'].append(c.id)
+[?2004l[?2004h>         elif len(res) == 253: chains_map['XLCQ5E'].append(c.id)
+[?2004l[?2004h>     coords = np.array([atom.coord for atom in s.get_atoms() if atom.element != 'H'])
+[?2004l[?2004h>     min_int, shape, is_open, x_range, y_range, z_range = build_grid(coords, margin=8)
+[?2004l[?2004h>     
+[?2004l[?2004h>     print(f'=== {m_name} ===')
+[?2004l[?2004h>     for idx, row in xl_df.iterrows():
+[?2004l[?2004h>         xl_id = row['xl_id']
+[?2004l[?2004h>         pa = row['protein_a']
+[?2004l[?2004h>         pb = row['protein_b']
+[?2004l[?2004h>         pos_a = row['position_a']
+[?2004l[?2004h>         pos_b = row['position_b']
+[?2004l[?2004h>         is_inter = (pa != pb)
+[?2004l[?2004h>         m_a = xlmbql_pos_to_model(pos_a) if pa == 'XLMBQL' else xlcq5e_pos_to_model(pos_a)
+[?2004l[?2004h>         m_b = xlmbql_pos_to_model(pos_b) if pb == 'XLMBQL' else xlcq5e_pos_to_model(pos_b)
+[?2004l[?2004h>         if m_a is None or m_b is None:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         chains_a = chains_map[pa]
+[?2004l[?2004h>         chains_b = chains_map[pb]
+[?2004l[?2004h>         assignments = []
+[?2004l[?2004h>         if is_inter:
+[?2004l[?2004h>             for ca in chains_a:
+[?2004l[?2004h>                 for cb in chains_b: assignments.append((ca, cb))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if pos_a == pos_b: assignments.append((chains_a[0], chains_a[1]))
+[?2004l[?2004h>             else:
+[?2004l[?2004h>                 assignments.append((chains_a[0], chains_a[0]))
+[?2004l[?2004h>                 assignments.append((chains_a[1], chains_a[1]))
+[?2004l[?2004h>                 assignments.append((chains_a[0], chains_a[1]))
+[?2004l[?2004h>                 assignments.append((chains_a[1], chains_a[0]))
+[?2004l[?2004h>         
+[?2004l[?2004h>         asgn_with_dist = []
+[?2004l[?2004h>         for ca, cb in assignments:
+[?2004l[?2004h>             coord_a = s[0][ca][m_a]['CA'].coord
+[?2004l[?2004h>             coord_b = s[0][cb][m_b]['CA'].coord
+[?2004l[?2004h>             euc = np.linalg.norm(coord_a - coord_b)
+[?2004l[?2004h>             asgn_with_dist.append((euc, ca, cb, coord_a, coord_b))
+[?2004l[?2004h>         asgn_with_dist.sort(key=lambda x: x[0])
+[?2004l[?2004h>         
+[?2004l[?2004h>         min_surf = np.inf
+[?2004l[?2004h>         for euc, ca, cb, coord_a, coord_b in asgn_with_dist:
+[?2004l[?2004h>             if euc > 38.0:
+[?2004l[?2004h>                 continue
+[?2004l[?2004h>             surf = astar_distance(coord_a, coord_b, min_int, shape, is_open, x_range, y_range, z_range, max_dist=38.0)
+[?2004l[?2004h>             min_surf = min(min_surf, surf)
+[?2004l[?2004h>         
+[?2004l[?2004h>         if min_surf > 34.0:
+[?2004l[?2004h>             print(f'  {xl_id} VIOLATED: min_surf={min_surf:.2f}, min_euc={asgn_with_dist[0][0]:.2f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 inspect_top_models.py
+[?2004l=== model_07 ===
+  XL007 VIOLATED: min_surf=inf, min_euc=32.13
+  XL013 VIOLATED: min_surf=inf, min_euc=36.07
+  XL014 VIOLATED: min_surf=inf, min_euc=42.48
+  XL032 VIOLATED: min_surf=inf, min_euc=38.58
+  XL033 VIOLATED: min_surf=inf, min_euc=42.78
+  XL035 VIOLATED: min_surf=inf, min_euc=46.44
+  XL037 VIOLATED: min_surf=inf, min_euc=32.68
+  XL044 VIOLATED: min_surf=inf, min_euc=43.58
+  XL046 VIOLATED: min_surf=inf, min_euc=32.43
+=== model_09 ===
+  XL007 VIOLATED: min_surf=inf, min_euc=32.13
+  XL013 VIOLATED: min_surf=inf, min_euc=36.07
+  XL014 VIOLATED: min_surf=inf, min_euc=38.63
+  XL032 VIOLATED: min_surf=inf, min_euc=38.58
+  XL033 VIOLATED: min_surf=inf, min_euc=38.92
+  XL035 VIOLATED: min_surf=inf, min_euc=46.44
+  XL037 VIOLATED: min_surf=inf, min_euc=32.68
+  XL044 VIOLATED: min_surf=inf, min_euc=40.51
+  XL046 VIOLATED: min_surf=inf, min_euc=32.43
+=== model_14 ===
+  XL007 VIOLATED: min_surf=inf, min_euc=32.13
+  XL013 VIOLATED: min_surf=inf, min_euc=36.07
+  XL014 VIOLATED: min_surf=inf, min_euc=41.68
+  XL032 VIOLATED: min_surf=inf, min_euc=38.58
+  XL033 VIOLATED: min_surf=inf, min_euc=42.73
+  XL035 VIOLATED: min_surf=inf, min_euc=46.44
+  XL037 VIOLATED: min_surf=inf, min_euc=32.68
+  XL044 VIOLATED: min_surf=inf, min_euc=43.86
+  XL046 VIOLATED: min_surf=inf, min_euc=32.43
+[?2004hroot@b7f307384b32:/task# cat << 'EOF' > generate_deliverables.py
+[?2004l[?2004h> import os, glob, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from evaluate_model import evaluate_model
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> models = sorted(glob.glob('/task/input/models/model_*.pdb'))
+[?2004l[?2004h> 
+[?2004l[?2004h> restraints_data = []
+[?2004l[?2004h> link_status_data = []
+[?2004l[?2004h> model_summary = []
+[?2004l[?2004h> 
+[?2004l[?2004h> for m_path in models:
+[?2004l[?2004h>     m_name = os.path.basename(m_path).replace('.pdb', '')
+[?2004l[?2004h>     res, inter_sat, inter_tot, intra_sat, intra_tot = evaluate_model(m_path, xl_df)
+[?2004l[?2004h>     total_sat = inter_sat + intra_sat
+[?2004l[?2004h>     
+[?2004l[?2004h>     restraints_data.append({
+[?2004l[?2004h>         'model': m_name,
+[?2004l[?2004h>         'inter_satisfied': inter_sat,
+[?2004l[?2004h>         'inter_total': inter_tot,
+[?2004l[?2004h>         'intra_satisfied': intra_sat,
+[?2004l[?2004h>         'intra_total': intra_tot
+[?2004l[?2004h>     })
+[?2004l[?2004h>     
+[?2004l[?2004h>     model_summary.append({
+[?2004l[?2004h>         'model': m_name,
+[?2004l[?2004h>         'total_satisfied': total_sat,
+[?2004l[?2004h>         'inter_satisfied': inter_sat,
+[?2004l[?2004h>         'intra_satisfied': intra_sat
+[?2004l[?2004h>     })
+[?2004l[?2004h>     
+[?2004l[?2004h>     for idx, row in xl_df.iterrows():
+[?2004l[?2004h>         xl_id = row['xl_id']
+[?2004l[?2004h>         link_status.append({
+[?2004l[?2004h>             'model': m_name,
+[?2004l[?2004h>             'xl_id': xl_id,
+[?2004l[?2004h>             'status': res[xl_id]
+[?2004l[?2004h>         }) if False else link_status_data.append({
+[?2004l[?2004h>             'model': m_name,
+[?2004l[?2004h>             'xl_id': xl_id,
+[?2004l[?2004h>             'status': res[xl_id]
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> with open('/task/input/ranking.json') as f:
+[?2004l[?2004h>     ranking_json = json.load(f)
+[?2004l[?2004h> conf_map = ranking_json.get('confidence', {})
+[?2004l[?2004h> 
+[?2004l[?2004h> model_summary.sort(key=lambda x: (x['total_satisfied'], conf_map.get(x['model'], 0)), reverse=True)
+[?2004l[?2004h> ranking_list = [x['model'] for x in model_summary]
+[?2004l[?2004h> best_model = ranking_list[0]
+[?2004l[?2004h> 
+[?2004l[?2004h> print('Final Ranking:')
+[?2004l[?2004h> for idx, item in enumerate(model_summary):
+[?2004l[?2004h>     print(f"{idx+1}. {item['model']}: satisfied={item['total_satisfied']} (inter={item['inter_satisfied']}, intra={item['intra_satisfied']}), conf={conf_map.get(item['model'])}")
+[?2004l[?2004h> 
+[?2004l[?2004h> restraints_df = pd.DataFrame(restraints_data)
+[?2004l[?2004h> restraints_path = '/task/output/restraints.tsv'
+[?2004l[?2004h> restraints_df.to_csv(restraints_path, sep='\t', index=False)
+[?2004l[?2004h> print(f'Wrote {restraints_path} ({len(restraints_df)} rows)')
+[?2004l[?2004h> 
+[?2004l[?2004h> link_status_df = pd.DataFrame(link_status_data)
+[?2004l[?2004h> link_status_path = '/task/output/link_status.tsv'
+[?2004l[?2004h> link_status_df.to_csv(link_status_path, sep='\t', index=False)
+[?2004l[?2004h> print(f'Wrote {link_status_path} ({len(link_status_df)} rows)')
+[?2004l[?2004h> 
+[?2004l[?2004h> selection_data = {
+[?2004l[?2004h>     'best_model': best_model,
+[?2004l[?2004h>     'ranking': ranking_list
+[?2004l[?2004h> }
+[?2004l[?2004h> selection_path = '/task/output/selection.json'
+[?2004l[?2004h> with open(selection_path, 'w') as f:
+[?2004l[?2004h>     json.dump(selection_data, f, indent=2)
+[?2004l[?2004h> print(f'Wrote {selection_path}: best_model = {best_model}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 generate_deliverables.py
+[?2004lFinal Ranking:
+1. model_07: satisfied=39 (inter=13, intra=26), conf=0.659
+2. model_09: satisfied=39 (inter=13, intra=26), conf=0.598
+3. model_14: satisfied=39 (inter=13, intra=26), conf=0.458
+4. model_01: satisfied=35 (inter=10, intra=25), conf=0.856
+5. model_17: satisfied=35 (inter=14, intra=21), conf=0.398
+6. model_10: satisfied=34 (inter=11, intra=23), conf=0.504
+7. model_02: satisfied=32 (inter=10, intra=22), conf=0.831
+8. model_03: satisfied=31 (inter=10, intra=21), conf=0.795
+9. model_04: satisfied=31 (inter=10, intra=21), conf=0.794
+10. model_05: satisfied=31 (inter=10, intra=21), conf=0.752
+11. model_06: satisfied=31 (inter=10, intra=21), conf=0.688
+12. model_08: satisfied=31 (inter=10, intra=21), conf=0.649
+13. model_11: satisfied=31 (inter=10, intra=21), conf=0.493
+14. model_12: satisfied=31 (inter=10, intra=21), conf=0.477
+15. model_15: satisfied=31 (inter=10, intra=21), conf=0.444
+16. model_16: satisfied=31 (inter=10, intra=21), conf=0.42
+17. model_13: satisfied=30 (inter=10, intra=20), conf=0.47
+Wrote /task/output/restraints.tsv (17 rows)
+Wrote /task/output/link_status.tsv (884 rows)
+Wrote /task/output/selection.json: best_model = model_07
+[?2004hroot@b7f307384b32:/task# head -n 25 /task/output/restraints.tsv; echo '---'; head -n 25 /task/output/link_status.tsv; echo '---'; cat /task/output/selection.json
+[?2004lmodel	inter_satisfied	inter_total	intra_satisfied	intra_total
+model_01	10	17	25	31
+model_02	10	17	22	31
+model_03	10	17	21	31
+model_04	10	17	21	31
+model_05	10	17	21	31
+model_06	10	17	21	31
+model_07	13	17	26	31
+model_08	10	17	21	31
+model_09	13	17	26	31
+model_10	11	17	23	31
+model_11	10	17	21	31
+model_12	10	17	21	31
+model_13	10	17	20	31
+model_14	13	17	26	31
+model_15	10	17	21	31
+model_16	10	17	21	31
+model_17	14	17	21	31
+---
+model	xl_id	status
+model_01	XL001	satisfied
+model_01	XL002	violated
+model_01	XL003	satisfied
+model_01	XL004	satisfied
+model_01	XL005	not_evaluable
+model_01	XL006	satisfied
+model_01	XL007	violated
+model_01	XL008	satisfied
+model_01	XL009	satisfied
+model_01	XL010	satisfied
+model_01	XL011	violated
+model_01	XL012	satisfied
+model_01	XL013	violated
+model_01	XL014	violated
+model_01	XL015	satisfied
+model_01	XL016	satisfied
+model_01	XL017	not_evaluable
+model_01	XL018	satisfied
+model_01	XL019	satisfied
+model_01	XL020	satisfied
+model_01	XL021	satisfied
+model_01	XL022	satisfied
+model_01	XL023	satisfied
+model_01	XL024	not_evaluable
+---
+{
+  "best_model": "model_07",
+  "ranking": [
+    "model_07",
+    "model_09",
+    "model_14",
+    "model_01",
+    "model_17",
+    "model_10",
+    "model_02",
+    "model_03",
+    "model_04",
+    "model_05",
+    "model_06",
+    "model_08",
+    "model_11",
+    "model_12",
+    "model_15",
+    "model_16",
+    "model_13"
+  ]
+}[?2004hroot@b7f307384b32:/task# cat << 'EOF' > validate_outputs.py
+[?2004l[?2004h> import os, json
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> assert os.path.exists('/task/output/restraints.tsv')
+[?2004l[?2004h> res_df = pd.read_csv('/task/output/restraints.tsv', sep='\t')
+[?2004l[?2004h> print('restraints.tsv columns:', list(res_df.columns))
+[?2004l[?2004h> assert list(res_df.columns) == ['model', 'inter_satisfied', 'inter_total', 'intra_satisfied', 'intra_total']
+[?2004l[?2004h> assert len(res_df) == 17
+[?2004l[?2004h> for col in ['inter_satisfied', 'inter_total', 'intra_satisfied', 'intra_total']:
+[?2004l[?2004h>     assert res_df[col].dtype.kind in 'iu', f'{col} is not integer'
+[?2004l[?2004h> print('restraints.tsv validation passed!')
+[?2004l[?2004h> 
+[?2004l[?2004h> assert os.path.exists('/task/output/link_status.tsv')
+[?2004l[?2004h> ls_df = pd.read_csv('/task/output/link_status.tsv', sep='\t')
+[?2004l[?2004h> print('link_status.tsv columns:', list(ls_df.columns))
+[?2004l[?2004h> assert list(ls_df.columns) == ['model', 'xl_id', 'status']
+[?2004l[?2004h> assert len(ls_df) == 17 * 52
+[?2004l[?2004h> valid_statuses = {'satisfied', 'violated', 'not_evaluable'}
+[?2004l[?2004h> assert set(ls_df['status']).issubset(valid_statuses)
+[?2004l[?2004h> print('link_status.tsv status counts:')
+[?2004l[?2004h> print(ls_df['status'].value_counts())
+[?2004l[?2004h> print('link_status.tsv validation passed!')
+[?2004l[?2004h> 
+[?2004l[?2004h> xl_df = pd.read_csv('/task/input/crosslinks.csv')
+[?2004l[?2004h> inter_ids = set(xl_df[xl_df['protein_a'] != xl_df['protein_b']]['xl_id'])
+[?2004l[?2004h> intra_ids = set(xl_df[xl_df['protein_a'] == xl_df['protein_b']]['xl_id'])
+[?2004l[?2004h> 
+[?2004l[?2004h> for idx, row in res_df.iterrows():
+[?2004l[?2004h>     m = row['model']
+[?2004l[?2004h>     m_ls = ls_df[ls_df['model'] == m]
+[?2004l[?2004h>     m_inter_sat = len(m_ls[(m_ls['xl_id'].isin(inter_ids)) & (m_ls['status'] == 'satisfied')])
+[?2004l[?2004h>     m_inter_tot = len(m_ls[(m_ls['xl_id'].isin(inter_ids)) & (m_ls['status'] != 'not_evaluable')])
+[?2004l[?2004h>     m_intra_sat = len(m_ls[(m_ls['xl_id'].isin(intra_ids)) & (m_ls['status'] == 'satisfied')])
+[?2004l[?2004h>     m_intra_tot = len(m_ls[(m_ls['xl_id'].isin(intra_ids)) & (m_ls['status'] != 'not_evaluable')])
+[?2004l[?2004h>     
+[?2004l[?2004h>     assert row['inter_satisfied'] == m_inter_sat
+[?2004l[?2004h>     assert row['inter_total'] == m_inter_tot
+[?2004l[?2004h>     assert row['intra_satisfied'] == m_intra_sat
+[?2004l[?2004h>     assert row['intra_total'] == m_intra_tot
+[?2004l[?2004h> print('Cross-check between restraints.tsv and link_status.tsv passed!')
+[?2004l[?2004h> 
+[?2004l[?2004h> assert os.path.exists('/task/output/selection.json')
+[?2004l[?2004h> with open('/task/output/selection.json') as f:
+[?2004l[?2004h>     sel = json.load(f)
+[?2004l[?2004h> assert set(sel.keys()) == {'best_model', 'ranking'}
+[?2004l[?2004h> assert len(sel['ranking']) == 17
+[?2004l[?2004h> assert len(set(sel['ranking'])) == 17
+[?2004l[?2004h> assert sel['ranking'][0] == sel['best_model']
+[?2004l[?2004h> totals = {r['model']: r['inter_satisfied'] + r['intra_satisfied'] for _, r in res_df.iterrows()}
+[?2004l[?2004h> for i in range(len(sel['ranking']) - 1):
+[?2004l[?2004h>     m1, m2 = sel['ranking'][i], sel['ranking'][i+1]
+[?2004l[?2004h>     assert totals[m1] >= totals[m2], f'{m1} ({totals[m1]}) < {m2} ({totals[m2]})'
+[?2004l[?2004h> print('selection.json validation passed!')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@b7f307384b32:/task# python3 validate_outputs.py
+[?2004lrestraints.tsv columns: ['model', 'inter_satisfied', 'inter_total', 'intra_satisfied', 'intra_total']
+restraints.tsv validation passed!
+link_status.tsv columns: ['model', 'xl_id', 'status']
+link_status.tsv status counts:
+status
+satisfied        562
+violated         254
+not_evaluable     68
+Name: count, dtype: int64
+link_status.tsv validation passed!
+Cross-check between restraints.tsv and link_status.tsv passed!
+selection.json validation passed!
+[?2004hroot@b7f307384b32:/task# rm -f /task/*.py; ls -la /task/output
+[?2004ltotal 44
+drwxr-xr-x 1 root root  4096 Nov 12 16:33 .
+drwxr-xr-x 1 root root  4096 Nov 12 16:33 ..
+-rw-rw-rw- 1 root root 22137 Nov 12 16:33 link_status.tsv
+-rw-rw-rw- 1 root root   419 Nov 12 16:33 restraints.tsv
+-rw-rw-rw- 1 root root   321 Nov 12 16:33 selection.json
+[?2004hroot@b7f307384b32:/task# 

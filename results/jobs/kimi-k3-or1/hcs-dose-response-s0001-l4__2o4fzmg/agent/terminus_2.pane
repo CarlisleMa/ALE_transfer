@@ -1,0 +1,2768 @@
+[?2004hroot@c808a9ea0a3a:/task# find /task -maxdepth 3 -type d | sort && ls /task/input | head
+[?2004l/task
+/task/input
+/task/input/annotations
+/task/input/flatfield
+/task/input/images
+/task/output
+/task/software
+analysis_sop.md
+annotations
+assay_notes.md
+flatfield
+images
+plate_layout.tsv
+[?2004hroot@c808a9ea0a3a:/task# cat /task/input/analysis_sop.md
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@c808a9ea0a3a:/task# cat /task/input/assay_notes.md
+[?2004l# Assay notes - plate HCS-6608 (imaged 2025-02-21)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid, plate at the front of the top shelf; the humidity tray of that incubator was found dry when the plate was taken out.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, added by hand with an 8-channel pipette column by column from column 1 to column 12; the stain was removed from the whole plate at once with the plate washer 45 min after the first column had been filled. Two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom with one fixed offset for the whole plate; images were not reviewed at the microscope.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+- Wells were not washed between treatment and fixation; floating material was fixed with the cells.
+[?2004hroot@c808a9ea0a3a:/task# cat /task/input/plate_layout.tsv
+[?2004lwell	compound	dose_uM	role
+A01	CPD-8550	0.01372	compound
+A02	CPD-8550	0.04115	compound
+A03	DMSO	0	vehicle
+A04	CPD-8550	0.1235	compound
+A05	REF-INH	10	reference
+A06	CPD-8550	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-8550	1.111	compound
+A09	CPD-8550	3.333	compound
+A10	CPD-8550	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-8550	30	compound
+B01	CPD-8693	0.01372	compound
+B02	CPD-8693	0.04115	compound
+B03	CPD-8693	0.1235	compound
+B04	DMSO	0	vehicle
+B05	CPD-8693	0.3704	compound
+B06	REF-INH	10	reference
+B07	CPD-8693	1.111	compound
+B08	DMSO	0	vehicle
+B09	CPD-8693	3.333	compound
+B10	CPD-8693	10	compound
+B11	CPD-8693	30	compound
+B12	DMSO	0	vehicle
+C01	CPD-9251	0.01372	compound
+C02	DMSO	0	vehicle
+C03	CPD-9251	0.04115	compound
+C04	CPD-9251	0.1235	compound
+C05	CPD-9251	0.3704	compound
+C06	DMSO	0	vehicle
+C07	CPD-9251	1.111	compound
+C08	REF-INH	10	reference
+C09	CPD-9251	3.333	compound
+C10	DMSO	0	vehicle
+C11	CPD-9251	10	compound
+C12	CPD-9251	30	compound
+D01	CPD-4184	0.01372	compound
+D02	CPD-4184	0.04115	compound
+D03	CPD-4184	0.1235	compound
+D04	DMSO	0	vehicle
+D05	CPD-4184	0.3704	compound
+D06	REF-INH	10	reference
+D07	CPD-4184	1.111	compound
+D08	DMSO	0	vehicle
+D09	CPD-4184	3.333	compound
+D10	CPD-4184	10	compound
+D11	CPD-4184	30	compound
+D12	DMSO	0	vehicle
+E01	DMSO	0	vehicle
+E02	CPD-8731	0.01372	compound
+E03	REF-INH	10	reference
+E04	CPD-8731	0.04115	compound
+E05	DMSO	0	vehicle
+E06	CPD-8731	0.1235	compound
+E07	CPD-8731	0.3704	compound
+E08	CPD-8731	1.111	compound
+E09	DMSO	0	vehicle
+E10	CPD-8731	3.333	compound
+E11	CPD-8731	10	compound
+E12	CPD-8731	30	compound
+F01	CPD-9526	0.01372	compound
+F02	DMSO	0	vehicle
+F03	CPD-9526	0.04115	compound
+F04	CPD-9526	0.1235	compound
+F05	CPD-9526	0.3704	compound
+F06	DMSO	0	vehicle
+F07	CPD-9526	1.111	compound
+F08	REF-INH	10	reference
+F09	CPD-9526	3.333	compound
+F10	DMSO	0	vehicle
+F11	CPD-9526	10	compound
+F12	CPD-9526	30	compound
+G01	CPD-8882	0.01372	compound
+G02	CPD-8882	0.04115	compound
+G03	DMSO	0	vehicle
+G04	CPD-8882	0.1235	compound
+G05	REF-INH	10	reference
+G06	CPD-8882	0.3704	compound
+G07	DMSO	0	vehicle
+G08	CPD-8882	1.111	compound
+G09	CPD-8882	3.333	compound
+G10	CPD-8882	10	compound
+G11	DMSO	0	vehicle
+G12	CPD-8882	30	compound
+H01	DMSO	0	vehicle
+H02	CPD-7827	0.01372	compound
+H03	REF-INH	10	reference
+H04	CPD-7827	0.04115	compound
+H05	DMSO	0	vehicle
+H06	CPD-7827	0.1235	compound
+H07	CPD-7827	0.3704	compound
+H08	CPD-7827	1.111	compound
+H09	DMSO	0	vehicle
+H10	CPD-7827	3.333	compound
+H11	CPD-7827	10	compound
+H12	CPD-7827	30	compound
+[?2004hroot@c808a9ea0a3a:/task# ls /task/input/annotations/ && head -5 /task/input/annotations/*.tsv | head -40 && ls /task/software
+[?2004lA06.tsv  A11.tsv  A12.tsv  C12.tsv  D10.tsv  E05.tsv  G07.tsv  H12.tsv
+==> /task/input/annotations/A06.tsv <==
+x_px	y_px
+98.8	21.5
+70.8	37.8
+102.3	30.7
+118.7	34.9
+
+==> /task/input/annotations/A11.tsv <==
+x_px	y_px
+245.6	1.0
+265.3	2.9
+275.9	3.3
+39.1	16.5
+
+==> /task/input/annotations/A12.tsv <==
+x_px	y_px
+1.0	31.4
+118.3	62.6
+117.0	200.0
+69.6	215.8
+
+==> /task/input/annotations/C12.tsv <==
+x_px	y_px
+152.6	40.0
+231.2	29.9
+243.8	38.1
+219.8	50.9
+
+==> /task/input/annotations/D10.tsv <==
+x_px	y_px
+142.8	1.0
+133.2	18.6
+191.0	9.0
+191.9	22.5
+
+==> /task/input/annotations/E05.tsv <==
+x_px	y_px
+199.1	1.0
+211.0	1.0
+129.4	20.7
+README.txt
+[?2004hroot@c808a9ea0a3a:/task# ls /task/input/images | head -8 && ls /task/input/images | wc -l
+[?2004lA01_ch1.tif
+A01_ch2.tif
+A02_ch1.tif
+A02_ch2.tif
+A03_ch1.tif
+A03_ch2.tif
+A04_ch1.tif
+A04_ch2.tif
+192
+[?2004hroot@c808a9ea0a3a:/task# cat /task/software/README.txt
+[?2004lAll tools are on PATH (conda env at /opt/tools).
+[?2004hroot@c808a9ea0a3a:/task# cd /task && python3 -c "
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> for f in ['input/images/A01_ch1.tif','input/images/A01_ch2.tif','input/flatfield/flat_ch1.tif','input/flatfield/flat_ch2.tif','input/flatfield/dark.tif']:
+[?2004l[?2004h>     im = tifffile.imread(f)
+[?2004l[?2004h>     print(f, im.shape, im.dtype, im.min(), im.max(), np.median(im), im.mean())
+[?2004l[?2004h> "
+[?2004linput/images/A01_ch1.tif (320, 320) uint16 103 2925 123.0 208.77314453125
+input/images/A01_ch2.tif (320, 320) uint16 239 1323 309.0 384.891962890625
+input/flatfield/flat_ch1.tif (320, 320) uint16 1779 2514 2269.0 2258.519755859375
+input/flatfield/flat_ch2.tif (320, 320) uint16 1648 2215 2025.0 2016.84634765625
+input/flatfield/dark.tif (320, 320) uint16 98 102 100.0 99.999609375
+[?2004hroot@c808a9ea0a3a:/task# mkdir -p /task/work && python3 -c "import cellpose; print(cellpose.version); from cellpose import models; print('ok')"
+[?2004l3.1.1.2
+ok
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark)
+[?2004l[?2004h>     g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>     manual = pts.shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     masks, flows, styles = model.eval(c, channels=[0,0], diameter=None)
+[?2004l[?2004h>     ids = np.unique(masks); ids = ids[ids>0]
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     minferets = [p.feret_diameter_max and 0 or 0 for p in props]  # placeholder
+[?2004l[?2004h>     # compute min feret via minor axis of fitted ellipse as proxy
+[?2004l[?2004h>     minor = [p.axis_minor_length for p in props]
+[?2004l[?2004h>     areas = [p.area for p in props]
+[?2004l[?2004h>     print(f'{well}: manual={manual} raw_masks={len(ids)}')
+[?2004l[?2004h>     if minor:
+[?2004l[?2004h>         print('   minor axis px: min=%.1f med=%.1f max=%.1f' % (np.min(minor), np.median(minor), np.max(minor)))
+[?2004l[?2004h>         print('   areas px: min=%d med=%d max=%d' % (np.min(areas), np.median(areas), np.max(areas)))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore.py
+[?2004lTraceback (most recent call last):
+  File "/task/work/explore.py", line 23, in <module>
+    masks, flows, styles = model.eval(c, channels=[0,0], diameter=None)
+    ^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 3)
+[?2004hroot@c808a9ea0a3a:/task# sed -i 's/masks, flows, styles = model.eval/masks, flows, styles, diams = model.eval/' /task/work/explore.py && python3 /task/work/explore.py
+[?2004lA06: manual=34 raw_masks=31
+   minor axis px: min=4.0 med=9.8 max=12.0
+   areas px: min=15 med=98 max=130
+A11: manual=66 raw_masks=61
+   minor axis px: min=4.0 med=9.8 max=12.2
+   areas px: min=15 med=94 max=140
+A12: manual=10 raw_masks=9
+   minor axis px: min=4.0 med=4.5 max=9.9
+   areas px: min=15 med=19 max=100
+C12: manual=18 raw_masks=24
+   minor axis px: min=4.0 med=13.4 max=15.6
+   areas px: min=16 med=180 max=227
+D10: manual=31 raw_masks=59
+   minor axis px: min=4.0 med=5.0 max=12.5
+   areas px: min=15 med=21 max=143
+E05: manual=113 raw_masks=114
+   minor axis px: min=4.0 med=9.9 max=15.8
+   areas px: min=15 med=96 max=263
+G07: manual=127 raw_masks=120
+   minor axis px: min=4.0 med=10.0 max=21.1
+   areas px: min=15 med=96 max=325
+H12: manual=38 raw_masks=41
+   minor axis px: min=4.2 med=13.2 max=15.7
+   areas px: min=16 med=168 max=326
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore2.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from scipy.ndimage import sobel
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> MINMINOR = 11.0/1.3  # 8.46 px
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> print('=== annotated wells ===')
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>     manual = pts.shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     H, W = masks.shape
+[?2004l[?2004h>     n_raw = len(props)
+[?2004l[?2004h>     keep_size = [p for p in props if p.axis_minor_length >= MINMINOR]
+[?2004l[?2004h>     keep_edge = [p for p in keep_size if not (np.any(p.coords[:,0]==H-1) or np.any(p.coords[:,1]==W-1))]
+[?2004l[?2004h>     print(f'{well}: manual={manual} raw={n_raw} sizefilt={len(keep_size)} sizefilt+edge={len(keep_edge)}')
+[?2004l[?2004h>     if well=='C12':
+[?2004l[?2004h>         import matplotlib
+[?2004l[?2004h>         matplotlib.use('Agg')
+[?2004l[?2004h>         import matplotlib.pyplot as plt
+[?2004l[?2004h>         fig,ax=plt.subplots(1,2,figsize=(12,6))
+[?2004l[?2004h>         ax[0].imshow(c,cmap='gray'); ax[0].plot(pts[:,0],pts[:,1],'r+')
+[?2004l[?2004h>         ax[1].imshow(masks,cmap='nipy_spectral')
+[?2004l[?2004h>         for p in props:
+[?2004l[?2004h>             ax[1].text(p.centroid[1],p.centroid[0],str(p.label),color='w',fontsize=6)
+[?2004l[?2004h>         plt.savefig('/task/work/C12_overlay.png',dpi=90)
+[?2004l[?2004h> 
+[?2004l[?2004h> print('=== focus metric all wells (ch1) ===')
+[?2004l[?2004h> wells = sorted(set(os.path.basename(f)[:3] for f in glob.glob(f'{IN}/images/*_ch1.tif')))
+[?2004l[?2004h> fm=[]
+[?2004l[?2004h> for w in wells:
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{w}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>     g = np.hypot(sobel(im,0),sobel(im,1))
+[?2004l[?2004h>     fm.append((w, g.var()))
+[?2004l[?2004h> vals = np.array([v for _,v in fm])
+[?2004l[?2004h> order = np.argsort(vals)
+[?2004l[?2004h> print('lowest 12:', [(fm[i][0], round(fm[i][1],1)) for i in order[:12]])
+[?2004l[?2004h> print('median metric:', np.median(vals))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore2.py
+[?2004l=== annotated wells ===
+A06: manual=34 raw=31 sizefilt=26 sizefilt+edge=26
+A11: manual=66 raw=61 sizefilt=44 sizefilt+edge=44
+A12: manual=10 raw=9 sizefilt=1 sizefilt+edge=1
+C12: manual=18 raw=24 sizefilt=16 sizefilt+edge=15
+D10: manual=31 raw=59 sizefilt=17 sizefilt+edge=17
+E05: manual=113 raw=114 sizefilt=97 sizefilt+edge=97
+G07: manual=127 raw=120 sizefilt=97 sizefilt+edge=96
+H12: manual=38 raw=41 sizefilt=32 sizefilt+edge=32
+=== focus metric all wells (ch1) ===
+lowest 12: [('E09', np.float32(28101.9)), ('C05', np.float32(31068.8)), ('G08', np.float32(32835.0)), ('G06', np.float32(37708.3)), ('C04', np.float32(38889.1)), ('A09', np.float32(272445.0)), ('A10', np.float32(278052.8)), ('C12', np.float32(314941.1)), ('A12', np.float32(350802.0)), ('A08', np.float32(364439.5)), ('H08', np.float32(384450.6)), ('E12', np.float32(389843.0))]
+median metric: 679675.44
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore3.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)  # x, y
+[?2004l[?2004h>     manual = pts.shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     H,W = masks.shape
+[?2004l[?2004h>     cents = np.array([p.centroid for p in props])  # (row,col)
+[?2004l[?2004h>     lab = np.array([p.label for p in props])
+[?2004l[?2004h>     matched_labels=set(); unmatched_pts=0; merged=0
+[?2004l[?2004h>     true_sizes=[]; true_minor=[]
+[?2004l[?2004h>     for (x,y) in pts:
+[?2004l[?2004h>         r,cc = int(round(y)), int(round(x))
+[?2004l[?2004h>         l = 0
+[?2004l[?2004h>         if 0<=r<H and 0<=cc<W: l = masks[r,cc]
+[?2004l[?2004h>         if l==0 and len(cents):
+[?2004l[?2004h>             d,i = cKDTree(cents).query([r,cc])
+[?2004l[?2004h>             if d<=10: l = lab[i]
+[?2004l[?2004h>         if l==0:
+[?2004l[?2004h>             unmatched_pts+=1
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             if l in matched_labels: merged+=1
+[?2004l[?2004h>             matched_labels.add(l)
+[?2004l[?2004h>     for p in props:
+[?2004l[?2004h>         if p.label in matched_labels:
+[?2004l[?2004h>             true_sizes.append(p.area); true_minor.append(p.axis_minor_length)
+[?2004l[?2004h>     fp = [p for p in props if p.label not in matched_labels]
+[?2004l[?2004h>     print(f'{well}: manual={manual} masks={len(props)} matched_masks={len(matched_labels)} missed_pts={unmatched_pts} merged_pts={merged} fp_masks={len(fp)}') M[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K)
+[?2004l[?2004h>     if true_sizes:
+[?2004l[?2004h>         print(f'   TRUE  area: min={min(true_sizes)} p10={np.percentile(true_sizes,10):.0f} med={np.median(true_sizes):.0f} | minor: min={min(true_minor):.1f} p10={np.percentile(true_minor,10):.1f}')
+[?2004l[?2004h>     if fp:
+[?2004l[?2004h>         fa=[p.area for p in fp]; fm_=[p.axis_minor_length for p in fp]
+[?2004l[?2004h>         print(f'   FP    area: med={np.median(fa):.0f} max={max(fa)} | minor: med={np.median(fm_):.1f} max={max(fm_):.1f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore3.py
+[?2004lA06: manual=34 masks=31 matched_masks=27 missed_pts=6 merged_pts=1 fp_masks=4
+   TRUE  area: min=55.0 p10=86 med=100 | minor: min=8.1 p10=9.1
+   FP    area: med=15 max=21.0 | minor: med=4.0 max=4.9
+A11: manual=66 masks=61 matched_masks=55 missed_pts=5 merged_pts=6 fp_masks=6
+   TRUE  area: min=37.0 p10=62 med=95 | minor: min=5.2 p10=7.5
+   FP    area: med=27 max=67.0 | minor: med=5.4 max=6.6
+A12: manual=10 masks=9 matched_masks=2 missed_pts=8 merged_pts=0 fp_masks=7
+   TRUE  area: min=43.0 p10=49 med=72 | minor: min=5.3 p10=5.8
+   FP    area: med=16 max=21.0 | minor: med=4.0 max=5.1
+C12: manual=18 masks=24 matched_masks=15 missed_pts=3 merged_pts=0 fp_masks=9
+   TRUE  area: min=130.0 p10=154 med=199 | minor: min=11.6 p10=13.0
+   FP    area: med=20 max=207.0 | minor: med=4.8 max=13.6
+D10: manual=31 masks=59 matched_masks=21 missed_pts=10 merged_pts=0 fp_masks=38
+   TRUE  area: min=46.0 p10=62 med=90 | minor: min=6.1 p10=6.4
+   FP    area: med=19 max=40.0 | minor: med=4.5 max=5.8
+E05: manual=113 masks=114 matched_masks=106 missed_pts=4 merged_pts=3 fp_masks=8
+   TRUE  area: min=23.0 p10=74 med=98 | minor: min=4.7 p10=8.6
+   FP    area: med=20 max=71.0 | minor: med=4.8 max=8.2
+G07: manual=127 masks=120 matched_masks=106 missed_pts=13 merged_pts=8 fp_masks=14
+   TRUE  area: min=33.0 p10=76 med=99 | minor: min=5.8 p10=8.6
+   FP    area: med=18 max=91.0 | minor: med=4.4 max=9.3
+H12: manual=38 masks=41 matched_masks=33 missed_pts=4 merged_pts=1 fp_masks=8
+   TRUE  area: min=69.0 p10=142 med=177 | minor: min=6.3 p10=11.9
+   FP    area: med=20 max=51.0 | minor: med=4.8 max=7.1
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore4.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for diam in [12, 15, 17]:
+[?2004l[?2004h>     print(f'--- diameter={diam} ---')
+[?2004l[?2004h>     for a in ann:
+[?2004l[?2004h>         well = os.path.basename(a)[:-4]
+[?2004l[?2004h>         pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>         manual = pts.shape[0]
+[?2004l[?2004h>         im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>         c = corr(im, flat1)
+[?2004l[?2004h>         masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=diam)
+[?2004l[?2004h>         props = regionprops(masks)
+[?2004l[?2004h>         areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>         for thr in [0, 30, 40, 50]:
+[?2004l[?2004h>             n = int((areas>thr).sum())
+[?2004l[?2004h>             ok = abs(n-manual) <= max(3, 0.1*manual)
+[?2004l[?2004h>             print(f'{well} thr={thr}: n={n} manual={manual} {"OK" if ok else "FAIL"}')
+[?2004l[?2004h>         print()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore4.py 2>&1 | tail -120
+[?2004lA06 thr=40: n=27 manual=34 FAIL
+A06 thr=50: n=27 manual=34 FAIL
+
+A11 thr=0: n=57 manual=66 FAIL
+A11 thr=30: n=54 manual=66 FAIL
+A11 thr=40: n=54 manual=66 FAIL
+A11 thr=50: n=53 manual=66 FAIL
+
+A12 thr=0: n=4 manual=10 FAIL
+A12 thr=30: n=4 manual=10 FAIL
+A12 thr=40: n=4 manual=10 FAIL
+A12 thr=50: n=3 manual=10 FAIL
+
+C12 thr=0: n=18 manual=18 OK
+C12 thr=30: n=16 manual=18 OK
+C12 thr=40: n=16 manual=18 OK
+C12 thr=50: n=16 manual=18 OK
+
+D10 thr=0: n=28 manual=31 OK
+D10 thr=30: n=22 manual=31 FAIL
+D10 thr=40: n=22 manual=31 FAIL
+D10 thr=50: n=22 manual=31 FAIL
+
+E05 thr=0: n=113 manual=113 OK
+E05 thr=30: n=108 manual=113 OK
+E05 thr=40: n=108 manual=113 OK
+E05 thr=50: n=108 manual=113 OK
+
+G07 thr=0: n=115 manual=127 OK
+G07 thr=30: n=109 manual=127 FAIL
+G07 thr=40: n=109 manual=127 FAIL
+G07 thr=50: n=108 manual=127 FAIL
+
+H12 thr=0: n=47 manual=38 FAIL
+H12 thr=30: n=37 manual=38 OK
+H12 thr=40: n=37 manual=38 OK
+H12 thr=50: n=37 manual=38 OK
+
+--- diameter=15 ---
+A06 thr=0: n=30 manual=34 FAIL
+A06 thr=30: n=27 manual=34 FAIL
+A06 thr=40: n=27 manual=34 FAIL
+A06 thr=50: n=27 manual=34 FAIL
+
+A11 thr=0: n=56 manual=66 FAIL
+A11 thr=30: n=53 manual=66 FAIL
+A11 thr=40: n=53 manual=66 FAIL
+A11 thr=50: n=52 manual=66 FAIL
+
+A12 thr=0: n=4 manual=10 FAIL
+A12 thr=30: n=4 manual=10 FAIL
+A12 thr=40: n=4 manual=10 FAIL
+A12 thr=50: n=3 manual=10 FAIL
+
+C12 thr=0: n=15 manual=18 OK
+C12 thr=30: n=14 manual=18 FAIL
+C12 thr=40: n=14 manual=18 FAIL
+C12 thr=50: n=14 manual=18 FAIL
+
+D10 thr=0: n=27 manual=31 FAIL
+D10 thr=30: n=27 manual=31 FAIL
+D10 thr=40: n=27 manual=31 FAIL
+D10 thr=50: n=27 manual=31 FAIL
+
+E05 thr=0: n=105 manual=113 OK
+E05 thr=30: n=103 manual=113 OK
+E05 thr=40: n=103 manual=113 OK
+E05 thr=50: n=103 manual=113 OK
+
+G07 thr=0: n=113 manual=127 FAIL
+G07 thr=30: n=110 manual=127 FAIL
+G07 thr=40: n=110 manual=127 FAIL
+G07 thr=50: n=109 manual=127 FAIL
+
+H12 thr=0: n=38 manual=38 OK
+H12 thr=30: n=35 manual=38 OK
+H12 thr=40: n=35 manual=38 OK
+H12 thr=50: n=35 manual=38 OK
+
+--- diameter=17 ---
+A06 thr=0: n=28 manual=34 FAIL
+A06 thr=30: n=28 manual=34 FAIL
+A06 thr=40: n=28 manual=34 FAIL
+A06 thr=50: n=28 manual=34 FAIL
+
+A11 thr=0: n=52 manual=66 FAIL
+A11 thr=30: n=51 manual=66 FAIL
+A11 thr=40: n=50 manual=66 FAIL
+A11 thr=50: n=50 manual=66 FAIL
+
+A12 thr=0: n=4 manual=10 FAIL
+A12 thr=30: n=4 manual=10 FAIL
+A12 thr=40: n=3 manual=10 FAIL
+A12 thr=50: n=3 manual=10 FAIL
+
+C12 thr=0: n=15 manual=18 OK
+C12 thr=30: n=15 manual=18 OK
+C12 thr=40: n=15 manual=18 OK
+C12 thr=50: n=15 manual=18 OK
+
+D10 thr=0: n=25 manual=31 FAIL
+D10 thr=30: n=25 manual=31 FAIL
+D10 thr=40: n=25 manual=31 FAIL
+D10 thr=50: n=25 manual=31 FAIL
+
+E05 thr=0: n=99 manual=113 FAIL
+E05 thr=30: n=97 manual=113 FAIL
+E05 thr=40: n=97 manual=113 FAIL
+E05 thr=50: n=97 manual=113 FAIL
+
+G07 thr=0: n=113 manual=127 FAIL
+G07 thr=30: n=109 manual=127 FAIL
+G07 thr=40: n=108 manual=127 FAIL
+G07 thr=50: n=107 manual=127 FAIL
+
+H12 thr=0: n=36 manual=38 OK
+H12 thr=30: n=35 manual=38 OK
+H12 thr=40: n=35 manual=38 OK
+H12 thr=50: n=35 manual=38 OK
+
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore5.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> print('--- diameter=None (auto) ---')
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>     manual = pts.shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>     print(f'{well} manual={manual}: ' + ' | '.join(
+[?2004l[?2004h>         f'thr{t}:{int((areas>t).sum())}{"ok" if abs(int((areas>t).sum())-manual)<=max(3,0.1*manual) else "X"}'
+[?2004l[?2004h>         for t in [0,20,30,40,50,60]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore5.py
+[?2004l--- diameter=None (auto) ---
+A06 manual=34: thr0:31ok | thr20:28X | thr30:27X | thr40:27X | thr50:27X | thr60:26X
+A11 manual=66: thr0:61ok | thr20:58X | thr30:58X | thr40:56X | thr50:53X | thr60:51X
+A12 manual=10: thr0:9ok | thr20:4X | thr30:2X | thr40:2X | thr50:1X | thr60:1X
+C12 manual=18: thr0:24X | thr20:19ok | thr30:17ok | thr40:17ok | thr50:17ok | thr60:17ok
+D10 manual=31: thr0:59X | thr20:33ok | thr30:25X | thr40:21X | thr50:19X | thr60:19X
+E05 manual=113: thr0:114ok | thr20:109ok | thr30:107ok | thr40:107ok | thr50:106ok | thr60:103ok
+G07 manual=127: thr0:120ok | thr20:111X | thr30:109X | thr40:108X | thr50:104X | thr60:104X
+H12 manual=38: thr0:41ok | thr20:37ok | thr30:34X | thr40:34X | thr50:34X | thr60:33X
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore6.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> data={}
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     data[well]=(corr(im,flat1), pts.shape[0])
+[?2004l[?2004h> 
+[?2004l[?2004h> for cp in [0.0, -1.0, -2.0]:
+[?2004l[?2004h>     print(f'=== cellprob={cp} ===')
+[?2004l[?2004h>     for well,(c,manual) in data.items():
+[?2004l[?2004h>         masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=None, cellprob_threshold=cp)
+[?2004l[?2004h>         props = regionprops(masks)
+[?2004l[?2004h>         areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>         res=[]
+[?2004l[?2004h>         for t in [0,20,30,40]:
+[?2004l[?2004h>             n=int((areas>t).sum())
+[?2004l[?2004h>             ok = abs(n-manual)<=max(3,0.1*manual)
+[?2004l[?2004h>             res.append(f't{t}:{n}{"ok" if ok else "X"}')
+[?2004l[?2004h>         print(f'{well} m={manual}: ' + ' | '.join(res))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore6.py
+[?2004l=== cellprob=0.0 ===
+A06 m=34: t0:31ok | t20:28X | t30:27X | t40:27X
+A11 m=66: t0:61ok | t20:58X | t30:58X | t40:56X
+A12 m=10: t0:9ok | t20:4X | t30:2X | t40:2X
+C12 m=18: t0:24X | t20:19ok | t30:17ok | t40:17ok
+D10 m=31: t0:59X | t20:33ok | t30:25X | t40:21X
+E05 m=113: t0:114ok | t20:109ok | t30:107ok | t40:107ok
+G07 m=127: t0:120ok | t20:111X | t30:109X | t40:108X
+H12 m=38: t0:41ok | t20:37ok | t30:34X | t40:34X
+=== cellprob=-1.0 ===
+A06 m=34: t0:38X | t20:32ok | t30:28X | t40:28X
+A11 m=66: t0:71ok | t20:64ok | t30:61ok | t40:61ok
+A12 m=10: t0:14X | t20:4X | t30:2X | t40:2X
+C12 m=18: t0:33X | t20:24X | t30:17ok | t40:17ok
+D10 m=31: t0:70X | t20:50X | t30:27X | t40:25X
+E05 m=113: t0:123ok | t20:115ok | t30:111ok | t40:110ok
+G07 m=127: t0:131ok | t20:124ok | t30:112X | t40:112X
+H12 m=38: t0:57X | t20:45X | t30:37ok | t40:37ok
+=== cellprob=-2.0 ===
+A06 m=34: t0:33ok | t20:32ok | t30:26X | t40:26X
+A11 m=66: t0:69ok | t20:68ok | t30:60ok | t40:59X
+A12 m=10: t0:17X | t20:12ok | t30:2X | t40:2X
+C12 m=18: t0:31X | t20:30X | t30:21ok | t40:17ok
+D10 m=31: t0:80X | t20:67X | t30:29ok | t40:28ok
+E05 m=113: t0:117ok | t20:117ok | t30:107ok | t40:105ok
+G07 m=127: t0:125ok | t20:123ok | t30:111X | t40:106X
+H12 m=38: t0:51X | t20:50X | t30:42X | t40:36ok
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore7.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for well in ['A12','D10','A06','C12']:
+[?2004l[?2004h>     pts = np.loadtxt(f'{IN}/annotations/{well}.tsv', skiprows=1, ndmin=2)
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks, intensity_image=c)
+[?2004l[?2004h>     H,W = masks.shape
+[?2004l[?2004h>     cents = np.array([p.centroid for p in props])
+[?2004l[?2004h>     lab = np.array([p.label for p in props])
+[?2004l[?2004h>     matched=set()
+[?2004l[?2004h>     for (x,y) in pts:
+[?2004l[?2004h>         r,cc = int(round(y)), int(round(x))
+[?2004l[?2004h>         l = masks[r,cc] if (0<=r<H and 0<=cc<W) else 0
+[?2004l[?2004h>         if l==0:
+[?2004l[?2004h>             d,i = cKDTree(cents).query([r,cc])
+[?2004l[?2004h>             if d<=10: l=lab[i]
+[?2004l[?2004h>         if l: matched.add(l)
+[?2004l[?2004h>     print(f'--- {well} (manual={pts.shape[0]}, masks={len(props)}) ---')
+[?2004l[?2004h>     rows=[]
+[?2004l[?2004h>     for p in props:
+[?2004l[?2004h>         rows.append((p.area, p.axis_minor_length, p.mean_intensity, p.solidity, p.eccentricity, p.label in matched))
+[?2004l[?2004h>     rows.sort()
+[?2004l[?2004h>     for r in rows:
+[?2004l[?2004h>         print(f'  area={r[0]:4d} minor={r[1]:5.1f} int={r[2]:8.1f} sol={r[3]:.2f} ecc={r[4]:.2f} {"TRUE" if r[5] else "fp"}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore7.py 2>&1 | head -130
+[?2004l--- A12 (manual=10, masks=9) ---
+Traceback (most recent call last):
+  File "/task/work/explore7.py", line 39, in <module>
+    print(f'  area={r[0]:4d} minor={r[1]:5.1f} int={r[2]:8.1f} sol={r[3]:.2f} ecc={r[4]:.2f} {"TRUE" if r[5] else "fp"}')
+                   ^^^^^^^^^
+ValueError: Unknown format code 'd' for object of type 'float'
+[?2004hroot@c808a9ea0a3a:/task# sed -i "s/area={r\[0\]:4d}/area={int(r[0]):4d}/" /task/work/explore7.py && python3 /task/work/explore7.py 2>&1 | head -140
+[?2004l--- A12 (manual=10, masks=9) ---
+  area=  15 minor=  4.0 int=   812.9 sol=1.00 ecc=0.49 fp
+  area=  15 minor=  4.0 int=   834.4 sol=1.00 ecc=0.49 fp
+  area=  16 minor=  4.0 int=   950.5 sol=1.00 ecc=0.58 fp
+  area=  16 minor=  4.0 int=  1063.5 sol=1.00 ecc=0.58 fp
+  area=  19 minor=  4.5 int=   774.9 sol=1.00 ecc=0.52 fp
+  area=  21 minor=  5.1 int=  1008.1 sol=1.00 ecc=0.00 fp
+  area=  21 minor=  5.1 int=  1094.7 sol=1.00 ecc=0.00 fp
+  area=  43 minor=  5.3 int=   694.3 sol=1.00 ecc=0.87 TRUE
+  area= 100 minor=  9.9 int=   696.6 sol=0.95 ecc=0.65 TRUE
+--- D10 (manual=31, masks=59) ---
+  area=  15 minor=  4.0 int=  1340.2 sol=1.00 ecc=0.56 fp
+  area=  15 minor=  4.1 int=   879.4 sol=0.94 ecc=0.48 fp
+  area=  15 minor=  4.1 int=   932.7 sol=0.94 ecc=0.48 fp
+  area=  15 minor=  4.1 int=   972.3 sol=0.94 ecc=0.48 fp
+  area=  15 minor=  4.1 int=  1092.5 sol=0.94 ecc=0.48 fp
+  area=  15 minor=  4.1 int=  1161.1 sol=0.94 ecc=0.48 fp
+  area=  16 minor=  4.0 int=   994.6 sol=1.00 ecc=0.58 fp
+  area=  16 minor=  4.0 int=  1001.3 sol=1.00 ecc=0.58 fp
+  area=  16 minor=  4.2 int=   984.7 sol=0.94 ecc=0.51 fp
+  area=  16 minor=  4.2 int=  1014.4 sol=0.94 ecc=0.51 fp
+  area=  17 minor=  4.0 int=  1166.8 sol=1.00 ecc=0.63 fp
+  area=  17 minor=  4.3 int=  1233.7 sol=0.94 ecc=0.48 fp
+  area=  17 minor=  4.5 int=  1149.2 sol=1.00 ecc=0.30 fp
+  area=  17 minor=  4.5 int=  1236.3 sol=1.00 ecc=0.30 fp
+  area=  18 minor=  4.2 int=  1534.4 sol=0.90 ecc=0.63 fp
+  area=  18 minor=  4.5 int=  1019.5 sol=0.95 ecc=0.48 fp
+  area=  19 minor=  4.4 int=  1238.8 sol=0.95 ecc=0.61 fp
+  area=  19 minor=  4.5 int=  1127.7 sol=1.00 ecc=0.52 fp
+  area=  19 minor=  4.5 int=  1309.2 sol=1.00 ecc=0.52 fp
+  area=  19 minor=  4.5 int=  1333.0 sol=1.00 ecc=0.52 fp
+  area=  19 minor=  4.5 int=  1412.3 sol=0.95 ecc=0.55 fp
+  area=  19 minor=  4.6 int=  1093.6 sol=0.90 ecc=0.46 fp
+  area=  19 minor=  4.7 int=  1587.4 sol=0.95 ecc=0.39 fp
+  area=  20 minor=  4.6 int=  1649.9 sol=0.91 ecc=0.52 fp
+  area=  20 minor=  4.8 int=   954.6 sol=0.95 ecc=0.39 fp
+  area=  20 minor=  5.0 int=  1481.6 sol=0.91 ecc=0.23 fp
+  area=  21 minor=  4.9 int=  1011.6 sol=0.91 ecc=0.48 fp
+  area=  21 minor=  5.0 int=  1242.1 sol=0.95 ecc=0.34 fp
+  area=  21 minor=  5.1 int=  1187.6 sol=1.00 ecc=0.00 fp
+  area=  21 minor=  5.1 int=  1248.9 sol=1.00 ecc=0.00 fp
+  area=  21 minor=  5.1 int=  1266.7 sol=1.00 ecc=0.00 fp
+  area=  22 minor=  4.9 int=   960.2 sol=1.00 ecc=0.54 fp
+  area=  22 minor=  5.0 int=  1218.2 sol=1.00 ecc=0.43 fp
+  area=  23 minor=  5.4 int=  1512.9 sol=1.00 ecc=0.13 fp
+  area=  33 minor=  5.3 int=  1103.1 sol=0.89 ecc=0.76 fp
+  area=  35 minor=  5.5 int=   963.8 sol=0.95 ecc=0.73 fp
+  area=  37 minor=  5.3 int=   909.2 sol=0.90 ecc=0.81 fp
+  area=  40 minor=  5.8 int=  1095.7 sol=0.93 ecc=0.78 fp
+  area=  46 minor=  6.2 int=  1244.8 sol=0.90 ecc=0.75 TRUE
+  area=  49 minor=  6.1 int=  1096.5 sol=0.98 ecc=0.79 TRUE
+  area=  62 minor=  6.4 int=  1415.6 sol=0.98 ecc=0.87 TRUE
+  area=  62 minor=  7.3 int=  1117.0 sol=0.90 ecc=0.78 TRUE
+  area=  73 minor=  8.8 int=  1475.0 sol=0.95 ecc=0.55 TRUE
+  area=  77 minor=  8.6 int=   777.9 sol=0.94 ecc=0.67 TRUE
+  area=  82 minor=  9.3 int=   893.3 sol=0.95 ecc=0.57 TRUE
+  area=  83 minor=  8.5 int=  1304.6 sol=0.97 ecc=0.74 TRUE
+  area=  89 minor=  9.7 int=   749.4 sol=0.96 ecc=0.57 TRUE
+  area=  90 minor=  9.8 int=  1067.5 sol=0.97 ecc=0.55 TRUE
+  area=  90 minor=  9.9 int=   690.4 sol=0.95 ecc=0.52 TRUE
+  area=  94 minor=  9.7 int=   932.8 sol=0.95 ecc=0.62 TRUE
+  area= 101 minor=  9.7 int=  1052.5 sol=0.93 ecc=0.68 TRUE
+  area= 104 minor= 10.2 int=  1298.0 sol=0.98 ecc=0.61 TRUE
+  area= 104 minor= 10.9 int=  1013.9 sol=0.97 ecc=0.44 TRUE
+  area= 112 minor= 10.1 int=  1274.3 sol=0.95 ecc=0.70 TRUE
+  area= 112 minor= 10.1 int=   880.8 sol=0.98 ecc=0.70 TRUE
+  area= 116 minor= 11.3 int=  1324.3 sol=0.97 ecc=0.49 TRUE
+  area= 120 minor= 10.3 int=  1004.0 sol=0.97 ecc=0.73 TRUE
+  area= 123 minor= 11.0 int=   964.5 sol=0.98 ecc=0.64 TRUE
+  area= 143 minor= 12.5 int=  1113.2 sol=0.95 ecc=0.52 TRUE
+--- A06 (manual=34, masks=31) ---
+  area=  15 minor=  4.0 int=  1143.9 sol=1.00 ecc=0.49 fp
+  area=  15 minor=  4.0 int=  1200.1 sol=1.00 ecc=0.49 fp
+  area=  15 minor=  4.1 int=  1122.7 sol=0.94 ecc=0.48 fp
+  area=  21 minor=  4.9 int=  1456.5 sol=0.95 ecc=0.45 fp
+  area=  55 minor=  8.1 int=   775.2 sol=0.93 ecc=0.41 TRUE
+  area=  77 minor=  8.6 int=   909.0 sol=0.93 ecc=0.71 TRUE
+  area=  86 minor=  9.7 int=  1164.8 sol=0.95 ecc=0.50 TRUE
+  area=  86 minor= 10.1 int=  1422.4 sol=0.91 ecc=0.40 TRUE
+  area=  87 minor=  9.8 int=  1118.1 sol=0.93 ecc=0.52 TRUE
+  area=  88 minor=  9.2 int=  1061.3 sol=0.99 ecc=0.66 TRUE
+  area=  88 minor=  9.3 int=  1031.7 sol=0.98 ecc=0.64 TRUE
+  area=  90 minor=  9.8 int=  1060.2 sol=0.94 ecc=0.54 TRUE
+  area=  90 minor= 10.3 int=  1327.4 sol=0.96 ecc=0.38 TRUE
+  area=  91 minor=  9.7 int=  1021.1 sol=0.93 ecc=0.59 TRUE
+  area=  93 minor=  9.6 int=   730.9 sol=0.92 ecc=0.64 TRUE
+  area=  98 minor= 10.4 int=   904.0 sol=0.96 ecc=0.51 TRUE
+  area=  98 minor= 10.6 int=  1123.7 sol=0.96 ecc=0.45 TRUE
+  area= 100 minor=  9.1 int=  1213.2 sol=0.93 ecc=0.76 TRUE
+  area= 102 minor=  9.6 int=   716.0 sol=0.91 ecc=0.71 TRUE
+  area= 102 minor=  9.9 int=  1709.1 sol=0.97 ecc=0.65 TRUE
+  area= 107 minor=  9.3 int=  1133.8 sol=0.96 ecc=0.78 TRUE
+  area= 108 minor= 10.6 int=  1085.3 sol=0.98 ecc=0.57 TRUE
+  area= 109 minor= 10.4 int=  1313.6 sol=0.96 ecc=0.62 TRUE
+  area= 110 minor=  9.8 int=  1036.9 sol=0.96 ecc=0.73 TRUE
+  area= 115 minor= 11.2 int=  1415.8 sol=0.96 ecc=0.52 TRUE
+  area= 115 minor= 11.4 int=  1312.9 sol=0.95 ecc=0.46 TRUE
+  area= 117 minor= 10.3 int=  1209.8 sol=0.95 ecc=0.71 TRUE
+  area= 119 minor= 11.2 int=   756.3 sol=0.98 ecc=0.55 TRUE
+  area= 121 minor= 10.9 int=   811.6 sol=0.97 ecc=0.63 TRUE
+  area= 126 minor= 12.0 int=  1162.5 sol=0.93 ecc=0.44 TRUE
+  area= 130 minor= 11.6 int=  1154.8 sol=0.94 ecc=0.58 TRUE
+--- C12 (manual=18, masks=24) ---
+  area=  16 minor=  4.0 int=   990.1 sol=1.00 ecc=0.58 fp
+  area=  16 minor=  4.4 int=   978.2 sol=0.94 ecc=0.38 fp
+  area=  19 minor=  4.5 int=  1282.3 sol=1.00 ecc=0.52 fp
+  area=  20 minor=  4.8 int=  1241.0 sol=0.95 ecc=0.39 fp
+  area=  20 minor=  4.8 int=  1251.9 sol=0.95 ecc=0.39 fp
+  area=  23 minor=  5.0 int=  1301.1 sol=0.96 ecc=0.48 fp
+  area=  23 minor=  5.2 int=  1328.7 sol=0.88 ecc=0.35 fp
+  area=  77 minor=  7.3 int=   990.8 sol=0.95 ecc=0.87 fp
+  area= 130 minor= 11.6 int=   922.0 sol=0.93 ecc=0.61 TRUE
+  area= 145 minor= 13.3 int=  1553.1 sol=0.91 ecc=0.39 TRUE
+  area= 167 minor= 14.0 int=   772.6 sol=0.92 ecc=0.39 TRUE
+  area= 180 minor= 12.9 int=  1043.8 sol=0.94 ecc=0.68 TRUE
+  area= 181 minor= 14.4 int=  1000.2 sol=0.95 ecc=0.43 TRUE
+  area= 191 minor= 13.2 int=   672.7 sol=0.95 ecc=0.70 TRUE
+  area= 196 minor= 13.8 int=   910.4 sol=0.96 ecc=0.65 TRUE
+  area= 199 minor= 15.5 int=  1179.1 sol=0.96 ecc=0.33 TRUE
+  area= 203 minor= 13.8 int=  1380.4 sol=0.94 ecc=0.68 TRUE
+  area= 204 minor= 15.6 int=   694.8 sol=0.96 ecc=0.36 TRUE
+  area= 205 minor= 15.3 int=   953.1 sol=0.96 ecc=0.46 TRUE
+  area= 207 minor= 13.6 int=  1292.7 sol=0.98 ecc=0.73 fp
+  area= 209 minor= 15.5 int=   738.6 sol=0.95 ecc=0.42 TRUE
+  area= 213 minor= 14.8 int=  1133.6 sol=0.95 ecc=0.60 TRUE
+  area= 225 minor= 14.4 int=  1035.6 sol=0.97 ecc=0.70 TRUE
+  area= 227 minor= 15.2 int=  1231.0 sol=0.97 ecc=0.61 TRUE
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore8.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops, label
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     c2 = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c2, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>     n0 = len(props)
+[?2004l[?2004h>     n42 = int((areas>=42).sum())
+[?2004l[?2004h>     # split attempt: watershed within masks using distance transform seeds
+[?2004l[?2004h>     masks2 = masks.copy()
+[?2004l[?2004h>     nextlab = masks2.max()+1
+[?2004l[?2004h>     med = np.median(areas) if len(areas) else 100
+[?2004l[?2004h>     for p in props:
+[?2004l[?2004h>         if p.area > 1.8*med:
+[?2004l[?2004h>             sub = (masks==p.label)
+[?2004l[?2004h>             dt = ndi.distance_transform_edt(sub)
+[?2004l[?2004h>             coords = peak_local_max(dt, min_distance=8, labels=sub)
+[?2004l[?2004h>             if len(coords)>1:
+[?2004l[?2004h>                 seeds = np.zeros_like(masks)
+[?2004l[?2004h>                 seeds[coords[:,0],coords[:,1]] = np.arange(1,len(coords)+1)
+[?2004l[?2004h>                 ws = watershed(-dt, seeds, mask=sub)
+[?2004l[?2004h>                 for s in range(1,len(coords)+1):
+[?2004l[?2004h>                     masks2[(ws==s)&sub] = nextlab; nextlab+=1
+[?2004l[?2004h>     props2 = regionprops(masks2)
+[?2004l[?2004h>     areas2 = np.array([p.area for p in props2]) if props2 else np.array([])
+[?2004l[?2004h>     n42s = int((areas2>=42).sum())
+[?2004l[?2004h>     def tag(n): return 'ok' if abs(n-manual)<=max(3,0.1*manual) else 'X'
+[?2004l[?2004h>     print(f'{well} m={manual}: raw={n0}{tag(n0)} area42={n42}{tag(n42)} split+area42={n42s}{tag(n42s)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore8.py
+[?2004lA06 m=34: raw=31ok area42=26X split+area42=26X
+A11 m=66: raw=63ok area42=56X split+area42=56X
+A12 m=10: raw=8ok area42=2X split+area42=2X
+C12 m=18: raw=21ok area42=18ok split+area42=18ok
+D10 m=31: raw=62X area42=24X split+area42=24X
+E05 m=113: raw=111ok area42=105ok split+area42=105ok
+G07 m=127: raw=121ok area42=108X split+area42=108X
+H12 m=38: raw=42X area42=34X split+area42=34X
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore9.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> cache={}
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     cache[well]=(corr(im,flat1), manual)
+[?2004l[?2004h> 
+[?2004l[?2004h> for prep in ['raw','tophat']:
+[?2004l[?2004h>     for cp in [0.0, -0.5]:
+[?2004l[?2004h>         rows=[]
+[?2004l[?2004h>         npass=0
+[?2004l[?2004h>         for well,(c,manual) in cache.items():
+[?2004l[?2004h>             img = white_tophat(c, footprint=disk(25)) if prep=='tophat' else c
+[?2004l[?2004h>             masks, flows, styles, diams = model.eval(img, channels=[0,0], diameter=None, cellprob_threshold=cp)
+[?2004l[?2004h>             props = regionprops(masks)
+[?2004l[?2004h>             areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>             r=[]
+[?2004l[?2004h>             for t in [0,42,45,50]:
+[?2004l[?2004h>                 n=int((areas>=t).sum())
+[?2004l[?2004h>                 ok=abs(n-manual)<=max(3,0.1*manual)
+[?2004l[?2004h>                 if t==45 and ok: npass+=1
+[?2004l[?2004h>                 r.append(f't{t}:{n}{"ok" if ok else "X"}')
+[?2004l[?2004h>             rows.append(f'{well} m={manual}: '+' | '.join(r))
+[?2004l[?2004h>         print(f'=== prep={prep} cp={cp} (pass@t45={npass}/8) ===')
+[?2004l[?2004h>         print('\n'.join(rows))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore9.py
+[?2004l=== prep=raw cp=0.0 (pass@t45=2/8) ===
+A06 m=34: t0:31ok | t42:27X | t45:27X | t50:27X
+A11 m=66: t0:61ok | t42:56X | t45:55X | t50:53X
+A12 m=10: t0:9ok | t42:2X | t45:1X | t50:1X
+C12 m=18: t0:24X | t42:17ok | t45:17ok | t50:17ok
+D10 m=31: t0:59X | t42:21X | t45:21X | t50:19X
+E05 m=113: t0:114ok | t42:107ok | t45:106ok | t50:106ok
+G07 m=127: t0:120ok | t42:107X | t45:106X | t50:104X
+H12 m=38: t0:41ok | t42:34X | t45:34X | t50:34X
+=== prep=raw cp=-0.5 (pass@t45=2/8) ===
+A06 m=34: t0:31ok | t42:25X | t45:25X | t50:25X
+A11 m=66: t0:70ok | t42:61ok | t45:59X | t50:58X
+A12 m=10: t0:10ok | t42:2X | t45:2X | t50:1X
+C12 m=18: t0:28X | t42:18ok | t45:18ok | t50:18ok
+D10 m=31: t0:66X | t42:24X | t45:24X | t50:23X
+E05 m=113: t0:117ok | t42:107ok | t45:107ok | t50:107ok
+G07 m=127: t0:129ok | t42:111X | t45:110X | t50:108X
+H12 m=38: t0:43X | t42:33X | t45:33X | t50:33X
+=== prep=tophat cp=0.0 (pass@t45=2/8) ===
+A06 m=34: t0:31ok | t42:26X | t45:26X | t50:26X
+A11 m=66: t0:63ok | t42:56X | t45:56X | t50:55X
+A12 m=10: t0:8ok | t42:2X | t45:1X | t50:1X
+C12 m=18: t0:21ok | t42:18ok | t45:18ok | t50:18ok
+D10 m=31: t0:62X | t42:24X | t45:24X | t50:22X
+E05 m=113: t0:111ok | t42:105ok | t45:104ok | t50:104ok
+G07 m=127: t0:121ok | t42:108X | t45:107X | t50:104X
+H12 m=38: t0:42X | t42:34X | t45:34X | t50:34X
+cat > /task/work/explore10.py << 'EOF'
+import numpy as np, tifffile, glob, os
+from skimage.measure import regionprops, label
+from skimage.morphology import white_tophat, disk
+from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+from skimage.filters import gaussian, threshold_otsu
+from scipy import ndimage as ndi
+
+IN='/task/input'
+dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+
+def corr(im, flat):
+    im = im.astype(np.float32)
+    g = (flat - dark); g = g / np.mean(g)
+    return (im - dark) / g
+
+ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+cache={}
+for a in ann:
+    well = os.path.basename(a)[:-4]
+    manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+    im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+    cache[well]=(corr(im,flat1), manual)
+
+def count(c, md=7, k=0.5, area_min=42, sigma=2.0):
+    t = white_tophat(c, footprint=disk(25))
+    s = gaussian(t, sigma)
+    thr = threshold_otsu(s)
+    bw = s > thr*k
+    bw = ndi.binary_opening(bw, iterations=1)
+    dt = ndi.distance_transform_edt(bw)
+    coords = peak_local_max(dt, min_distance=md, threshold_abs=3)
+    seeds = np.zeros_like(bw, dtype=int)
+    seeds[coords[:,0],coords[:,1]] = np.arange(1,len(coords)+1)
+    ws = watershed(-dt, seeds, mask=bw)
+    props = regionprops(ws)
+    n = sum(1 for p in props if p.area>=area_min)
+    return n
+
+for md in [5,6,7,8]:
+    for k in [0.4,0.5,0.7,1.0]:
+        out=[]; npass=0
+        for well,(c,manual) in cache.items():
+            n=count(c,md=md,k=k)
+            ok=abs(n-manual)<=max(3,0.1*manual); npass+=ok
+            out.append(f'{well}:{n}{"ok" if ok else "X"}')
+        print(f'md={md} k={k} pass={npass}/8 :: '+' '.join(out))
+EOF
+python3 /task/work/explore10.py
+=== prep=tophat cp=-0.5 (pass@t45=3/8) ===
+A06 m=34: t0:30X | t42:24X | t45:24X | t50:24X
+A11 m=66: t0:73X | t42:63ok | t45:60ok | t50:60ok
+A12 m=10: t0:10ok | t42:2X | t45:2X | t50:1X
+C12 m=18: t0:26X | t42:17ok | t45:17ok | t50:17ok
+D10 m=31: t0:67X | t42:25X | t45:25X | t50:25X
+E05 m=113: t0:117ok | t42:107ok | t45:107ok | t50:107ok
+G07 m=127: t0:129ok | t42:111X | t45:110X | t50:108X
+H12 m=38: t0:46X | t42:33X | t45:33X | t50:33X
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore10.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from skimage.measure import regionprops, label
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> cache={}
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     cache[well]=(corr(im,flat1), manual)
+[?2004l[?2004h> 
+[?2004l[?2004h> def count(c, md=7, k=0.5, area_min=42, sigma=2.0):
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, sigma)
+[?2004l[?2004h>     thr = threshold_otsu(s)
+[?2004l[?2004h>     bw = s > thr*k
+[?2004l[?2004h>     bw = ndi.binary_opening(bw, iterations=1)
+[?2004l[?2004h>     dt = ndi.distance_transform_edt(bw)
+[?2004l[?2004h>     coords = peak_local_max(dt, min_distance=md, threshold_abs=3)
+[?2004l[?2004h>     seeds = np.zeros_like(bw, dtype=int)
+[?2004l[?2004h>     seeds[coords[:,0],coords[:,1]] = np.arange(1,len(coords)+1)
+[?2004l[?2004h>     ws = watershed(-dt, seeds, mask=bw)
+[?2004l[?2004h>     props = regionprops(ws)
+[?2004l[?2004h>     n = sum(1 for p in props if p.area>=area_min)
+[?2004l[?2004h>     return n
+[?2004l[?2004h> 
+[?2004l[?2004h> for md in [5,6,7,8]:
+[?2004l[?2004h>     for k in [0.4,0.5,0.7,1.0]:
+[?2004l[?2004h>         out=[]; npass=0
+[?2004l[?2004h>         for well,(c,manual) in cache.items():
+[?2004l[?2004h>             n=count(c,md=md,k=k)
+[?2004l[?2004h>             ok=abs(n-manual)<=max(3,0.1*manual); npass+=ok
+[?2004l[?2004h>             out.append(f'{well}:{n}{"ok" if ok else "X"}')
+[?2004l[?2004h>         print(f'md={md} k={k} pass={npass}/8 :: '+' '.join(out))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore10.py
+[?2004lmd=5 k=0.4 pass=1/8 :: A06:36ok A11:38X A12:29X C12:25X D10:67X E05:65X G07:79X H12:47X
+md=5 k=0.5 pass=1/8 :: A06:32ok A11:33X A12:22X C12:24X D10:56X E05:66X G07:80X H12:44X
+md=5 k=0.7 pass=4/8 :: A06:32ok A11:37X A12:12ok C12:19ok D10:40X E05:67X G07:75X H12:38ok
+md=5 k=1.0 pass=3/8 :: A06:29X A11:40X A12:9ok C12:18ok D10:29ok E05:71X G07:79X H12:34X
+md=6 k=0.4 pass=1/8 :: A06:36ok A11:36X A12:29X C12:25X D10:64X E05:60X G07:77X H12:46X
+md=6 k=0.5 pass=1/8 :: A06:32ok A11:32X A12:22X C12:23X D10:54X E05:62X G07:77X H12:44X
+md=6 k=0.7 pass=4/8 :: A06:32ok A11:30X A12:12ok C12:18ok D10:38X E05:62X G07:71X H12:38ok
+md=6 k=1.0 pass=3/8 :: A06:26X A11:31X A12:9ok C12:17ok D10:29ok E05:67X G07:72X H12:33X
+md=7 k=0.4 pass=1/8 :: A06:33ok A11:33X A12:29X C12:25X D10:63X E05:55X G07:70X H12:45X
+md=7 k=0.5 pass=0/8 :: A06:30X A11:32X A12:22X C12:23X D10:53X E05:59X G07:69X H12:43X
+md=7 k=0.7 pass=3/8 :: A06:30X A11:30X A12:12ok C12:18ok D10:36X E05:55X G07:64X H12:36ok
+md=7 k=1.0 pass=3/8 :: A06:24X A11:30X A12:9ok C12:17ok D10:28ok E05:62X G07:64X H12:33X
+md=8 k=0.4 pass=1/8 :: A06:32ok A11:31X A12:28X C12:23X D10:62X E05:53X G07:63X H12:44X
+md=8 k=0.5 pass=1/8 :: A06:29X A11:31X A12:22X C12:22X D10:53X E05:54X G07:58X H12:40ok
+md=8 k=0.7 pass=3/8 :: A06:30X A11:29X A12:11ok C12:17ok D10:36X E05:52X G07:62X H12:36ok
+md=8 k=1.0 pass=3/8 :: A06:23X A11:28X A12:8ok C12:16ok D10:28ok E05:58X G07:59X H12:32X
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore11.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops, label
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> 
+[?2004l[?2004h> AMIN=42
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     bw = s > 0.5*otsu
+[?2004l[?2004h>     # peaks on smoothed image
+[?2004l[?2004h>     peaks = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     # accepted masks
+[?2004l[?2004h>     acc = [p for p in props if p.area>=AMIN]
+[?2004l[?2004h>     accmask = np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h>     # assign peaks to accepted masks
+[?2004l[?2004h>     n = 0
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub = (masks==p.label)
+[?2004l[?2004h>         pk = peaks[sub[peaks[:,0],peaks[:,1]]] if len(peaks) else np.empty((0,2))
+[?2004l[?2004h>         n += max(1, len(pk))
+[?2004l[?2004h>     # orphan peaks: not inside any accepted mask
+[?2004l[?2004h>     if len(peaks):
+[?2004l[?2004h>         inside = accmask[peaks[:,0],peaks[:,1]]
+[?2004l[?2004h>         orph = peaks[~inside]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         orph = np.empty((0,2),dtype=int)
+[?2004l[?2004h>     nadd=0
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         # grow blobs on bw excluding accepted masks
+[?2004l[?2004h>         cand = bw & ~accmask
+[?2004l[?2004h>         seeds = np.zeros_like(bw, dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>         for i2 in range(1,len(orph)+1):
+[?2004l[?2004h>             if (ws==i2).sum()>=AMIN: nadd+=1
+[?2004l[?2004h>     ntot = n + nadd
+[?2004l[?2004h>     ok = abs(ntot-manual)<=max(3,0.1*manual)
+[?2004l[?2004h>     print(f'{well} m={manual}: masks={len(props)} acc={len(acc)} splitcount={n} orphans={len(orph)} added={nadd} total={ntot} {"OK" if ok else "FAIL"}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore11.py
+[?2004lA06 m=34: masks=31 acc=26 splitcount=26 orphans=22 added=12 total=38 FAIL
+A11 m=66: masks=63 acc=56 splitcount=56 orphans=12 added=6 total=62 OK
+A12 m=10: masks=8 acc=2 splitcount=2 orphans=36 added=20 total=22 FAIL
+C12 m=18: masks=21 acc=18 splitcount=18 orphans=23 added=9 total=27 FAIL
+D10 m=31: masks=62 acc=24 splitcount=24 orphans=59 added=35 total=59 FAIL
+E05 m=113: masks=111 acc=105 splitcount=105 orphans=15 added=9 total=114 OK
+G07 m=127: masks=121 acc=108 splitcount=108 orphans=24 added=12 total=120 OK
+H12 m=38: masks=42 acc=34 splitcount=34 orphans=26 added=13 total=47 FAIL
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore12.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     pts = np.loadtxt(a, skiprows=1, ndmin=2)
+[?2004l[?2004h>     manual = pts.shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     accmask = np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h>     peaks = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     if not len(peaks): continue
+[?2004l[?2004h>     inside = accmask[peaks[:,0],peaks[:,1]]
+[?2004l[?2004h>     orph = peaks[~inside]
+[?2004l[?2004h>     tree = cKDTree(np.stack([pts[:,1],pts[:,0]],axis=1))  # (y,x)
+[?2004l[?2004h>     bw = s > 0.5*otsu
+[?2004l[?2004h>     cand = bw & ~accmask
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         seeds = np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>         rows=[]
+[?2004l[?2004h>         for i2,(py,px) in enumerate(orph, start=1):
+[?2004l[?2004h>             area = (ws==i2).sum()
+[?2004l[?2004h>             h = s[py,px]
+[?2004l[?2004h>             d,_ = tree.query([py,px])
+[?2004l[?2004h>             rows.append((area,h,d<=8))
+[?2004l[?2004h>         tr=[r for r in rows if r[2]]; fp=[r for r in rows if not r[2]]
+[?2004l[?2004h>         print(f'{well} m={manual} orphans={len(orph)} (true={len(tr)} junk={len(fp)})')
+[?2004l[?2004h>         if tr:
+[?2004l[?2004h>             print(f'   TRUE orphan: area med={np.median([r[0] for r in tr]):.0f} min={min(r[0] for r in tr)} | h med={np.median([r[1] for r in tr]):.0f}')
+[?2004l[?2004h>         if fp:
+[?2004l[?2004h>             print(f'   JUNK orphan: area med={np.median([r[0] for r in fp]):.0f} p90={np.percentile([r[0] for r in fp],90):.0f} max={max(r[0] for r in fp)} | h med={np.median([r[1] for r in fp]):.0f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore12.py
+[?2004lA06 m=34 orphans=22 (true=6 junk=16)
+   TRUE orphan: area med=232 min=195 | h med=1966
+   JUNK orphan: area med=38 p90=64 max=72 | h med=638
+A11 m=66 orphans=12 (true=3 junk=9)
+   TRUE orphan: area med=467 min=224 | h med=1315
+   JUNK orphan: area med=39 p90=52 max=66 | h med=678
+A12 m=10 orphans=36 (true=7 junk=29)
+   TRUE orphan: area med=214 min=170 | h med=1966
+   JUNK orphan: area med=41 p90=54 max=58 | h med=714
+C12 m=18 orphans=23 (true=3 junk=20)
+   TRUE orphan: area med=311 min=231 | h med=2175
+   JUNK orphan: area med=30 p90=54 max=61 | h med=554
+D10 m=31 orphans=59 (true=6 junk=53)
+   TRUE orphan: area med=253 min=204 | h med=1821
+   JUNK orphan: area med=44 p90=67 max=219 | h med=676
+E05 m=113 orphans=15 (true=3 junk=12)
+   TRUE orphan: area med=1094 min=239 | h med=1241
+   JUNK orphan: area med=42 p90=63 max=68 | h med=725
+G07 m=127 orphans=24 (true=7 junk=17)
+   TRUE orphan: area med=428 min=173 | h med=1519
+   JUNK orphan: area med=32 p90=46 max=59 | h med=565
+H12 m=38 orphans=26 (true=4 junk=22)
+   TRUE orphan: area med=260 min=87 | h med=990
+   JUNK orphan: area med=37 p90=59 max=69 | h med=574
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore13.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> res={}
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     accmask = np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h>     peaks = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     n=0
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub=(masks==p.label)
+[?2004l[?2004h>         pk=peaks[sub[peaks[:,0],peaks[:,1]]] if len(peaks) else np.empty((0,2))
+[?2004l[?2004h>         n+=max(1,len(pk))
+[?2004l[?2004h>     orph_areas=[]
+[?2004l[?2004h>     if len(peaks):
+[?2004l[?2004h>         inside = accmask[peaks[:,0],peaks[:,1]]
+[?2004l[?2004h>         orph = peaks[~inside]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         orph = np.empty((0,2),dtype=int)
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         bw = s > 0.5*otsu
+[?2004l[?2004h>         cand = bw & ~accmask
+[?2004l[?2004h>         seeds = np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>         orph_areas=[(ws==i2).sum() for i2 in range(1,len(orph)+1)]
+[?2004l[?2004h>     res[well]=(manual,n,orph_areas)
+[?2004l[?2004h> 
+[?2004l[?2004h> for othr in [70,90,110,130,150]:
+[?2004l[?2004h>     out=[]; npass=0
+[?2004l[?2004h>     for well,(manual,n,oa) in res.items():
+[?2004l[?2004h>         tot = n + sum(1 for x in oa if x>=othr)
+[?2004l[?2004h>         ok = abs(tot-manual)<=max(3,0.1*manual); npass+=ok
+[?2004l[?2004h>         out.append(f'{well}:{tot}{"ok" if ok else "X"}(m{manual})')
+[?2004l[?2004h>     print(f'orph_thr={othr} pass={npass}/8 :: '+' '.join(out))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore13.py
+[?2004lorph_thr=70 pass=6/8 :: A06:33ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:35X(m31) E05:108ok(m113) G07:115ok(m127) H12:38ok(m38)
+orph_thr=90 pass=7/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:33ok(m31) E05:108ok(m113) G07:115ok(m127) H12:37ok(m38)
+orph_thr=110 pass=7/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:33ok(m31) E05:108ok(m113) G07:115ok(m127) H12:37ok(m38)
+orph_thr=130 pass=7/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:32ok(m31) E05:108ok(m113) G07:115ok(m127) H12:37ok(m38)
+orph_thr=150 pass=7/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:31ok(m31) E05:108ok(m113) G07:115ok(m127) H12:37ok(m38)
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore14.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> im = tifffile.imread(f'{IN}/images/A11_ch1.tif')
+[?2004l[?2004h> c = corr(im, flat1)
+[?2004l[?2004h> t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h> s = gaussian(t, 2.0)
+[?2004l[?2004h> otsu = threshold_otsu(s)
+[?2004l[?2004h> masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h> props = regionprops(masks)
+[?2004l[?2004h> acc = [p for p in props if p.area>=42]
+[?2004l[?2004h> med = np.median([p.area for p in acc])
+[?2004l[?2004h> print('acc masks:', len(acc), 'median area', med)
+[?2004l[?2004h> for md in [4,5,6,7]:
+[?2004l[?2004h>     peaks = peak_local_max(s, min_distance=md, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     big = [p for p in acc if p.area>1.5*med]
+[?2004l[?2004h>     counts=[]
+[?2004l[?2004h>     for p in big:
+[?2004l[?2004h>         sub=(masks==p.label)
+[?2004l[?2004h>         k = int(sub[peaks[:,0],peaks[:,1]].sum())
+[?2004l[?2004h>         counts.append((p.area,k))
+[?2004l[?2004h>     extra = sum(max(0,k-1) for _,k in counts)
+[?2004l[?2004h>     print(f'md={md}: bigmasks={len(big)} extra_from_split={extra} details={sorted(counts,reverse=True)[:8]}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore14.py
+[?2004lacc masks: 56 median area 96.0
+md=4: bigmasks=0 extra_from_split=0 details=[]
+md=5: bigmasks=0 extra_from_split=0 details=[]
+md=6: bigmasks=0 extra_from_split=0 details=[]
+md=7: bigmasks=0 extra_from_split=0 details=[]
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore15.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for mds in [4,5,6]:
+[?2004l[?2004h>     out=[]; npass=0
+[?2004l[?2004h>     for a in ann:
+[?2004l[?2004h>         well = os.path.basename(a)[:-4]
+[?2004l[?2004h>         manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>         im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>         c = corr(im, flat1)
+[?2004l[?2004h>         t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>         s = gaussian(t, 2.0)
+[?2004l[?2004h>         otsu = threshold_otsu(s)
+[?2004l[?2004h>         masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>         props = regionprops(masks)
+[?2004l[?2004h>         acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>         accmask = np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h>         pk_split = peak_local_max(s, min_distance=mds, threshold_abs=0.3*otsu)
+[?2004l[?2004h>         n=0
+[?2004l[?2004h>         for p in acc:
+[?2004l[?2004h>             sub=(masks==p.label)
+[?2004l[?2004h>             k = int(sub[pk_split[:,0],pk_split[:,1]].sum()) if len(pk_split) else 0
+[?2004l[?2004h>             n += max(1,k)
+[?2004l[?2004h>         peaks = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+[?2004l[?2004h>         if len(peaks):
+[?2004l[?2004h>             inside = accmask[peaks[:,0],peaks[:,1]]
+[?2004l[?2004h>             orph = peaks[~inside]
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             orph = np.empty((0,2),dtype=int)
+[?2004l[?2004h>         nadd=0
+[?2004l[?2004h>         if len(orph):
+[?2004l[?2004h>             bw = s > 0.5*otsu
+[?2004l[?2004h>             cand = bw & ~accmask
+[?2004l[?2004h>             seeds = np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>             seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>             ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>             nadd = sum(1 for i2 in range(1,len(orph)+1) if (ws==i2).sum()>=90)
+[?2004l[?2004h>         tot=n+nadd
+[?2004l[?2004h>         ok=abs(tot-manual)<=max(3,0.1*manual); npass+=ok
+[?2004l[?2004h>         out.append(f'{well}:{tot}{"ok" if ok else "X"}(m{manual})')
+[?2004l[?2004h>     print(f'md_split={mds} pass={npass}/8 :: '+' '.join(out))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore15.py
+[?2004lmd_split=4 pass=7/8 :: A06:32ok(m34) A11:60ok(m66) A12:9ok(m10) C12:22X(m18) D10:33ok(m31) E05:110ok(m113) G07:116ok(m127) H12:39ok(m38)
+md_split=5 pass=6/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:22X(m18) D10:33ok(m31) E05:109ok(m113) G07:116ok(m127) H12:39ok(m38)
+cat > /task/work/explore16.py << 'EOF'
+import numpy as np, tifffile
+from cellpose import models
+from skimage.measure import regionprops
+from skimage.morphology import white_tophat, disk
+from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+from skimage.filters import gaussian, threshold_otsu
+from scipy.spatial import cKDTree
+
+IN='/task/input'
+dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+
+def corr(im, flat):
+    im = im.astype(np.float32)
+    g = (flat - dark); g = g / np.mean(g)
+    return (im - dark) / g
+
+model = models.Cellpose(model_type='nuclei', gpu=False)
+well='C12'
+pts = np.loadtxt(f'{IN}/annotations/{well}.tsv', skiprows=1, ndmin=2)
+im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+c = corr(im, flat1)
+t = white_tophat(c, footprint=disk(25))
+s = gaussian(t, 2.0)
+otsu = threshold_otsu(s)
+masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+props = regionprops(masks)
+acc = [p for p in props if p.area>=42]
+med = np.median([p.area for p in acc])
+print('acc:',len(acc),'median area:',med)
+pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+tree = cKDTree(np.stack([pts[:,1],pts[:,0]],axis=1))
+for p in sorted(acc,key=lambda q:-q.area):
+    sub=(masks==p.label)
+    k=int(sub[pk4[:,0],pk4[:,1]].sum())
+    print(f'mask area={p.area} peaks_md4={k}')
+orph = pk4[~np.isin(masks[pk4[:,0],pk4[:,1]], [p.label for p in acc])]
+bw = s > 0.5*otsu
+cand = bw & ~np.isin(masks, [p.label for p in acc])
+if len(orph):
+    seeds = np.zeros_like(bw,dtype=int)
+    seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+    ws = watershed(-s, seeds, mask=cand)
+    for i2,(py,px) in enumerate(orph, start=1):
+        ar=(ws==i2).sum()
+        if ar>=90:
+            d,_=tree.query([py,px])
+            print(f'orphan at ({py},{px}) blobarea={ar} near_manual={d<=8} (d={d:.1f})')
+EOF
+python3 /task/work/explore16.py
+md_split=6 pass=7/8 :: A06:32ok(m34) A11:59X(m66) A12:9ok(m10) C12:21ok(m18) D10:33ok(m31) E05:108ok(m113) G07:115ok(m127) H12:38ok(m38)
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore16.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> well='C12'
+[?2004l[?2004h> pts = np.loadtxt(f'{IN}/annotations/{well}.tsv', skiprows=1, ndmin=2)
+[?2004l[?2004h> im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h> c = corr(im, flat1)
+[?2004l[?2004h> t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h> s = gaussian(t, 2.0)
+[?2004l[?2004h> otsu = threshold_otsu(s)
+[?2004l[?2004h> masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h> props = regionprops(masks)
+[?2004l[?2004h> acc = [p for p in props if p.area>=42]
+[?2004l[?2004h> med = np.median([p.area for p in acc])
+[?2004l[?2004h> print('acc:',len(acc),'median area:',med)
+[?2004l[?2004h> pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+[?2004l[?2004h> tree = cKDTree(np.stack([pts[:,1],pts[:,0]],axis=1))
+[?2004l[?2004h> for p in sorted(acc,key=lambda q:-q.area):
+[?2004l[?2004h>     sub=(masks==p.label)
+[?2004l[?2004h>     k=int(sub[pk4[:,0],pk4[:,1]].sum())
+[?2004l[?2004h>     print(f'mask area={p.area} peaks_md4={k}')
+[?2004l[?2004h> orph = pk4[~np.isin(masks[pk4[:,0],pk4[:,1]], [p.label for p in acc])]
+[?2004l[?2004h> bw = s > 0.5*otsu
+[?2004l[?2004h> cand = bw & ~np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h> if len(orph):
+[?2004l[?2004h>     seeds = np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>     seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>     ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>     for i2,(py,px) in enumerate(orph, start=1):
+[?2004l[?2004h>         ar=(ws==i2).sum()
+[?2004l[?2004h>         if ar>=90:
+[?2004l[?2004h>             d,_=tree.query([py,px])
+[?2004l[?2004h>             print(f'orphan at ({py},{px}) blobarea={ar} near_manual={d<=8} (d={d:.1f})')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore16.py
+[?2004lacc: 18 median area: 196.5
+mask area=250.0 peaks_md4=1
+mask area=225.0 peaks_md4=1
+mask area=221.0 peaks_md4=1
+mask area=211.0 peaks_md4=1
+mask area=206.0 peaks_md4=0
+mask area=206.0 peaks_md4=1
+mask area=203.0 peaks_md4=1
+mask area=201.0 peaks_md4=1
+mask area=197.0 peaks_md4=1
+mask area=196.0 peaks_md4=1
+mask area=195.0 peaks_md4=1
+mask area=193.0 peaks_md4=2
+mask area=182.0 peaks_md4=1
+mask area=175.0 peaks_md4=1
+mask area=152.0 peaks_md4=0
+mask area=134.0 peaks_md4=1
+mask area=106.0 peaks_md4=0
+mask area=75.0 peaks_md4=0
+orphan at (69,285) blobarea=311 near_manual=True (d=1.7)
+orphan at (74,158) blobarea=231 near_manual=True (d=6.4)
+orphan at (48,248) blobarea=595 near_manual=True (d=3.1)
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore17.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy.spatial import distance
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for well in ['C12','A11','G07','E05']:
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     print(f'--- {well} ---')
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub=(masks==p.label)
+[?2004l[?2004h>         idx=[i for i in range(len(pk4)) if sub[pk4[i,0],pk4[i,1]]]
+[?2004l[?2004h>         if len(idx)>=2:
+[?2004l[?2004h>             pks=pk4[idx]
+[?2004l[?2004h>             hs=[s[y,x] for y,x in pks]
+[?2004l[?2004h>             dmax=max(distance.euclidean(a,b) for a in pks for b in pks)
+[?2004l[?2004h>             print(f'mask area={p.area} npeaks={len(idx)} heights={[round(h) for h in hs]} maxdist={dmax:.1f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore17.py
+[?2004l--- C12 ---
+mask area=193.0 npeaks=2 heights=[744, 689] maxdist=9.4
+--- A11 ---
+mask area=106.0 npeaks=2 heights=[1173, 1133] maxdist=7.8
+--- G07 ---
+mask area=325.0 npeaks=2 heights=[1564, 1512] maxdist=9.9
+--- E05 ---
+mask area=263.0 npeaks=2 heights=[1210, 1174] maxdist=7.8
+mask area=137.0 npeaks=2 heights=[1487, 1381] maxdist=8.1
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore18.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for well in ['C12','A11','G07','E05','H12','D10','A06','A12']:
+[?2004l[?2004h>     im = tifffile.imread(f'{IN}/images/{well}_ch1.tif')
+[?2004l[?2004h>     c = corr(im, flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     pk = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub=(masks==p.label)
+[?2004l[?2004h>         idx=[i for i in range(len(pk)) if sub[pk[i,0],pk[i,1]]]
+[?2004l[?2004h>         if len(idx)>=2:
+[?2004l[?2004h>             pks=pk[idx]; hs=np.array([s[y,x] for y,x in pks])
+[?2004l[?2004h>             # valley: sample lines between all pairs, take max over pairs of (min along line)
+[?2004l[?2004h>             best=None
+[?2004l[?2004h>             for i in range(len(pks)):
+[?2004l[?2004h>                 for j in range(i+1,len(pks)):
+[?2004l[?2004h>                     n=20
+[?2004l[?2004h>                     ys=np.linspace(pks[i,0],pks[j,0],n); xs=np.linspace(pks[i,1],pks[j,1],n)
+[?2004l[?2004h>                     yi=np.clip(ys.astype(int),0,319); xi=np.clip(xs.astype(int),0,319)
+[?2004l[?2004h>                     vmin=s[yi,xi].min()
+[?2004l[?2004h>                     ratio=vmin/min(hs[i],hs[j])
+[?2004l[?2004h>                     if best is None or ratio>best: best=ratio
+[?2004l[?2004h>             print(f'{well}: mask area={p.area} npeaks={len(idx)} valley_ratio={best:.2f}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore18.py
+[?2004lC12: mask area=193.0 npeaks=2 valley_ratio=0.88
+A11: mask area=106.0 npeaks=2 valley_ratio=0.87
+G07: mask area=325.0 npeaks=2 valley_ratio=0.82
+E05: mask area=263.0 npeaks=2 valley_ratio=0.87
+E05: mask area=137.0 npeaks=2 valley_ratio=0.95
+cat > /task/work/final_count.py << 'EOF'
+import numpy as np, tifffile, glob, os, pickle
+from cellpose import models
+from skimage.measure import regionprops, label
+from skimage.morphology import white_tophat, disk
+from skimage.feature import peak_local_max
+from skimage.segmentation import watershed
+from skimage.filters import gaussian, threshold_otsu
+
+IN='/task/input'
+OUT='/task/work/masks'
+os.makedirs(OUT, exist_ok=True)
+dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+
+def corr(im, flat):
+    im = im.astype(np.float32)
+    g = (flat - dark); g = g / np.mean(g)
+    return (im - dark) / g
+
+def segment(c, model):
+    t = white_tophat(c, footprint=disk(25))
+    s = gaussian(t, 2.0)
+    otsu = threshold_otsu(s)
+    masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+    props = regionprops(masks)
+    acc = [p for p in props if p.area>=42]
+    accmask = np.isin(masks, [p.label for p in acc])
+    pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+    final = np.zeros_like(masks)
+    nl = 0
+    for p in acc:
+        sub = (masks==p.label)
+        k = int(sub[pk4[:,0],pk4[:,1]].sum()) if len(pk4) else 0
+        if k>=2 and p.area<=150:
+            # split by watershed on -s within mask
+            pks = pk4[sub[pk4[:,0],pk4[:,1]]]
+            seeds = np.zeros_like(masks,dtype=int)
+            seeds[pks[:,0],pks[:,1]] = np.arange(1,len(pks)+1)
+            ws = watershed(-s, seeds, mask=sub)
+            for i2 in range(1,len(pks)+1):
+                piece = (ws==i2)&sub
+                if piece.sum()>=20:
+                    nl+=1; final[piece]=nl
+        else:
+            nl+=1; final[sub]=nl
+    # orphans
+    pk7 = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+    if len(pk7):
+        inside = (final>0)[pk7[:,0],pk7[:,1]]
+        orph = pk7[~inside]
+    else:
+        orph = np.empty((0,2),dtype=int)
+    if len(orph):
+        bw = s > 0.5*otsu
+        cand = bw & (final==0)
+        seeds = np.zeros_like(bw,dtype=int)
+        seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+        ws = watershed(-s, seeds, mask=cand)
+        for i2 in range(1,len(orph)+1):
+            piece = ws==i2
+            if piece.sum()>=90:
+                nl+=1; final[piece]=nl
+    return final, s
+
+def apply_edge_rule(lab):
+    # remove objects cut by bottom or right edge
+    H,W = lab.shape
+    bad = set(np.unique(lab[H-1,:])) | set(np.unique(lab[:,W-1]))
+    bad.discard(0)
+    out = lab.copy()
+    for b in bad: out[out==b]=0
+    return out
+
+if __name__=='__main__':
+    model = models.Cellpose(model_type='nuclei', gpu=False)
+    # validation first
+    ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+    for a in ann:
+        well = os.path.basename(a)[:-4]
+        manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+        c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+        final, s = segment(c, model)
+        n_raw = len(np.unique(final))-1
+        fe = apply_edge_rule(final)
+        n_edge = len(np.unique(fe))-1
+        ok = lambda n: 'ok' if abs(n-manual)<=max(3,0.1*manual) else 'X'
+        print(f'{well} m={manual}: pipeline={n_raw}{ok(n_raw)} edge_applied={n_edge}{ok(n_edge)}')
+EOF
+python3 /task/work/final_count.py
+H12: mask area=318.0 npeaks=2 valley_ratio=0.76
+H12: mask area=193.0 npeaks=2 valley_ratio=0.82
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/final_count.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, pickle
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops, label
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> OUT='/task/work/masks'
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> def segment(c, model):
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     accmask = np.isin(masks, [p.label for p in acc])
+[?2004l[?2004h>     pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     final = np.zeros_like(masks)
+[?2004l[?2004h>     nl = 0
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub = (masks==p.label)
+[?2004l[?2004h>         k = int(sub[pk4[:,0],pk4[:,1]].sum()) if len(pk4) else 0
+[?2004l[?2004h>         if k>=2 and p.area<=150:
+[?2004l[?2004h>             # split by watershed on -s within mask
+[?2004l[?2004h>             pks = pk4[sub[pk4[:,0],pk4[:,1]]]
+[?2004l[?2004h>             seeds = np.zeros_like(masks,dtype=int)
+[?2004l[?2004h>             seeds[pks[:,0],pks[:,1]] = np.arange(1,len(pks)+1)
+[?2004l[?2004h>             ws = watershed(-s, seeds, mask=sub)
+[?2004l[?2004h>             for i2 in range(1,len(pks)+1):
+[?2004l[?2004h>                 piece = (ws==i2)&sub
+[?2004l[?2004h>                 if piece.sum()>=20:
+[?2004l[?2004h>                     nl+=1; final[piece]=nl
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             nl+=1; final[sub]=nl
+[?2004l[?2004h>     # orphans
+[?2004l[?2004h>     pk7 = peak_local_max(s, min_distance=7, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     if len(pk7):
+[?2004l[?2004h>         inside = (final>0)[pk7[:,0],pk7[:,1]]
+[?2004l[?2004h>         orph = pk7[~inside]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         orph = np.empty((0,2),dtype=int)
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         bw = s > 0.5*otsu
+[?2004l[?2004h>         cand = bw & (final==0)
+[?2004l[?2004h>         seeds = np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]] = np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws = watershed(-s, seeds, mask=cand)
+[?2004l[?2004h>         for i2 in range(1,len(orph)+1):
+[?2004l[?2004h>             piece = ws==i2
+[?2004l[?2004h>             if piece.sum()>=90:
+[?2004l[?2004h>                 nl+=1; final[piece]=nl
+[?2004l[?2004h>     return final, s
+[?2004l[?2004h> 
+[?2004l[?2004h> def apply_edge_rule(lab):
+[?2004l[?2004h>     # remove objects cut by bottom or right edge
+[?2004l[?2004h>     H,W = lab.shape
+[?2004l[?2004h>     bad = set(np.unique(lab[H-1,:])) | set(np.unique(lab[:,W-1]))
+[?2004l[?2004h>     bad.discard(0)
+[?2004l[?2004h>     out = lab.copy()
+[?2004l[?2004h>     for b in bad: out[out==b]=0
+[?2004l[?2004h>     return out
+[?2004l[?2004h> 
+[?2004l[?2004h> if __name__=='__main__':
+[?2004l[?2004h>     model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h>     # validation first
+[?2004l[?2004h>     ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h>     for a in ann:
+[?2004l[?2004h>         well = os.path.basename(a)[:-4]
+[?2004l[?2004h>         manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>         c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+[?2004l[?2004h>         final, s = segment(c, model)
+[?2004l[?2004h>         n_raw = len(np.unique(final))-1
+[?2004l[?2004h>         fe = apply_edge_rule(final)
+[?2004l[?2004h>         n_edge = len(np.unique(fe))-1
+[?2004l[?2004h>         ok = lambda n: 'ok' if abs(n-manual)<=max(3,0.1*manual) else 'X'
+[?2004l[?2004h>         print(f'{well} m={manual}: pipeline={n_raw}{ok(n_raw)} edge_applied={n_edge}{ok(n_edge)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/final_count.py
+[?2004lA06 m=34: pipeline=32ok edge_applied=32ok
+A11 m=66: pipeline=60ok edge_applied=59X
+A12 m=10: pipeline=9ok edge_applied=9ok
+C12 m=18: pipeline=21ok edge_applied=19ok
+D10 m=31: pipeline=33ok edge_applied=33ok
+E05 m=113: pipeline=109ok edge_applied=108ok
+G07 m=127: pipeline=115ok edge_applied=111X
+H12 m=38: pipeline=37ok edge_applied=37ok
+[?2004hroot@c808a9ea0a3a:/task# sed -i 's/p.area<=150/p.area<=200/; s/min_distance=7, threshold_abs=0.3\*otsu/min_distance=6, threshold_abs=0.3*otsu/' /task/work/final_count.py && python3 /task/work/final_count.py
+[?2004lA06 m=34: pipeline=32ok edge_applied=32ok
+A11 m=66: pipeline=60ok edge_applied=59X
+A12 m=10: pipeline=9ok edge_applied=9ok
+C12 m=18: pipeline=22X edge_applied=20ok
+D10 m=31: pipeline=33ok edge_applied=33ok
+E05 m=113: pipeline=110ok edge_applied=109ok
+G07 m=127: pipeline=115ok edge_applied=111X
+H12 m=38: pipeline=38ok edge_applied=38ok
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/diag_g07.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, sys
+[?2004l[?2004h> sys.path.insert(0,'/task/work')
+[?2004l[?2004h> from final_count import corr, segment, apply_edge_rule, flat1
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy.spatial import cKDTree
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> for well in ['G07','A11']:
+[?2004l[?2004h>     pts = np.loadtxt(f'{IN}/annotations/{well}.tsv', skiprows=1, ndmin=2)
+[?2004l[?2004h>     c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+[?2004l[?2004h>     final, s = segment(c, model)
+[?2004l[?2004h>     fe = apply_edge_rule(final)
+[?2004l[?2004h>     # match points to objects
+[?2004l[?2004h>     props = regionprops(fe)
+[?2004l[?2004h>     cents = np.array([p.centroid for p in props])
+[?2004l[?2004h>     lab = np.array([p.label for p in props])
+[?2004l[?2004h>     tree = cKDTree(cents)
+[?2004l[?2004h>     used=set(); misses=[]; merges=0
+[?2004l[?2004h>     for (x,y) in pts:
+[?2004l[?2004h>         r,cc=int(round(y)),int(round(x))
+[?2004l[?2004h>         l = fe[r,cc] if (0<=r<320 and 0<=cc<320) else 0
+[?2004l[?2004h>         if l==0:
+[?2004l[?2004h>             d,i = tree.query([y,x])
+[?2004l[?2004h>             if d<=8: l=lab[i]
+[?2004l[?2004h>         if l==0: misses.append((x,y))
+[?2004l[?2004h>         elif l in used: merges+=1
+[?2004l[?2004h>         else: used.add(l)
+[?2004l[?2004h>     print(f'{well}: manual={len(pts)} objects={len(props)} matched={len(used)} merges={merges} misses={len(misses)} at {misses[:12]}')
+[?2004l[?2004h>     otsu=threshold_otsu(s)
+[?2004l[?2004h>     pk7 = peak_local_max(s, min_distance=6, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     # where are misses? check local max s at miss point neighborhood
+[?2004l[?2004h>     for (x,y) in misses[:12]:
+[?2004l[?2004h>         yy,xx=int(y),int(x)
+[?2004l[?2004h>         nb = s[max(0,yy-6):yy+7, max(0,xx-6):xx+7]
+[?2004l[?2004h>         print(f'   miss ({x:.0f},{y:.0f}) smax_near={nb.max():.0f} otsu={otsu:.0f} edge={x<8 or y<8 or x>312 or y>312}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/diag_g07.py
+[?2004lG07: manual=127 objects=111 matched=109 merges=11 misses=7 at [(np.float64(287.0), np.float64(14.2)), (np.float64(295.2), np.float64(31.8)), (np.float64(303.3), np.float64(38.5)), (np.float64(304.2), np.float64(26.3)), (np.float64(306.9), np.float64(68.3)), (np.float64(308.6), np.float64(77.8)), (np.float64(80.5), np.float64(124.2))]
+   miss (287,14) smax_near=1131 otsu=502 edge=False
+   miss (295,32) smax_near=1790 otsu=502 edge=False
+   miss (303,38) smax_near=2513 otsu=502 edge=False
+   miss (304,26) smax_near=1014 otsu=502 edge=False
+   miss (307,68) smax_near=974 otsu=502 edge=False
+   miss (309,78) smax_near=1100 otsu=502 edge=False
+   miss (80,124) smax_near=1271 otsu=502 edge=False
+A11: manual=66 objects=59 matched=59 merges=0 misses=7 at [(np.float64(21.9), np.float64(37.3)), (np.float64(42.6), np.float64(43.3)), (np.float64(1.0), np.float64(66.1)), (np.float64(48.3), np.float64(68.4)), (np.float64(42.2), np.float64(199.2)), (np.float64(41.3), np.float64(210.3)), (np.float64(97.5), np.float64(233.5))]
+   miss (22,37) smax_near=649 otsu=489 edge=False
+   miss (43,43) smax_near=1376 otsu=489 edge=False
+   miss (1,66) smax_near=1268 otsu=489 edge=True
+   miss (48,68) smax_near=1268 otsu=489 edge=False
+   miss (42,199) smax_near=1785 otsu=489 edge=False
+   miss (41,210) smax_near=1211 otsu=489 edge=False
+   miss (98,234) smax_near=1492 otsu=489 edge=False
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/diag2.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy import ndimage as ndi
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for dt_thr in [3.0, 3.5, 4.0]:
+[?2004l[?2004h>   out=[]; npass=0
+[?2004l[?2004h>   for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     final = np.zeros_like(masks); nl=0
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         sub=(masks==p.label)
+[?2004l[?2004h>         dt = ndi.distance_transform_edt(sub)
+[?2004l[?2004h>         pk = peak_local_max(dt, min_distance=4, threshold_abs=dt_thr)
+[?2004l[?2004h>         k=len(pk)
+[?2004l[?2004h>         if k>=2:
+[?2004l[?2004h>             seeds=np.zeros_like(masks,dtype=int)
+[?2004l[?2004h>             seeds[pk[:,0],pk[:,1]]=np.arange(1,k+1)
+[?2004l[?2004h>             ws=watershed(-dt,seeds,mask=sub)
+[?2004l[?2004h>             for i2 in range(1,k+1):
+[?2004l[?2004h>                 piece=(ws==i2)&sub
+[?2004l[?2004h>                 if piece.sum()>=30: nl+=1; final[piece]=nl
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             nl+=1; final[sub]=nl
+[?2004l[?2004h>     pk7 = peak_local_max(s, min_distance=6, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     if len(pk7):
+[?2004l[?2004h>         orph = pk7[~(final>0)[pk7[:,0],pk7[:,1]]]
+[?2004l[?2004h>     else: orph=np.empty((0,2),dtype=int)
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         bw = s > 0.5*otsu
+[?2004l[?2004h>         cand = bw & (final==0)
+[?2004l[?2004h>         seeds=np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]]=np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws=watershed(-s,seeds,mask=cand)
+[?2004l[?2004h>         for i2 in range(1,len(orph)+1):
+[?2004l[?2004h>             piece=ws==i2
+[?2004l[?2004h>             if piece.sum()>=90: nl+=1; final[piece]=nl
+[?2004l[?2004h>     # edge rule
+[?2004l[?2004h>     H,W=final.shape
+[?2004l[?2004h>     bad=set(np.unique(final[H-1,:]))|set(np.unique(final[:,W-1])); bad.discard(0)
+[?2004l[?2004h>     n=len([u for u in np.unique(final) if u and u not in bad])
+[?2004l[?2004h>     ok=abs(n-manual)<=max(3,0.1*manual); npass+=ok
+[?2004l[?2004h>     out.append(f'{well}:{n}{"ok" if ok else "X"}(m{manual})')
+[?2004l[?2004h>   print(f'dt_thr={dt_thr} pass={npass}/8 :: '+' '.join(out))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/diag2.py
+[?2004ldt_thr=3.0 pass=6/8 :: A06:32ok(m34) A11:58X(m66) A12:9ok(m10) C12:19ok(m18) D10:33ok(m31) E05:108ok(m113) G07:111X(m127) H12:37ok(m38)
+dt_thr=3.5 pass=6/8 :: A06:32ok(m34) A11:58X(m66) A12:9ok(m10) C12:19ok(m18) D10:33ok(m31) E05:108ok(m113) G07:111X(m127) H12:37ok(m38)
+dt_thr=4.0 pass=6/8 :: A06:32ok(m34) A11:58X(m66) A12:9ok(m10) C12:19ok(m18) D10:33ok(m31) E05:108ok(m113) G07:111X(m127) H12:37ok(m38)
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore19.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk, binary_dilation
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     s = gaussian(t, 2.0)
+[?2004l[?2004h>     otsu = threshold_otsu(s)
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     acc = [p for p in props if p.area>=42]
+[?2004l[?2004h>     final = np.zeros_like(masks); nl=0
+[?2004l[?2004h>     for p in acc:
+[?2004l[?2004h>         nl+=1; final[masks==p.label]=nl
+[?2004l[?2004h>     # split pass on small multi-peak masks
+[?2004l[?2004h>     pk4 = peak_local_max(s, min_distance=4, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     # second pass: erase and re-run
+[?2004l[?2004h>     t2 = t.copy()
+[?2004l[?2004h>     t2[binary_dilation(final>0, footprint=disk(3))] = 0
+[?2004l[?2004h>     masks2, flows2, styles2, diams2 = model.eval(t2, channels=[0,0], diameter=None, cellprob_threshold=-1.0)
+[?2004l[?2004h>     props2 = regionprops(masks2, intensity_image=s)
+[?2004l[?2004h>     added=0
+[?2004l[?2004h>     for p in props2:
+[?2004l[?2004h>         if p.area>=60 and p.mean_intensity>=0.5*otsu:
+[?2004l[?2004h>             ov = np.isin(masks, [q.label for q in acc])[masks2==p.label].mean()
+[?2004l[?2004h>             if ov<0.3:
+[?2004l[?2004h>                 nl+=1; final[masks2==p.label]=nl; added+=1
+[?2004l[?2004h>     # orphans
+[?2004l[?2004h>     pk7 = peak_local_max(s, min_distance=6, threshold_abs=0.3*otsu)
+[?2004l[?2004h>     orph = pk7[~(final>0)[pk7[:,0],pk7[:,1]]] if len(pk7) else np.empty((0,2),dtype=int)
+[?2004l[?2004h>     if len(orph):
+[?2004l[?2004h>         bw = s > 0.5*otsu
+[?2004l[?2004h>         cand = bw & (final==0)
+[?2004l[?2004h>         seeds=np.zeros_like(bw,dtype=int)
+[?2004l[?2004h>         seeds[orph[:,0],orph[:,1]]=np.arange(1,len(orph)+1)
+[?2004l[?2004h>         ws=watershed(-s,seeds,mask=cand)
+[?2004l[?2004h>         for i2 in range(1,len(orph)+1):
+[?2004l[?2004h>             piece=ws==i2
+[?2004l[?2004h>             if piece.sum()>=90: nl+=1; final[piece]=nl
+[?2004l[?2004h>     H,W=final.shape
+[?2004l[?2004h>     bad=set(np.unique(final[H-1,:]))|set(np.unique(final[:,W-1])); bad.discard(0)
+[?2004l[?2004h>     n=len([u for u in np.unique(final) if u and u not in bad])
+[?2004l[?2004h>     ok=abs(n-manual)<=max(3,0.1*manual)
+[?2004l[?2004h>     print(f'{well} m={manual}: n={n}{"ok" if ok else "X"} (pass1={len(acc)} pass2add={added})')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore19.py
+[?2004lA06 m=34: n=32ok (pass1=26 pass2add=0)
+A11 m=66: n=58X (pass1=56 pass2add=0)
+A12 m=10: n=9ok (pass1=2 pass2add=0)
+/opt/tools/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:3596: RuntimeWarning: Mean of empty slice.
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/opt/tools/lib/python3.12/site-packages/numpy/_core/_methods.py:138: RuntimeWarning: invalid value encountered in scalar divide
+  ret = ret.dtype.type(ret / rcount)
+C12 m=18: n=19ok (pass1=18 pass2add=0)
+cat > /task/work/explore20.py << 'EOF'
+import numpy as np, tifffile, glob, os
+from cellpose import models
+from skimage.measure import regionprops
+from skimage.morphology import white_tophat, disk
+
+IN='/task/input'
+dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+
+def corr(im, flat):
+    im = im.astype(np.float32)
+    g = (flat - dark); g = g / np.mean(g)
+    return (im - dark) / g
+
+model = models.Cellpose(model_type='cyto3', gpu=False)
+ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+for a in ann:
+    well = os.path.basename(a)[:-4]
+    manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+    c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+    t = white_tophat(c, footprint=disk(25))
+    masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+    props = regionprops(masks)
+    areas = np.array([p.area for p in props]) if props else np.array([])
+    H,W = masks.shape
+    edge = set(np.unique(masks[H-1,:]))|set(np.unique(masks[:,W-1])); edge.discard(0)
+    n0 = len(props)
+    n42 = int((areas>=42).sum())
+    # edge rule on raw
+    ne = len([p for p in props if p.label not in edge])
+    ne42 = len([p for p in props if p.label not in edge and p.area>=42])
+    def tag(n): return 'ok' if abs(n-manual)<=max(3,0.1*manual) else 'X'
+    print(f'{well} m={manual}: raw={n0}{tag(n0)} a42={n42}{tag(n42)} rawE={ne}{tag(ne)} a42E={ne42}{tag(ne42)}')
+EOF
+python3 /task/work/explore20.py
+D10 m=31: n=33ok (pass1=24 pass2add=0)
+E05 m=113: n=108ok (pass1=105 pass2add=0)
+G07 m=127: n=112X (pass1=108 pass2add=1)
+H12 m=38: n=37ok (pass1=34 pass2add=1)
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/explore20.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> model = models.Cellpose(model_type='cyto3', gpu=False)
+[?2004l[?2004h> ann = sorted(glob.glob(f'{IN}/annotations/*.tsv'))
+[?2004l[?2004h> for a in ann:
+[?2004l[?2004h>     well = os.path.basename(a)[:-4]
+[?2004l[?2004h>     manual = np.loadtxt(a, skiprows=1, ndmin=2).shape[0]
+[?2004l[?2004h>     c = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flat1)
+[?2004l[?2004h>     t = white_tophat(c, footprint=disk(25))
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     areas = np.array([p.area for p in props]) if props else np.array([])
+[?2004l[?2004h>     H,W = masks.shape
+[?2004l[?2004h>     edge = set(np.unique(masks[H-1,:]))|set(np.unique(masks[:,W-1])); edge.discard(0)
+[?2004l[?2004h>     n0 = len(props)
+[?2004l[?2004h>     n42 = int((areas>=42).sum())
+[?2004l[?2004h>     # edge rule on raw
+[?2004l[?2004h>     ne = len([p for p in props if p.label not in edge])
+[?2004l[?2004h>     ne42 = len([p for p in props if p.label not in edge and p.area>=42])
+[?2004l[?2004h>     def tag(n): return 'ok' if abs(n-manual)<=max(3,0.1*manual) else 'X'
+[?2004l[?2004h>     print(f'{well} m={manual}: raw={n0}{tag(n0)} a42={n42}{tag(n42)} rawE={ne}{tag(ne)} a42E={ne42}{tag(ne42)}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/explore20.py
+[?2004lA06 m=34: raw=34ok a42=34ok rawE=34ok a42E=34ok
+A11 m=66: raw=62ok a42=62ok rawE=61ok a42E=61ok
+A12 m=10: raw=10ok a42=10ok rawE=10ok a42E=10ok
+C12 m=18: raw=20ok a42=20ok rawE=18ok a42E=18ok
+D10 m=31: raw=30ok a42=30ok rawE=30ok a42E=30ok
+E05 m=113: raw=112ok a42=112ok rawE=111ok a42E=111ok
+G07 m=127: raw=125ok a42=125ok rawE=122ok a42E=122ok
+H12 m=38: raw=39ok a42=39ok rawE=38ok a42E=38ok
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/run_all.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, pickle, time
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk
+[?2004l[?2004h> from skimage.filters import gaussian, threshold_otsu
+[?2004l[?2004h> from scipy.ndimage import sobel
+[?2004l[?2004h> 
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flats = {1: tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32),
+[?2004l[?2004h>          2: tifffile.imread(f'{IN}/flatfield/flat_ch2.tif').astype(np.float32)}
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> wells = sorted(set(os.path.basename(f)[:3] for f in glob.glob(f'{IN}/images/*_ch1.tif')))
+[?2004l[?2004h> model = models.Cellpose(model_type='cyto3', gpu=False)
+[?2004l[?2004h> res = {}
+[?2004l[?2004h> t0=time.time()
+[?2004l[?2004h> for wi, well in enumerate(wells):
+[?2004l[?2004h>     c1 = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flats[1])
+[?2004l[?2004h>     c2 = corr(tifffile.imread(f'{IN}/images/{well}_ch2.tif'), flats[2])
+[?2004l[?2004h>     t = white_tophat(c1, footprint=disk(25))
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     H,W = masks.shape
+[?2004l[?2004h>     edge = set(np.unique(masks[H-1,:])) | set(np.unique(masks[:,W-1])); edge.discard(0)
+[?2004l[?2004h>     keep = [p.label for p in props if p.area>=42 and p.label not in edge]
+[?2004l[?2004h>     fmask = np.isin(masks, keep)
+[?2004l[?2004h>     n = len(keep)
+[?2004l[?2004h>     # marker per cell: mean ch2 within cell mask minus field background (median of ch2 outside cells, dilated)
+[?2004l[?2004h>     from skimage.morphology import binary_dilation
+[?2004l[?2004h>     cellmask = binary_dilation(fmask, footprint=disk(2))
+[?2004l[?2004h>     bg = c2[~cellmask]
+[?2004l[?2004h>     bgmed = float(np.median(bg)) if bg.size else 0.0
+[?2004l[?2004h>     if n:
+[?2004l[?2004h>         labs = np.array(keep)
+[?2004l[?2004h>         # mean intensity per kept label
+[?2004l[?2004h>         means = np.zeros(n)
+[?2004l[?2004h>         mm = masks
+[?2004l[?2004h>         for i,l in enumerate(labs):
+[?2004l[?2004h>             means[i] = c2[mm==l].mean()
+[?2004l[?2004h>         per_cell = means - bgmed
+[?2004l[?2004h>         r2 = float(np.mean(per_cell))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         r2 = None
+[?2004l[?2004h>     # focus metric on raw ch1
+[?2004l[?2004h>     im1 = tifffile.imread(f'{IN}/images/{well}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>     g = np.hypot(sobel(im1,0), sobel(im1,1))
+[?2004l[?2004h>     fm = float(g.var())
+[?2004l[?2004h>     res[well] = dict(n_cells=n, marker_per_cell=r2, bg=bgmed, focus=fm, masks=masks, keep=keep)
+[?2004l[?2004h>     if (wi+1)%10==0:
+[?2004l[?2004h>         print(f'{wi+1}/{len(wells)} done, {time.time()-t0:.0f}s', flush=True)
+[?2004l[?2004h>         pickle.dump(res, open('/task/work/results.pkl','wb'))
+[?2004l[?2004h> pickle.dump(res, open('/task/work/results.pkl','wb'))
+[?2004l[?2004h> print('DONE', time.time()-t0)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# nohup python3 /task/work/run_all.py > /task/work/run_all.log 2>&1 &
+[?2004l[1] 1677
+[?2004hroot@c808a9ea0a3a:/task# echo started
+[?2004lstarted
+[?2004hroot@c808a9ea0a3a:/task# python3 -c "
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> lay = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for _,r in lay.iterrows():
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{r.well}_ch2.tif')
+[?2004l[?2004h>     rows.append((r.well, r.well[0], int(r.well[1:]), r.compound, float(np.median(im)), float(im.mean())))
+[?2004l[?2004h> df = pd.DataFrame(rows, columns=['well','row','col','compound','med','mean'])
+[?2004l[?2004h> piv = df.pivot_table(index='row', columns='col', values='med')
+[?2004l[?2004h> print(piv.round(0))
+[?2004l[?2004h> print()
+[?2004l[?2004h> veh = df[df.compound=='DMSO']
+[?2004l[?2004h> print('vehicle median ch2 by column:')
+[?2004l[?2004h> print(veh.groupby('col')['med'].mean().round(1))
+[?2004l[?2004h> "
+[?2004lcol     1      2      3      4      5      6      7      8      9      10     11     12
+row                                                                                    
+A    309.0  262.0  232.0  254.0  257.0  258.0  209.0  207.0  184.0  174.0  214.0  173.0
+B    338.0  340.0  267.0  280.0  236.0  268.0  235.0  220.0  226.0  216.0  189.0  175.0
+C    278.0  319.0  253.0  283.0  254.0  243.0  222.0  223.0  216.0  201.0  200.0  188.0
+D    274.0  254.0  310.0  276.0  258.0  227.0  206.0  220.0  201.0  182.0  186.0  184.0
+E    309.0  248.0  233.0  264.0  268.0  267.0  212.0  209.0  219.0  216.0  189.0  202.0
+F    267.0  330.0  298.0  243.0  246.0  237.0  262.0  198.0  297.0  187.0  435.0  920.0
+G    275.0  264.0  294.0  226.0  257.0  221.0  208.0  212.0  193.0  193.0  190.0  180.0
+H    287.0  235.0  255.0  255.0  257.0  223.0  217.0  222.0  200.0  176.0  196.0  182.0
+
+vehicle median ch2 by column:
+col
+1     298.0
+2     324.5
+3     263.0
+4     278.0
+5     262.5
+6     240.0
+7     208.5
+8     220.0
+9     209.5
+10    194.0
+11    202.0
+12    179.5
+Name: med, dtype: float64
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/run_all.log
+[?2004lnohup: ignoring input
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/run_all.log; ls -la /task/work/results.pkl 2>/dev/null
+[?2004lnohup: ignoring input
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/run_all.log
+[?2004lnohup: ignoring input
+[?2004hroot@c808a9ea0a3a:/task# ps aux | grep run_all | grep -v grep; top -bn1 | head -15
+[?2004lroot        1677  129  5.2 3076208 871244 pts/0  Rl   13:23   5:00 python3 /task/work/run_all.py
+top - 13:27:33 up  1:33,  0 users,  load average: 9.33, 8.29, 6.60
+Tasks:   9 total,   2 running,   7 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 97.6 us,  0.0 sy,  0.0 ni,  0.0 id,  0.0 wa,  0.0 hi,  0.0 si,  2.4 st 
+MiB Mem :  16086.0 total,   9171.5 free,   4692.8 used,   2563.8 buff/cache     
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.  11393.2 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+   1677 root      20   0 3076208 871244 209668 R 163.6   5.3   5:01.17 python3
+      1 root      20   0    2680   1620   1504 S   0.0   0.0   0:00.04 sh
+      6 root      20   0    3020   1868   1760 S   0.0   0.0   0:00.00 sleep
+     28 root      20   0   17068   6156   3620 S   0.0   0.0   0:00.28 tmux: s+
+     29 root      20   0    4888   4208   3408 S   0.0   0.0   0:00.15 bash
+     31 root      20   0    2680   1840   1732 S   0.0   0.0   0:00.00 sh
+     32 root      20   0    3288   1820   1704 S   0.0   0.0   0:00.00 cat
+   1807 root      20   0    7676   5084   3084 R   0.0   0.0   0:00.00 top
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/build_outputs.py << 'EOF'
+[?2004l[?2004h> import numpy as np, pandas as pd, pickle, os
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> OUT='/task/output'
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> lay = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> res = pickle.load(open('/task/work/results.pkl','rb'))
+[?2004l[?2004h> 
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for _,r in lay.iterrows():
+[?2004l[?2004h>     w = r.well
+[?2004l[?2004h>     d = res[w]
+[?2004l[?2004h>     rows.append(dict(well=w, n_cells=d['n_cells'],
+[?2004l[?2004h>                      marker_per_cell=(d['marker_per_cell'] if d['marker_per_cell'] is not None else np.nan),
+[?2004l[?2004h>                      focus=d['focus'], bg=d['bg']))
+[?2004l[?2004h> df = lay.merge(pd.DataFrame(rows), on='well')
+[?2004l[?2004h> 
+[?2004l[?2004h> # QC: out-of-focus = very low gradient variance (clear gap in distribution)
+[?2004l[?2004h> lv = np.log10(df.focus)
+[?2004l[?2004h> srt = np.sort(lv)
+[?2004l[?2004h> gaps = np.diff(srt)
+[?2004l[?2004h> i = np.argmax(gaps)
+[?2004l[?2004h> thr = 10**((srt[i]+srt[i+1])/2)
+[?2004l[?2004h> df['qc_pass'] = (df.focus > thr).astype(int)
+[?2004l[?2004h> print('QC threshold %.0f; failed wells:' % thr, df[df.qc_pass==0].well.tolist())
+[?2004l[?2004h> 
+[?2004l[?2004h> # write well_measurements.tsv
+[?2004l[?2004h> wm = df[['well','n_cells','marker_per_cell','qc_pass']].copy()
+[?2004l[?2004h> wm['marker_per_cell'] = wm['marker_per_cell'].map(lambda v: 'NA' if (v is None or (isinstance(v,float) and np.isnan(v))) else f'{v:.4f}')
+[?2004l[?2004h> wm.to_csv(f'{OUT}/well_measurements.tsv', sep='\t', index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> # validation.tsv
+[?2004l[?2004h> ann_wells = ['A06','A11','A12','C12','D10','E05','G07','H12']
+[?2004l[?2004h> vrows=[]
+[?2004l[?2004h> for w in ann_wells:
+[?2004l[?2004h>     pts = np.loadtxt(f'/task/input/annotations/{w}.tsv', skiprows=1, ndmin=2)
+[?2004l[?2004h>     vrows.append(dict(field=w, manual_count=pts.shape[0], pipeline_count=int(df.loc[df.well==w,'n_cells'].iloc[0])))
+[?2004l[?2004h> pd.DataFrame(vrows).to_csv(f'{OUT}/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print(pd.DataFrame(vrows))
+[?2004l[?2004h> 
+[?2004l[?2004h> # response scale: vehicle model per column for marker; global mean for count (check column trend first)
+[?2004l[?2004h> veh = df[(df.role=='vehicle') & (df.qc_pass==1)].copy()
+[?2004l[?2004h> print('vehicle marker_per_cell by column:')
+[?2004l[?2004h> veh['col'] = veh.well.str[1:].astype(int)
+[?2004l[?2004h> print(veh.groupby('col')['marker_per_cell'].mean())
+[?2004l[?2004h> # linear fit marker vs column
+[?2004l[?2004h> A = np.polyfit(veh.col, veh.marker_per_cell, 1)
+[?2004l[?2004h> veh_pred_m = lambda col: np.polyval(A, col)
+[?2004l[?2004h> veh_mean_r1 = veh.n_cells.mean()
+[?2004l[?2004h> # check count vs column trend
+[?2004l[?2004h> Ac = np.polyfit(veh.col, veh.n_cells, 1)
+[?2004l[?2004h> print('vehicle n_cells mean %.1f, slope per col %.2f' % (veh_mean_r1, Ac[0]))
+[?2004l[?2004h> 
+[?2004l[?2004h> df['col'] = df.well.str[1:].astype(int)
+[?2004l[?2004h> df['resp_marker'] = df.marker_per_cell / veh_pred_m(df.col)
+[?2004l[?2004h> df['resp_count'] = df.n_cells / veh_mean_r1
+[?2004l[?2004h> 
+[?2004l[?2004h> def logistic(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0-bottom)/(1.0+(c/ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit_compound(sub, ycol):
+[?2004l[?2004h>     sub = sub[(sub.qc_pass==1) & np.isfinite(sub[ycol])]
+[?2004l[?2004h>     c = sub.dose_uM.values.astype(float)
+[?2004l[?2004h>     y = sub[ycol].values.astype(float)
+[?2004l[?2004h>     if len(c) < 5:
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     try:
+[?2004l[?2004h>         popt,_ = curve_fit(logistic, c, y, p0=[0.0, np.median(c), 1.0],
+[?2004l[?2004h>                            bounds=([0.0, c.min()/100, 0.05],[0.999, c.max()*100, 10]),
+[?2004l[?2004h>                            maxfev=20000)
+[?2004l[?2004h>     except Exception as e:
+[?2004l[?2004h>         print('fit fail', e)
+[?2004l[?2004h>         return None
+[?2004l[?2004h>     bottom, ec50, h = popt
+[?2004l[?2004h>     # potency: curve == 0.5 at or below max tested conc
+[?2004l[?2004h>     cmax = c.max()
+[?2004l[?2004h>     y_at_max = logistic(cmax, *popt)
+[?2004l[?2004h>     if bottom >= 0.5 or y_at_max > 0.5:
+[?2004l[?2004h>         return ('inactive', popt, y_at_max)
+[?2004l[?2004h>     # solve
+[?2004l[?2004h>     val = (1.0-bottom)/(0.5-bottom) - 1.0
+[?2004l[?2004h>     if val <= 0:
+[?2004l[?2004h>         return ('inactive', popt, y_at_max)
+[?2004l[?2004h>     c50 = ec50 * val**(1.0/h)
+[?2004l[?2004h>     if c50 > cmax:
+[?2004l[?2004h>         return ('inactive', popt, y_at_max)
+[?2004l[?2004h>     return (c50, popt, y_at_max)
+[?2004l[?2004h> 
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for comp in sorted(df[df.role=='compound'].compound.unique()):
+[?2004l[?2004h>     sub = df[(df.compound==comp)]
+[?2004l[?2004h>     rm = fit_compound(sub, 'resp_marker')
+[?2004l[?2004h>     rc = fit_compound(sub, 'resp_count')
+[?2004l[?2004h>     ic50 = rm[0] if rm else 'inactive'
+[?2004l[?2004h>     gi50 = rc[0] if rc else 'inactive'
+[?2004l[?2004h>     rows.append(dict(compound=comp,
+[?2004l[?2004h>                      ic50_marker_uM=(f'{ic50:.4g}' if isinstance(ic50,float) else ic50),
+[?2004l[?2004h>                      gi50_count_uM=(f'{gi50:.4g}' if isinstance(gi50,float) else gi50)))
+[?2004l[?2004h>     print(comp, 'marker:', rm, 'count:', rc[0] if rc else None)
+[?2004l[?2004h> dr = pd.DataFrame(rows)
+[?2004l[?2004h> dr.to_csv(f'{OUT}/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print(dr)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# echo written
+[?2004lwritten
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/run_all.log
+[?2004lnohup: ignoring input
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/run_all.log
+[?2004lnohup: ignoring input
+10/96 done, 313s
+[?2004hroot@c808a9ea0a3a:/task# kill %1 2>/dev/null; sleep 1
+[?2004l[1]+  Terminated              nohup python3 /task/work/run_all.py > /task/work/run_all.log 2>&1
+[?2004hroot@c808a9ea0a3a:/task# cat > /task/work/worker.py << 'EOF'
+[?2004l[?2004h> import numpy as np, tifffile, glob, os, pickle, time, sys
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.morphology import white_tophat, disk, binary_dilation
+[?2004l[?2004h> from scipy.ndimage import sobel
+[?2004l[?2004h> 
+[?2004l[?2004h> part = int(os.environ['PART']); nparts = int(os.environ['NPARTS'])
+[?2004l[?2004h> IN='/task/input'
+[?2004l[?2004h> dark = tifffile.imread(f'{IN}/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flats = {1: tifffile.imread(f'{IN}/flatfield/flat_ch1.tif').astype(np.float32),
+[?2004l[?2004h>          2: tifffile.imread(f'{IN}/flatfield/flat_ch2.tif').astype(np.float32)}
+[?2004l[?2004h> 
+[?2004l[?2004h> def corr(im, flat):
+[?2004l[?2004h>     im = im.astype(np.float32)
+[?2004l[?2004h>     g = (flat - dark); g = g / np.mean(g)
+[?2004l[?2004h>     return (im - dark) / g
+[?2004l[?2004h> 
+[?2004l[?2004h> wells = sorted(set(os.path.basename(f)[:3] for f in glob.glob(f'{IN}/images/*_ch1.tif')))
+[?2004l[?2004h> wells = [w for i,w in enumerate(wells) if i % nparts == part]
+[?2004l[?2004h> model = models.Cellpose(model_type='cyto3', gpu=False)
+[?2004l[?2004h> res = {}
+[?2004l[?2004h> for well in wells:
+[?2004l[?2004h>     c1 = corr(tifffile.imread(f'{IN}/images/{well}_ch1.tif'), flats[1])
+[?2004l[?2004h>     c2 = corr(tifffile.imread(f'{IN}/images/{well}_ch2.tif'), flats[2])
+[?2004l[?2004h>     t = white_tophat(c1, footprint=disk(25))
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(t, channels=[0,0], diameter=None)
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     H,W = masks.shape
+[?2004l[?2004h>     edge = set(np.unique(masks[H-1,:])) | set(np.unique(masks[:,W-1])); edge.discard(0)
+[?2004l[?2004h>     keep = [p.label for p in props if p.area>=42 and p.label not in edge]
+[?2004l[?2004h>     fmask = np.isin(masks, keep)
+[?2004l[?2004h>     n = len(keep)
+[?2004l[?2004h>     cellmask = binary_dilation(fmask, footprint=disk(2))
+[?2004l[?2004h>     bg = c2[~cellmask]
+[?2004l[?2004h>     bgmed = float(np.median(bg)) if bg.size else 0.0
+[?2004l[?2004h>     if n:
+[?2004l[?2004h>         means = np.array([c2[masks==l].mean() for l in keep])
+[?2004l[?2004h>         per_cell = means - bgmed
+[?2004l[?2004h>         r2 = float(np.mean(per_cell))
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         r2 = None
+[?2004l[?2004h>     im1 = tifffile.imread(f'{IN}/images/{well}_ch1.tif').astype(np.float32)
+[?2004l[?2004h>     g = np.hypot(sobel(im1,0), sobel(im1,1))
+[?2004l[?2004h>     res[well] = dict(n_cells=n, marker_per_cell=r2, bg=bgmed, focus=float(g.var()))
+[?2004l[?2004h>     print(well, n, r2, flush=True)
+[?2004l[?2004h> pickle.dump(res, open(f'/task/work/res_part{part}.pkl','wb'))
+[?2004l[?2004h> print('PART', part, 'DONE')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@c808a9ea0a3a:/task# for i in 0 1 2 3; do PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1 & done
+[?2004l[1] 1889
+[2] 1890
+[3] 1891
+[4] 1892
+[?2004hroot@c808a9ea0a3a:/task# echo launched
+[?2004llaunched
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l 1 /task/work/worker0.log
+ 1 /task/work/worker1.log
+ 1 /task/work/worker2.log
+ 1 /task/work/worker3.log
+ 4 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l 1 /task/work/worker0.log
+ 1 /task/work/worker1.log
+ 1 /task/work/worker2.log
+ 1 /task/work/worker3.log
+ 4 total
+[?2004hroot@c808a9ea0a3a:/task# cat /task/work/worker*.log; ps aux | grep worker | grep -v grep | awk '{print $2, $3, $4, $10}'
+[?2004lnohup: ignoring input
+A01 61 267.9503173828125
+nohup: ignoring input
+A02 57 244.5709228515625
+nohup: ignoring input
+A03 59 217.0741729736328
+nohup: ignoring input
+A04 45 258.359130859375
+1889 54.6 5.8 1:43
+1890 54.0 5.1 1:42
+1891 55.6 6.3 1:45
+1892 55.4 5.1 1:44
+[?2004hroot@c808a9ea0a3a:/task# nproc
+[?2004l4
+[?2004hroot@c808a9ea0a3a:/task# kill 1889 1890 1891 1892 2>/dev/null; sleep 2
+[?2004l[1]   Terminated              PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[2]   Terminated              PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[3]-  Terminated              PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[4]+  Terminated              PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[?2004hroot@c808a9ea0a3a:/task# sed -i 's/import numpy as np/import os\nimport numpy as np/; s/from cellpose import models/import torch\ntorch.set_num_threads(1)\nfrom cellpose import models/' /task/work/worker.py
+[?2004l[?2004hroot@c808a9ea0a3a:/task# for i in 0 1 2 3; do OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1 & done; echo relaunched
+[?2004l[1] 2053
+[2] 2054
+[3] 2055
+[4] 2056
+relaunched
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log; ps aux | grep worker | grep -v grep | awk '{print $2,$3}'
+[?2004l  3 /task/work/worker0.log
+  2 /task/work/worker1.log
+  2 /task/work/worker2.log
+  2 /task/work/worker3.log
+  9 total
+2053 69.2
+2054 67.5
+2055 68.9
+2056 69.4
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  4 /task/work/worker0.log
+  4 /task/work/worker1.log
+  4 /task/work/worker2.log
+  4 /task/work/worker3.log
+ 16 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  6 /task/work/worker0.log
+  6 /task/work/worker1.log
+  6 /task/work/worker2.log
+  6 /task/work/worker3.log
+ 24 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l 10 /task/work/worker0.log
+  8 /task/work/worker1.log
+  8 /task/work/worker2.log
+  9 /task/work/worker3.log
+ 35 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  11 /task/work/worker0.log
+   9 /task/work/worker1.log
+  10 /task/work/worker2.log
+  11 /task/work/worker3.log
+  41 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  12 /task/work/worker0.log
+  10 /task/work/worker1.log
+  11 /task/work/worker2.log
+  12 /task/work/worker3.log
+  45 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  13 /task/work/worker0.log
+  11 /task/work/worker1.log
+  12 /task/work/worker2.log
+  13 /task/work/worker3.log
+  49 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  14 /task/work/worker0.log
+  12 /task/work/worker1.log
+  12 /task/work/worker2.log
+  13 /task/work/worker3.log
+  51 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  16 /task/work/worker0.log
+  13 /task/work/worker1.log
+  14 /task/work/worker2.log
+  15 /task/work/worker3.log
+  58 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  18 /task/work/worker0.log
+  15 /task/work/worker1.log
+  16 /task/work/worker2.log
+  17 /task/work/worker3.log
+  66 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log
+[?2004l  20 /task/work/worker0.log
+  17 /task/work/worker1.log
+  17 /task/work/worker2.log
+  18 /task/work/worker3.log
+  72 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log; ls /task/work/res_part*.pkl 2>/dev/null
+[?2004l  21 /task/work/worker0.log
+  18 /task/work/worker1.log
+  18 /task/work/worker2.log
+  20 /task/work/worker3.log
+  77 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log; ls /task/work/res_part*.pkl 2>/dev/null
+[?2004l  23 /task/work/worker0.log
+  19 /task/work/worker1.log
+  20 /task/work/worker2.log
+  22 /task/work/worker3.log
+  84 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log; ls /task/work/res_part*.pkl 2>/dev/null
+[?2004l  24 /task/work/worker0.log
+  21 /task/work/worker1.log
+  21 /task/work/worker2.log
+  24 /task/work/worker3.log
+  90 total
+[?2004hroot@c808a9ea0a3a:/task# wc -l /task/work/worker*.log; ls /task/work/res_part*.pkl 2>/dev/null; grep -l DONE /task/work/worker*.log
+[?2004l  26 /task/work/worker0.log
+  23 /task/work/worker1.log
+  23 /task/work/worker2.log
+  26 /task/work/worker3.log
+  98 total
+[1]   Done                    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[4]+  Done                    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+/task/work/res_part0.pkl  /task/work/res_part3.pkl
+/task/work/worker0.log
+/task/work/worker3.log
+[?2004hroot@c808a9ea0a3a:/task# ls /task/work/res_part*.pkl; grep -l DONE /task/work/worker*.log
+[?2004l/task/work/res_part0.pkl  /task/work/res_part1.pkl  /task/work/res_part2.pkl  /task/work/res_part3.pkl
+[2]-  Done                    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+[3]+  Done                    OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 PART=$i NPARTS=4 nohup python3 /task/work/worker.py > /task/work/worker$i.log 2>&1
+/task/work/worker0.log
+/task/work/worker1.log
+/task/work/worker2.log
+/task/work/worker3.log
+[?2004hroot@c808a9ea0a3a:/task# python3 -c "
+[?2004l[?2004h> import pickle, glob
+[?2004l[?2004h> res={}
+[?2004l[?2004h> for f in sorted(glob.glob('/task/work/res_part*.pkl')):
+[?2004l[?2004h>     res.update(pickle.load(open(f,'rb')))
+[?2004l[?2004h> print(len(res))
+[?2004l[?2004h> pickle.dump(res, open('/task/work/results.pkl','wb'))
+[?2004l[?2004h> "
+[?2004l96
+[?2004hroot@c808a9ea0a3a:/task# python3 /task/work/build_outputs.py
+[?2004lQC threshold 102933; failed wells: ['C04', 'C05', 'E09', 'G06', 'G08']
+  field  manual_count  pipeline_count
+0   A06            34              34
+1   A11            66              61
+2   A12            10              10
+3   C12            18              18
+4   D10            31              30
+5   E05           113             111
+6   G07           127             122
+7   H12            38              38
+vehicle marker_per_cell by column:
+col
+1     247.172287
+2     224.488106
+3     211.465721
+4     199.415329
+5     175.117325
+6     169.935371
+7     152.944176
+8     134.075752
+9     128.612183
+10    111.873863
+11    108.547867
+12    104.534443
+Name: marker_per_cell, dtype: float64
+vehicle n_cells mean 94.9, slope per col -0.56
+CPD-4184 marker: (np.float64(4.922795444415497), array([0.10299471, 4.31524758, 1.75110267]), np.float64(0.1320913722190842)) count: 0.43365980386992353
+CPD-7827 marker: ('inactive', array([ 0.95389303,  0.03147492, 10.        ]), np.float64(0.9538930318794099)) count: 0.9856940558750045
+CPD-8550 marker: ('inactive', array([  0.99899353, 245.83353603,   8.39977651]), np.float64(0.999999999978648)) count: 0.08185559493950542
+CPD-8693 marker: ('inactive', array([9.15443599e-01, 1.92445911e+02, 1.15196730e-01]), np.float64(0.9622306110062777)) count: inactive
+CPD-8731 marker: ('inactive', array([0.6748311 , 0.33197827, 1.43749818]), np.float64(0.6753319127279224)) count: inactive
+CPD-8882 marker: (np.float64(3.462025436712634), array([1.02267523e-18, 3.46202544e+00, 8.58323198e-01]), np.float64(0.13547247213753763)) count: inactive
+CPD-9251 marker: (np.float64(0.057025197424574695), array([0.0527585 , 0.05486058, 2.88150996]), np.float64(0.05275851029185211)) count: 4.750523974815698
+CPD-9526 marker: (np.float64(2.6137904920784543), array([0.01475393, 2.5400676 , 1.04687765]), np.float64(0.08384578096902125)) count: inactive
+   compound ic50_marker_uM gi50_count_uM
+0  CPD-4184          4.923        0.4337
+1  CPD-7827       inactive        0.9857
+2  CPD-8550       inactive       0.08186
+3  CPD-8693       inactive      inactive
+4  CPD-8731       inactive      inactive
+5  CPD-8882          3.462      inactive
+6  CPD-9251        0.05703         4.751
+7  CPD-9526          2.614      inactive
+[?2004hroot@c808a9ea0a3a:/task# head -5 /task/output/well_measurements.tsv; wc -l /task/output/*.tsv; cat /task/output/validation.tsv; cat /task/output/dose_response.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	61	267.9503	1
+A02	57	244.5709	1
+A03	59	217.0742	1
+A04	45	258.3591	1
+   9 /task/output/dose_response.tsv
+   9 /task/output/validation.tsv
+  97 /task/output/well_measurements.tsv
+ 115 total
+field	manual_count	pipeline_count
+A06	34	34
+A11	66	61
+A12	10	10
+C12	18	18
+D10	31	30
+E05	113	111
+G07	127	122
+H12	38	38
+compound	ic50_marker_uM	gi50_count_uM
+CPD-4184	4.923	0.4337
+CPD-7827	inactive	0.9857
+CPD-8550	inactive	0.08186
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	3.462	inactive
+CPD-9251	0.05703	4.751
+CPD-9526	2.614	inactive
+[?2004hroot@c808a9ea0a3a:/task# python3 -c "
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> wm=pd.read_csv('/task/output/well_measurements.tsv',sep='\t')
+[?2004l[?2004h> v=pd.read_csv('/task/output/validation.tsv',sep='\t')
+[?2004l[?2004h> dr=pd.read_csv('/task/output/dose_response.tsv',sep='\t')
+[?2004l[?2004h> print(wm.shape, v.shape, dr.shape)
+[?2004l[?2004h> print('qc fails:', wm[wm.qc_pass==0].well.tolist())
+[?2004l[?2004h> for _,r in v.iterrows():
+[?2004l[?2004h>     n=wm[wm.well==r.field].n_cells.iloc[0]
+[?2004l[?2004h>     assert n==r.pipeline_count
+[?2004l[?2004h>     tol=max(3,0.1*r.manual_count)
+[?2004l[?2004h>     print(r.field, r.manual_count, r.pipeline_count, abs(r.pipeline_count-r.manual_count)<=tol)
+[?2004l[?2004h> print('NA wells:', wm[wm.marker_per_cell=='NA'].well.tolist())
+[?2004l[?2004h> "
+[?2004l(96, 4) (8, 3) (8, 3)
+qc fails: ['C04', 'C05', 'E09', 'G06', 'G08']
+A06 34 34 True
+A11 66 61 True
+A12 10 10 True
+C12 18 18 True
+D10 31 30 True
+E05 113 111 True
+G07 127 122 True
+H12 38 38 True
+NA wells: []
+[?2004hroot@c808a9ea0a3a:/task# 

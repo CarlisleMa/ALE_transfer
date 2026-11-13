@@ -1,0 +1,12 @@
+from openmm import app, unit, Vec3
+pdb=app.PDBFile('/opt/tools/lib/python3.12/site-packages/pdbfixer/tests/data/alanine-dipeptide.pdb')
+ff=app.ForceField('amber14-all.xml')
+mod=app.Modeller(pdb.topology,pdb.positions)
+box=unit.Quantity((Vec3(30,0,0),Vec3(0,32,0),Vec3(0,0,34)),unit.angstrom)
+mod.topology.setPeriodicBoxVectors(box)
+mod.addHydrogens(ff)
+sys=ff.createSystem(mod.topology,nonbondedMethod=app.PME,nonbondedCutoff=9.0*unit.angstrom)
+amp=app.AmberPrmtopFile.fromTopology(mod.topology,sys,boxVectors=box)
+amp.write('/task/output/test_openmm_amber.prmtop')
+app.AmberInpcrdFile(mod.positions).write('/task/output/test_openmm_amber.inpcrd')
+print('EXPORT_OK',mod.topology.getNumAtoms(),mod.topology.getNumResidues())

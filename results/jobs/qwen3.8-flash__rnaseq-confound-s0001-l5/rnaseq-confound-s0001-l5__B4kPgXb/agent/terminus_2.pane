@@ -1,0 +1,2186 @@
+[?2004hroot@03b0b295779b:/task# ls -la /task /task/input /task/input/previous_analysis /task/input/previous_analysis/scripts
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 12 14:08 .
+drwxr-xr-x 1 root root 4096 Nov 12 21:32 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 input
+drwxr-xr-x 2 root root 4096 Nov 12 02:10 output
+drwxr-xr-x 1 root root 4096 Nov 12 14:08 software
+
+/task/input:
+total 28
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 .
+drwxr-xr-x 1 root root 4096 Nov 12 14:08 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 fastq
+-r--r--r-- 1 root root 1263 Nov 12 14:08 lab_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 previous_analysis
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 reference
+-r--r--r-- 1 root root  609 Nov 12 14:08 samples.tsv
+
+/task/input/previous_analysis:
+total 124
+dr-xr-xr-x 1 root root  4096 Nov 12 14:08 .
+dr-xr-xr-x 1 root root  4096 Nov 12 14:08 ..
+-r--r--r-- 1 root root  1201 Nov 12 14:08 HANDOVER.md
+-r--r--r-- 1 root root 43007 Nov 12 14:08 de_draft.tsv
+-r--r--r-- 1 root root 61026 Nov 12 14:08 gene_counts_merged.tsv
+-r--r--r-- 1 root root  1028 Nov 12 14:08 mail_top_responders.tsv
+dr-xr-xr-x 1 root root  4096 Nov 12 14:08 scripts
+
+/task/input/previous_analysis/scripts:
+total 20
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 .
+dr-xr-xr-x 1 root root 4096 Nov 12 14:08 ..
+-r-xr-xr-x 1 root root  727 Nov 12 14:08 01_quantify.sh
+-r--r--r-- 1 root root  798 Nov 12 14:08 02_merge_counts.py
+-r--r--r-- 1 root root 1601 Nov 12 14:08 03_de.py
+[?2004hroot@03b0b295779b:/task# cat /task/input/samples.tsv
+[?2004lsample_id	condition	donor_id	donor_sex	library_prep_batch	fastq_file
+RS19	treated	D874	M	2024-03-05	RS19.fastq.gz
+RS22	vehicle	D379	M	2024-03-05	RS22.fastq.gz
+RS26	vehicle	D172	M	2024-03-19	RS26.fastq.gz
+RS27	vehicle	D643	F	2024-03-19	RS27.fastq.gz
+RS47	treated	D593	M	2024-03-05	RS47.fastq.gz
+RS62	vehicle	D602	M	2024-03-19	RS62.fastq.gz
+RS69	vehicle	D187	F	2024-03-19	RS69.fastq.gz
+RS75	treated	D616	F	2024-03-05	RS75.fastq.gz
+RS79	treated	D407	M	2024-03-05	RS79.fastq.gz
+RS80	treated	D933	F	2024-03-05	RS80.fastq.gz
+RS89	treated	D120	F	2024-03-19	RS89.fastq.gz
+RS97	vehicle	D296	F	2024-03-19	RS97.fastq.gz
+[?2004hroot@03b0b295779b:/task# cat /task/input/lab_notes.md
+[?2004l# Wet-lab notes: compound vs vehicle, primary cells
+
+- Cells: primary cells from 12 unrelated donors (one culture per donor), passage 2.
+- Treatment: compound at 1 uM or vehicle (0.1% DMSO) for 24 h; one condition per donor.
+- RNA: column purification with on-column DNase; RIN >= 8.9 for all samples.
+- Gene panel: the transcripts in `reference/` (targeted panel plus sex-chromosome control genes).
+- Library prep: poly-A selection, unstranded. Two prep sessions because the first kit lot ran out: 2024-03-05 (6 libraries, kit lot A, operator 1) and 2024-03-19 (6 libraries, kit lot B, operator 2, different PCR cycler). The session of each library is in the sample sheet.
+- Sequencing: all libraries pooled equimolar on one lane, 50-cycle single read. The core delivered adapter-trimmed reads; read names and base qualities were stripped to placeholders by their export tool.
+- Incident (recorded for completeness): the final libraries were stored at -20 C in a cardboard box. When the box was taken out for pooling, condensation had made the hand-written tube labels partly illegible. All tubes were re-labelled from the box map before pooling and index assignment. Library-prep session and all other sample-sheet fields were copied from the original records.
+[?2004hroot@03b0b295779b:/task# cat /task/input/previous_analysis/HANDOVER.md
+[?2004l# Hand-over note: compound vs vehicle RNA-seq
+
+Written on my last day. Sorry for the state of things.
+
+## What is in this folder
+- `scripts/01_quantify.sh` - salmon index and quantification of the 12 FASTQ files
+- `scripts/02_merge_counts.py` - gene-level matrix from the salmon output
+- `scripts/03_de.py` - DESeq2 model (pydeseq2), compound vs vehicle
+- `gene_counts_merged.tsv` - gene-level matrix (output of 01 + 02)
+- `de_draft.tsv` - draft differential-expression table (output of 03)
+- `mail_top_responders.tsv` - the 40 genes I mailed to the wet lab on 9 April as "top responder genes"
+
+## Notes
+- The salmon output directories were on the scratch disk, which has been purged since. Only the
+  merged matrix is left.
+- The mailed list came from my first differential-expression run (smallest adjusted p-values first,
+  sex-chromosome control genes taken out). The table of that run was overwritten; `de_draft.tsv` is
+  from a later run.
+- Samples were used as listed in the sample sheet.
+- The wet lab has started to order qPCR primers for the mailed genes, so they need to know soon
+  which of them hold up.
+- All scripts take their paths as arguments, see the usage line at the top of each.
+[?2004hroot@03b0b295779b:/task# cat /task/input/previous_analysis/scripts/01_quantify.sh /task/input/previous_analysis/scripts/02_merge_counts.py /task/input/previous_analysis/scripts/03_de.py
+[?2004l#!/bin/bash
+# Quantification of all libraries of the sample sheet with salmon.
+# usage: bash 01_quantify.sh <work_dir>
+# (PROJECT_INPUT overrides the input location, default /task/input)
+set -euo pipefail
+IN=${PROJECT_INPUT:-/task/input}
+WORK=${1:?usage: 01_quantify.sh <work_dir>}
+mkdir -p "$WORK/quant"
+salmon index -t "$IN/reference/transcripts.fa.gz" -i "$WORK/index" -k 31 -p 2 > "$WORK/index.log" 2>&1
+tail -n +2 "$IN/samples.tsv" | cut -f1,6 | while IFS=$'\t' read -r sid fq; do
+  salmon quant -i "$WORK/index" -l SR -r "$IN/fastq/$fq" --validateMappings -p 2 \
+    -o "$WORK/quant/$sid" > "$WORK/quant/$sid.log" 2>&1 < /dev/null
+done
+echo "quantified $(ls "$WORK/quant" | grep -vc '\.log$') libraries into $WORK/quant"
+#!/usr/bin/env python3
+"""Gene-level matrix from the salmon output of 01_quantify.sh.
+usage: python3 02_merge_counts.py <work_dir> <out.tsv>
+"""
+import os
+import sys
+
+import pandas as pd
+
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+work, out = sys.argv[1], sys.argv[2]
+samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str)
+t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+gene_of = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+cols = {}
+for sid in samples["sample_id"]:
+    sf = pd.read_csv(f"{work}/quant/{sid}/quant.sf", sep="\t")
+    cols[sid] = sf.groupby(sf["Name"].map(gene_of))["NumReads"].sum()
+matrix = pd.DataFrame(cols).reindex(list(dict.fromkeys(t2g["gene_id"]))).fillna(0.0)
+matrix.index.name = "gene_id"
+matrix.round(3).to_csv(out, sep="\t")
+#!/usr/bin/env python3
+"""Differential expression, compound vs vehicle (DESeq2 model via pydeseq2).
+usage: python3 03_de.py <gene_counts.tsv> <out.tsv> [samples.tsv]
+"""
+import os
+import sys
+
+import pandas as pd
+from pydeseq2.dds import DeseqDataSet
+from pydeseq2.ds import DeseqStats
+IN = os.environ.get("PROJECT_INPUT", "/task/input")
+counts = pd.read_csv(sys.argv[1], sep="\t", index_col=0)
+sheet = sys.argv[3] if len(sys.argv) > 3 else f"{IN}/samples.tsv"
+samples = pd.read_csv(sheet, sep="\t", dtype=str).set_index("sample_id")
+names = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str).drop_duplicates("gene_id")
+names = names.set_index("gene_id")["gene_name"]
+
+meta = pd.DataFrame({"condition": samples["condition"],
+                     "session": ["s" + d.replace("-", "") for d in samples["library_prep_batch"]]})
+mat = counts[meta.index].T.round().astype(int)
+dds = DeseqDataSet(counts=mat, metadata=meta, design="~condition", quiet=True, n_cpus=2)
+dds.deseq2()
+st = DeseqStats(dds, contrast=["condition", "treated", "vehicle"], alpha=0.05, quiet=True, n_cpus=2)
+st.summary()
+res = st.results_df.reindex(counts.index)
+padj = res["padj"]
+table = pd.DataFrame({"gene_id": counts.index,
+                      "gene_name": names.reindex(counts.index).values,
+                      "base_mean": res["baseMean"].round(2).values,
+                      "log2fc": (res["log2FoldChange"]).round(4).values,
+                      "pvalue": res["pvalue"].values,
+                      "padj": padj.values})
+table.to_csv(sys.argv[2], sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004hroot@03b0b295779b:/task# ls -la /task/input/reference /task/input/fastq; head -3 /task/input/reference/tx2gene.tsv; wc -l /task/input/reference/tx2gene.tsv
+[?2004l/task/input/fastq:
+total 21520
+dr-xr-xr-x 1 root root    4096 Nov 12 14:08 .
+dr-xr-xr-x 1 root root    4096 Nov 12 14:08 ..
+-r--r--r-- 1 root root 1751756 Nov 12 14:08 RS19.fastq.gz
+-r--r--r-- 1 root root 1776064 Nov 12 14:08 RS22.fastq.gz
+-r--r--r-- 1 root root 1672775 Nov 12 14:08 RS26.fastq.gz
+-r--r--r-- 1 root root 1577703 Nov 12 14:08 RS27.fastq.gz
+-r--r--r-- 1 root root 1900597 Nov 12 14:08 RS47.fastq.gz
+-r--r--r-- 1 root root 1999418 Nov 12 14:08 RS62.fastq.gz
+-r--r--r-- 1 root root 1826746 Nov 12 14:08 RS69.fastq.gz
+-r--r--r-- 1 root root 1775995 Nov 12 14:08 RS75.fastq.gz
+-r--r--r-- 1 root root 1856053 Nov 12 14:08 RS79.fastq.gz
+-r--r--r-- 1 root root 1810690 Nov 12 14:08 RS80.fastq.gz
+-r--r--r-- 1 root root 2219217 Nov 12 14:08 RS89.fastq.gz
+-r--r--r-- 1 root root 1832396 Nov 12 14:08 RS97.fastq.gz
+
+/task/input/reference:
+total 748
+dr-xr-xr-x 1 root root   4096 Nov 12 14:08 .
+dr-xr-xr-x 1 root root   4096 Nov 12 14:08 ..
+-r--r--r-- 1 root root 719766 Nov 12 14:08 transcripts.fa.gz
+-r--r--r-- 1 root root  35644 Nov 12 14:08 tx2gene.tsv
+transcript_id	gene_id	gene_name
+ENST00000381334	ENSG00000134851	TMEM165
+ENST00000332496	ENSG00000185033	SEMA4B
+929 /task/input/reference/tx2gene.tsv
+[?2004hroot@03b0b295779b:/task# grep -iE 'XIST|TSIX|RPS4Y1|DDX3Y|UTY|KDM5D|EIF1AY|NLGN4Y|USP9Y|ZFY|SRY|TXLNGY|KDM6A|EIF1AX' /task/input/reference/tx2gene.tsv
+[?2004lENST00000336079	ENSG00000067048	DDX3Y
+ENST00000429829	ENSG00000229807	XIST
+ENST00000361365	ENSG00000198692	EIF1AY
+ENST00000556143	ENSG00000165861	ZFYVE1
+ENST00000362096	ENSG00000183878	UTY
+ENST00000250784	ENSG00000129824	RPS4Y1
+ENST00000440077	ENSG00000012817	KDM5D
+[?2004hroot@03b0b295779b:/task# head -5 /task/input/previous_analysis/gene_counts_merged.tsv | cut -c1-300; wc -l /task/input/previous_analysis/gene_counts_merged.tsv
+[?2004lgene_id	RS19	RS22	RS26	RS27	RS47	RS62	RS69	RS75	RS79	RS80	RS89	RS97
+ENSG00000134851	29.0	28.0	26.0	19.0	18.0	24.0	36.0	18.0	13.0	30.0	41.0	30.0
+ENSG00000185033	85.0	62.0	69.0	87.0	60.0	130.0	145.0	138.0	26.0	47.0	199.0	125.0
+ENSG00000186897	49.0	49.0	58.0	22.0	40.0	62.0	41.0	47.0	12.0	54.0	56.0	72.0
+ENSG00000164086	128.0	129.0	89.0	155.0	123.0	145.0	112.0	119.0	41.0	144.0	147.0	142.0
+801 /task/input/previous_analysis/gene_counts_merged.tsv
+[?2004hroot@03b0b295779b:/task# head -5 /task/input/previous_analysis/de_draft.tsv; wc -l /task/input/previous_analysis/de_draft.tsv; head -45 /task/input/previous_analysis/mail_top_responders.tsv
+[?2004lgene_id	gene_name	base_mean	log2fc	pvalue	padj
+ENSG00000134851	TMEM165	25.05	-0.1721	0.490465	0.843646
+ENSG00000185033	SEMA4B	90.27	-0.6557	0.0262572	0.269705
+ENSG00000186897	C1QL4	43.38	-0.1512	0.53217	0.857766
+ENSG00000164086	DUSP7	115.97	-0.0491	0.757778	0.912266
+801 /task/input/previous_analysis/de_draft.tsv
+rank	gene_id	gene_name
+1	ENSG00000054803	CBLN4
+2	ENSG00000183918	SH2D1A
+3	ENSG00000111704	NANOG
+4	ENSG00000183773	AIFM3
+5	ENSG00000097046	CDC7
+6	ENSG00000121067	SPOP
+7	ENSG00000162623	TYW3
+8	ENSG00000113360	DROSHA
+9	ENSG00000116783	TNNI3K
+10	ENSG00000253148	RGS21
+11	ENSG00000118777	ABCG2
+12	ENSG00000205869	KRTAP5-1
+13	ENSG00000204335	SP5
+14	ENSG00000102178	UBL4A
+15	ENSG00000165138	ANKS6
+16	ENSG00000189433	GJB4
+17	ENSG00000111252	SH2B3
+18	ENSG00000167565	SERTAD3
+19	ENSG00000124279	FASTKD3
+20	ENSG00000270011	ZNF559-ZNF177
+21	ENSG00000142599	RERE
+22	ENSG00000116984	MTR
+23	ENSG00000164647	STEAP1
+24	ENSG00000034239	CLXN
+25	ENSG00000154370	TRIM11
+26	ENSG00000149451	ADAM33
+27	ENSG00000101871	MID1
+28	ENSG00000168255	POLR2J3
+29	ENSG00000160688	FLAD1
+30	ENSG00000137571	SLCO5A1
+31	ENSG00000120860	WASHC3
+32	ENSG00000205502	C2CD4B
+33	ENSG00000142186	SCYL1
+34	ENSG00000009830	POMT2
+35	ENSG00000112116	IL17F
+36	ENSG00000115548	KDM3A
+37	ENSG00000107521	HPS1
+38	ENSG00000132388	UBE2G1
+39	ENSG00000106823	ECM2
+40	ENSG00000129696	TTI2
+[?2004hroot@03b0b295779b:/task# zcat /task/input/fastq/RS19.fastq.gz | head -8; for f in /task/input/fastq/*.fastq.gz; do echo -n "$(basename $f) "; echo $(( $(zcat $f | wc -l) / 4 )); done
+[?2004l@1
+GGCTCGAGATGTTGCTGCTAGACATTCTCAGACTGAGTGTGTTGAATTCC
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+@2
+ACATCATGAGATCTAGCAGCACCAGCCTCTTGAAGTGGCTTCTCAGTGGA
++
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+RS19.fastq.gz 88799
+RS22.fastq.gz 90012
+RS26.fastq.gz 84822
+RS27.fastq.gz 80025
+RS47.fastq.gz 96350
+RS62.fastq.gz 101405
+RS69.fastq.gz 92672
+RS75.fastq.gz 90111
+RS79.fastq.gz 94090
+RS80.fastq.gz 91832
+RS89.fastq.gz 112657
+RS97.fastq.gz 92974
+[?2004hroot@03b0b295779b:/task# mkdir -p /task/work /task/output; cd /task/work
+[?2004l[?2004hroot@03b0b295779b:/task/work# bash /task/input/previous_analysis/scripts/01_quantify.sh /task/work 2>&1 | tail -3
+[?2004lquantified 12 libraries into /task/work/quant
+[?2004hroot@03b0b295779b:/task/work# python3 /task/input/previous_analysis/scripts/02_merge_counts.py /task/work /task/work/gene_counts_raw.tsv && head -2 /task/work/gene_counts_raw.tsv | cut -c1-200
+[?2004lgene_id	RS19	RS22	RS26	RS27	RS47	RS62	RS69	RS75	RS79	RS80	RS89	RS97
+ENSG00000134851	29.0	28.0	26.0	19.0	18.0	24.0	36.0	18.0	41.0	30.0	41.0	30.0
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> c=pd.read_csv('gene_counts_raw.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> nam=dict(zip(t2g.gene_id,t2g.gene_name))
+[?2004l[?2004h> sex={'ENSG00000229807':'XIST','ENSG00000129824':'RPS4Y1','ENSG00000067048':'DDX3Y','ENSG00000198692':'EIF1AY','ENSG00000183878':'UTY','ENSG00000012817':'KDM5D'}
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for sid in c.columns:
+[?2004l[?2004h>     d=c[sid]
+[?2004l[?2004h>     tot=d.sum()
+[?2004l[?2004h>     y=sum(d[g] for g in sex if g!='ENSG00000229807')
+[?2004l[?2004h>     rows.append([sid,nam.get(sid,'')]+[round(d[g],1) for g in sex]+[round(1e6*y/tot,1), round(tot,1)])
+[?2004l[?2004h> out=pd.DataFrame(rows,columns=['sample','']+list(sex.values())+['Y_perM','sum_all'])
+[?2004l[?2004h> print(out.to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004lsample   XIST  RPS4Y1  DDX3Y  EIF1AY  UTY  KDM5D  Y_perM  sum_all
+  RS19   24.0    18.0   16.0    31.0 38.0   38.0  3298.8  42743.0
+  RS22    0.0    48.0   31.0   119.0 68.0   80.0  7988.7  43311.0
+  RS26   46.0     0.0    0.0     0.0  0.0    0.0     0.0  40964.0
+  RS27   58.0     0.0    0.0     0.0  0.0    0.0     0.0  38556.0
+  RS47    0.0    23.0   32.0    55.0 80.0   96.0  6162.1  46413.0
+  RS62    0.0    39.0   31.0    57.0 63.0   66.0  5239.0  48864.0
+  RS69   78.0     0.0    0.0     0.0  0.0    0.0     0.0  44604.0
+  RS75    0.0    20.0   26.0    94.0 52.0   81.0  6293.4  43379.0
+  RS79    0.0    46.0   32.0    51.0 59.0   40.0  5044.8  45195.0
+  RS80  100.0     0.0    0.0     0.0  0.0    0.0     0.0  44262.0
+  RS89   69.0     0.0    0.0     0.0  0.0    0.0     0.0  54429.0
+  RS97   70.0     0.0    0.0     0.0  0.0    0.0     0.0  44933.0
+[?2004hroot@03b0b295779b:/task/work# ls /task/work/quant; head -1 /task/work/quant/RS19/quant.sf; grep -E 'fold_change|Mapping rate|library type' /task/work/quant/RS19/quant.sf.log 2>/dev/null | head
+[?2004lRS19	  RS22	    RS26      RS27	RS47	  RS62	    RS69      RS75	RS79	  RS80	    RS89      RS97
+RS19.log  RS22.log  RS26.log  RS27.log	RS47.log  RS62.log  RS69.log  RS75.log	RS79.log  RS80.log  RS89.log  RS97.log
+Name	Length	EffectiveLength	TPM	NumReads
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c=pd.read_csv('gene_counts_raw.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> lcpm=np.log2(c/c.sum()*1e6+1)
+[?2004l[?2004h> X=(lcpm - lcpm.mean(axis=1).values[:,None]).T.values
+[?2004l[?2004h> from numpy.linalg import svd
+[?2004l[?2004h> U,S,Vt=svd(X,full_matrices=False)
+[?2004l[?2004h> pc=(U*S)
+[?2004l[?2004h> var=S**2/np.sum(S**2)*100
+[?2004l[?2004h> print('var%',np.round(var[:5],1))
+[?2004l[?2004h> df=pd.DataFrame(pc[:,:4],columns=['PC1','PC2','PC3','PC4'],index=lcpm.columns)
+[?2004l[?2004h> df['cond']=sh['condition']; df['batch']=sh['library_prep_batch']
+[?2004l[?2004h> df['sheet_sex']=sh['donor_sex']
+[?2004l[?2004h> print(df.round(1).to_string())
+[?2004l[?2004h> print(lcpm.corr().round(3).to_string())
+[?2004l[?2004h> EOF
+[?2004lvar% [37.4 31.5  8.1  3.9  3.3]
+       PC1   PC2   PC3   PC4     cond       batch sheet_sex
+RS19  -6.8   3.6  -0.0 -11.1  treated  2024-03-05         M
+RS22 -13.2  11.2 -13.4   1.4  vehicle  2024-03-05         M
+RS26  -2.7 -20.4  -4.2   2.3  vehicle  2024-03-19         M
+RS27  18.6   1.9  -2.8   6.9  vehicle  2024-03-19         F
+RS47 -20.2  -3.0   4.1   0.7  treated  2024-03-05         M
+RS62  -0.4  18.5   4.3  -0.0  vehicle  2024-03-19         M
+RS69  18.3   1.7  -2.9  -0.8  vehicle  2024-03-19         F
+RS75  -0.1  19.5   5.4   3.8  treated  2024-03-05         F
+RS79 -20.4  -3.3   3.3   2.4  treated  2024-03-05         M
+RS80  -1.1 -19.3  -3.3  -0.0  treated  2024-03-05         F
+RS89   9.9 -11.8  12.5  -0.3  treated  2024-03-19         F
+RS97  18.1   1.4  -3.2  -5.3  vehicle  2024-03-19         F
+       RS19   RS22   RS26   RS27   RS47   RS62   RS69   RS75   RS79   RS80   RS89   RS97
+RS19  1.000  0.811  0.763  0.744  0.842  0.818  0.762  0.803  0.833  0.778  0.795  0.778
+RS22  0.811  1.000  0.640  0.637  0.789  0.787  0.641  0.778  0.795  0.643  0.585  0.651
+RS26  0.763  0.640  1.000  0.719  0.772  0.557  0.735  0.544  0.781  0.921  0.847  0.733
+RS27  0.744  0.637  0.719  1.000  0.570  0.762  0.920  0.757  0.566  0.744  0.843  0.919
+RS47  0.842  0.789  0.772  0.570  1.000  0.697  0.573  0.685  0.923  0.769  0.714  0.577
+RS62  0.818  0.787  0.557  0.762  0.697  1.000  0.769  0.904  0.692  0.574  0.702  0.767
+RS69  0.762  0.641  0.735  0.920  0.573  0.769  1.000  0.761  0.570  0.748  0.850  0.932
+RS75  0.803  0.778  0.544  0.757  0.685  0.904  0.761  1.000  0.680  0.560  0.695  0.757
+RS79  0.833  0.795  0.781  0.566  0.923  0.692  0.570  0.680  1.000  0.767  0.714  0.575
+RS80  0.778  0.643  0.921  0.744  0.769  0.574  0.748  0.560  0.767  1.000  0.863  0.756
+RS89  0.795  0.585  0.847  0.843  0.714  0.702  0.850  0.695  0.714  0.863  1.000  0.856
+RS97  0.778  0.651  0.733  0.919  0.577  0.767  0.932  0.757  0.575  0.756  0.856  1.000
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> samples=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> gene_of=dict(zip(t2g.transcript_id,t2g.gene_id))
+[?2004l[?2004h> genes=list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> cols={}
+[?2004l[?2004h> for sid in samples.sample_id:
+[?2004l[?2004h>     sf=pd.read_csv(f'quant/{sid}/quant.sf',sep='\t')
+[?2004l[?2004h>     s=sf.groupby(sf.Name.map(gene_of))['NumReads'].sum()
+[?2004l[?2004h>     cols[sid]=s.reindex(genes).fillna(0.0)
+[?2004l[?2004h> c=pd.DataFrame(cols)
+[?2004l[?2004h> c.index.name='gene_id'
+[?2004l[?2004h> print('matrix',c.shape,'colsums'); print(c.sum().round(0).to_string())
+[?2004l[?2004h> c.to_csv('gene_counts.tsv',sep='\t')
+[?2004l[?2004h> Yg=['ENSG00000129824','ENSG00000067048','ENSG00000198692','ENSG00000183878','ENSG00000012817']
+[?2004l[?2004h> XI='ENSG00000229807'
+[?2004l[?2004h> cpm=c/c.sum()*1e6
+[?2004l[?2004h> rep=pd.DataFrame({'XIST_cpm':cpm.loc[XI].round(1),'Y_cpm':cpm.loc[Yg].sum().round(1),
+[?2004l[?2004h>                   'X_cpm_over_Y':(cpm.loc[XI]/(cpm.loc[Yg].sum()+.01)).round(2)},
+[?2004l[?2004h>                  ).join(samples.set_index('sample_id')[['condition','donor_sex','library_prep_batch']])
+[?2004l[?2004h> print(rep.to_string())
+[?2004l[?2004h> EOF
+[?2004lmatrix (800, 12) colsums
+RS19    42743.0
+RS22    43311.0
+RS26    40964.0
+RS27    38556.0
+RS47    46413.0
+RS62    48864.0
+RS69    44604.0
+RS75    43379.0
+RS79    45195.0
+RS80    44262.0
+RS89    54429.0
+RS97    44933.0
+      XIST_cpm   Y_cpm  X_cpm_over_Y condition donor_sex library_prep_batch
+RS19     561.5  3298.8          0.17   treated         M         2024-03-05
+RS22       0.0  7988.7          0.00   vehicle         M         2024-03-05
+RS26    1122.9     0.0     112293.72   vehicle         M         2024-03-19
+RS27    1504.3     0.0     150430.54   vehicle         F         2024-03-19
+RS47       0.0  6162.1          0.00   treated         M         2024-03-05
+RS62       0.0  5239.0          0.00   vehicle         M         2024-03-19
+RS69    1748.7     0.0     174872.21   vehicle         F         2024-03-19
+RS75       0.0  6293.4          0.00   treated         F         2024-03-05
+RS79       0.0  5044.8          0.00   treated         M         2024-03-05
+RS80    2259.3     0.0     225927.43   treated         F         2024-03-05
+RS89    1267.7     0.0     126770.66   treated         F         2024-03-19
+RS97    1557.9     0.0     155787.51   vehicle         F         2024-03-19
+[?2004hroot@03b0b295779b:/task/work# python3 -c "import pydeseq2,sklearn,statsmodels,pandas,numpy;print(pydeseq2.__version__,pandas.__version__,numpy.__version__)"
+[?2004l0.5.4 3.1.1 2.5.4
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> mine=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> old=pd.read_csv('/task/input/previous_analysis/gene_counts_merged.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print(mine.shape,old.shape, list(old.columns))
+[?2004l[?2004h> print('sum mine',mine.sum().round(0).to_dict())
+[?2004l[?2004h> print('sum old',old.sum().round(0).to_dict())
+[?2004l[?2004h> # find permutation: correlate each old column with each mine column
+[?2004l[?2004h> cc=pd.DataFrame(index=old.columns,columns=mine.columns,dtype=float)
+[?2004l[?2004h> for a in old.columns:
+[?2004l[?2004h>     for b in mine.columns:
+[?2004l[?2004h>         cc.loc[a,b]=np.corrcoef(np.log2(old[a]+1),np.log2(mine[b]+1))[0,1]
+[?2004l[?2004h> print(cc.round(3).to_string())
+[?2004l[?2004h> EOF
+[?2004l(800, 12) (800, 12) ['RS19', 'RS22', 'RS26', 'RS27', 'RS47', 'RS62', 'RS69', 'RS75', 'RS79', 'RS80', 'RS89', 'RS97']
+sum mine {'RS19': 42743.0, 'RS22': 43311.0, 'RS26': 40964.0, 'RS27': 38556.0, 'RS47': 46413.0, 'RS62': 48864.0, 'RS69': 44604.0, 'RS75': 43379.0, 'RS79': 45195.0, 'RS80': 44262.0, 'RS89': 54429.0, 'RS97': 44933.0}
+sum old {'RS19': 42743.0, 'RS22': 43311.0, 'RS26': 40964.0, 'RS27': 38556.0, 'RS47': 46413.0, 'RS62': 48864.0, 'RS69': 44604.0, 'RS75': 43379.0, 'RS79': 14841.0, 'RS80': 44262.0, 'RS89': 54429.0, 'RS97': 44933.0}
+       RS19   RS22   RS26   RS27   RS47   RS62   RS69   RS75   RS79   RS80   RS89   RS97
+RS19  1.000  0.833  0.837  0.811  0.871  0.835  0.822  0.828  0.863  0.845  0.851  0.846
+RS22  0.833  1.000  0.733  0.726  0.796  0.783  0.726  0.783  0.802  0.733  0.654  0.737
+RS26  0.837  0.733  1.000  0.695  0.858  0.633  0.707  0.626  0.866  0.918  0.831  0.712
+RS27  0.811  0.726  0.695  1.000  0.654  0.859  0.920  0.862  0.644  0.715  0.830  0.924
+RS47  0.871  0.796  0.858  0.654  1.000  0.698  0.653  0.692  0.923  0.865  0.788  0.661
+RS62  0.835  0.783  0.633  0.859  0.698  1.000  0.859  0.915  0.693  0.647  0.775  0.861
+RS69  0.822  0.726  0.707  0.920  0.653  0.859  1.000  0.859  0.647  0.714  0.834  0.930
+RS75  0.828  0.783  0.626  0.862  0.692  0.915  0.859  1.000  0.687  0.637  0.771  0.860
+RS79  0.839  0.769  0.844  0.633  0.889  0.669  0.636  0.669  0.959  0.838  0.769  0.645
+RS80  0.845  0.733  0.918  0.715  0.865  0.647  0.714  0.637  0.862  1.000  0.845  0.727
+RS89  0.851  0.654  0.831  0.830  0.788  0.775  0.834  0.771  0.786  0.845  1.000  0.846
+RS97  0.846  0.737  0.712  0.924  0.661  0.861  0.930  0.860  0.658  0.727  0.846  1.000
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > explore.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> names=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str).drop_duplicates('gene_id').set_index('gene_id').gene_name
+[?2004l[?2004h> 
+[?2004l[?2004h> # corrected condition assignment based on data
+[?2004l[?2004h> cond_correct=sh.condition.copy()
+[?2004l[?2004h> cond_correct['RS26']='treated'
+[?2004l[?2004h> cond_correct['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy()
+[?2004l[?2004h> # session follows the true record (tubes swapped): RS26 file <- record RS75 (03-05); RS75 file <- record RS26 (03-19)
+[?2004l[?2004h> sess_correct=sess.copy()
+[?2004l[?2004h> sess_correct['RS26']=sess['RS75']
+[?2004l[?2004h> sess_correct['RS75']=sess['RS26']
+[?2004l[?2004h> 
+[?2004l[?2004h> def run(sample_list, cond, sessd=None, tag=''):
+[?2004l[?2004h>     meta=pd.DataFrame({'condition':cond[sample_list]})
+[?2004l[?2004h>     design='~condition'
+[?2004l[?2004h>     if sessd is not None:
+[?2004l[?2004h>         meta['session']=['s'+d.replace('-','') for d in sessd[sample_list]]
+[?2004l[?2004h>         design='~session+condition'
+[?2004l[?2004h>     mat=c[sample_list].T.round().astype(int)
+[?2004l[?2004h>     dds=DeseqDataSet(counts=mat,metadata=meta,design=design,quiet=True,n_cpus=2)
+[?2004l[?2004h>     dds.deseq2()
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=0.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary()
+[?2004l[?2004h>     r=st.results_df.reindex(c.index)
+[?2004l[?2004h>     r['name']=names.reindex(r.index)
+[?2004l[?2004h>     print(f'--- {tag} design={design} n={len(sample_list)} sig={(r.padj<0.05).sum()} |lfc|>0.5&sig={((r.padj<0.05)&(r.log2FoldChange.abs()>0.5)).sum()}')
+[?2004l[?2004h>     return r
+[?2004l[?2004h> 
+[?2004l[?2004h> keep11=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> A=run(keep11,cond_correct,None,'corrected_no_session')
+[?2004l[?2004h> B=run(keep11,cond_correct,sess_correct,'corrected_with_session')
+[?2004l[?2004h> naive=run(list(c.columns),sh.condition,None,'sheet_naive_all12')
+[?2004l[?2004h> for nm,r in [('A',A),('B',B),('naive',naive)]:
+[?2004l[?2004h>     t=r.sort_values('padj').head(15)
+[?2004l[?2004h>     print(nm, [(x.name,round(x.log2FoldChange,2),float(x.padj)) for _,x in t.iterrows()][:15])
+[?2004l[?2004h> sigA=set(A.index[A.padj<0.05]); sigB=set(B.index[B.padj<0.05]); sign=set(naive.index[naive.padj<0.05])
+[?2004l[?2004h> print('nA',len(sigA),'nB',len(sigB),'nnaive',len(sign),'A&B',len(sigA&sigB),'A-B',len(sigA-sigB),'B-A',len(sigB-sigA))
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> mg=list(mail.gene_id)
+[?2004l[?2004h> print('mail in A',sum(g in sigA for g in mg),'mail in B',sum(g in sigB for g in mg),'mail in naive',sum(g in sign for g in mg))
+[?2004l[?2004h> A.to_csv('resA.tsv',sep='\t'); B.to_csv('resB.tsv',sep='\t'); naive.to_csv('resnaive.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 explore.py 2>&1 | tail -30
+[?2004l--- corrected_no_session design=~condition n=11 sig=115 |lfc|>0.5&sig=114
+--- corrected_with_session design=~session+condition n=11 sig=75 |lfc|>0.5&sig=75
+--- sheet_naive_all12 design=~condition n=12 sig=3 |lfc|>0.5&sig=3
+A [('ENSG00000100220', 2.57, 9.939015036808591e-78), ('ENSG00000278845', 2.79, 6.868849620120093e-48), ('ENSG00000176170', 2.62, 2.5407115991145443e-46), ('ENSG00000167565', 2.95, 7.506410545100816e-44), ('ENSG00000148300', 3.32, 6.868526734112648e-39), ('ENSG00000261371', 3.1, 3.73217957152537e-35), ('ENSG00000179915', 2.12, 1.1870224343224754e-33), ('ENSG00000189433', 2.63, 1.786866555341632e-33), ('ENSG00000143375', 2.15, 1.1048171387333985e-31), ('ENSG00000111252', 2.69, 1.4590882379033357e-30), ('ENSG00000169696', -2.23, 2.5355930540908933e-29), ('ENSG00000149506', 2.57, 5.838669143881628e-27), ('ENSG00000189067', -2.35, 1.6103407327032114e-26), ('ENSG00000065154', 2.1, 3.7961772733182134e-24), ('ENSG00000138400', -3.36, 7.541168287691968e-23)]
+B [('ENSG00000100220', 2.54, 2.0998060489985317e-39), ('ENSG00000278845', 2.85, 5.778384073025749e-34), ('ENSG00000097046', 3.12, 6.588877916677467e-33), ('ENSG00000167565', 3.0, 6.588877916677467e-33), ('ENSG00000258289', -2.83, 2.7889741686029186e-32), ('ENSG00000176170', 2.66, 6.954237542742121e-31), ('ENSG00000261371', 3.24, 8.205910766908002e-28), ('ENSG00000169696', -2.45, 5.062240804409387e-27), ('ENSG00000143375', 2.32, 3.944850712288353e-25), ('ENSG00000148300', 3.21, 8.262082931268171e-25), ('ENSG00000111704', 2.86, 1.262514244716204e-24), ('ENSG00000149506', 2.79, 1.6283372671785966e-23), ('ENSG00000111252', 2.84, 8.480750495748426e-23), ('ENSG00000138400', -2.68, 3.2183947848599166e-22), ('ENSG00000189433', 2.54, 1.2286253705667215e-21)]
+naive [('ENSG00000054803', -1.36, 0.007647950313077779), ('ENSG00000183918', -2.01, 0.007647950313077779), ('ENSG00000111704', 1.87, 0.014566458039580671), ('ENSG00000183773', 1.2, 0.12325461130593536), ('ENSG00000121067', 0.5, 0.20038502840763572), ('ENSG00000205869', -1.42, 0.20038502840763572), ('ENSG00000253148', 0.95, 0.20038502840763572), ('ENSG00000162623', -1.37, 0.20038502840763572), ('ENSG00000097046', 1.63, 0.20038502840763572), ('ENSG00000116783', -0.92, 0.20038502840763572), ('ENSG00000113360', 1.75, 0.24248894400712698), ('ENSG00000116984', 0.79, 0.27072209660745317), ('ENSG00000124279', 1.29, 0.31056292209651426), ('ENSG00000102178', 1.58, 0.31056292209651426), ('ENSG00000270011', -1.53, 0.31056292209651426)]
+nA 115 nB 75 nnaive 3 A&B 70 A-B 45 B-A 5
+mail in A 19 mail in B 16 mail in naive 3
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np, statsmodels.api as sm
+[?2004l[?2004h> A=pd.read_csv('resA.tsv',sep='\t',index_col=0); B=pd.read_csv('resB.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> cond=sh.condition.copy(); cond['RS26']='treated'; cond['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy(); sess['RS26'],sess['RS75']=sess['RS75'],sess['RS26']
+[?2004l[?2004h> keep=[s for s in A if s!='RS19']
+[?2004l[?2004h> both=(A.padj<0.05); onlyA=(A.padj<0.05)&(B.padj>=0.05); onlyB=(B.padj<0.05)&(A.padj>=0.05)
+[?2004l[?2004h> print('both',int(both.sum()),'onlyA',int(onlyA.sum()),'onlyB',int(onlyB.sum()))
+[?2004l[?2004h> sub=pd.DataFrame({'lfcA':A.log2FoldChange,'pA':A.padj,'lfcB':B.log2FoldChange,'pB':B.padj})
+[?2004l[?2004h> print('corr lfcA vs lfcB (expressed genes):',sub[(sub.lfcA.abs()>0.5)].pipe(lambda d: np.corrcoef(d.lfcA,d.lfcB)[0,1].round(3)))
+[?2004l[?2004h> print(sub[onlyA].sort_values('pA').head(20).round(4).to_string())
+[?2004l[?2004h> # joint OLS on log-CPM
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)[keep]
+[?2004l[?2004h> lcpm=np.log2(c/c.sum()*1e6+1)
+[?2004l[?2004h> X=pd.DataFrame({'inter':1.0,'cond':(cond[keep]=='treated').astype(float).values,
+[?2004l[?2004h>                 'sess':(sess[keep]=='2024-03-19').astype(float).values},index=keep)
+[?2004l[?2004h> res=[]
+[?2004l[?2004h> for g in lcpm.index:
+[?2004l[?2004h>     m=sm.OLS(lcpm.loc[g].values,X.values).fit()
+[?2004l[?2004h>     res.append([g,m.params[1],m.pvalues[1],m.params[2],m.pvalues[2]])
+[?2004l[?2004h> R=pd.DataFrame(res,columns=['gene','cond_coef','cond_p','sess_coef','sess_p']).set_index('gene')
+[?2004l[?2004h> print('genes sess_p<0.05:',int((R.sess_p<0.05).sum()),' |sess_coef|>0.5 & p<0.05:',int(((R.sess_p<0.05)&(R.sess_coef.abs()>0.5)).sum()))
+[?2004l[?2004h> print('genes cond_p<0.05:',int((R.cond_p<0.05).sum()),' |cond_coef|>0.5& p<0.05:',int(((R.cond_p<0.05)&(R.cond_coef.abs()>0.5)).sum()))
+[?2004l[?2004h> print('top by sess_p:'); print(R.sort_values('sess_p').head(12).round(4).to_string())
+[?2004l[?2004h> R.to_csv('ols.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004lboth 115 onlyA 45 onlyB 4
+corr lfcA vs lfcB (expressed genes): 0.86
+                   lfcA      pA    lfcB      pB
+gene_id                                        
+ENSG00000183921 -1.3343  0.0002 -1.1024  0.0512
+ENSG00000119737 -1.1298  0.0020 -0.9628  0.0784
+ENSG00000100316 -1.3908  0.0021 -0.6311  0.4455
+ENSG00000076321 -1.5160  0.0025 -0.4530  0.8828
+ENSG00000161277 -1.1877  0.0029 -0.5000  0.5582
+ENSG00000031003 -1.0575  0.0029 -0.4359  0.4642
+ENSG00000142973  1.3587  0.0055  0.3358  0.9436
+ENSG00000140795  0.8868  0.0055  0.6878  0.2292
+ENSG00000183963 -1.2308  0.0058 -0.3178  0.9143
+ENSG00000163633  1.2836  0.0076  0.2843  0.9436
+ENSG00000180914 -1.0255  0.0076 -0.7634  0.4085
+ENSG00000050130  0.8618  0.0081  0.3213  0.8235
+ENSG00000107521  1.2815  0.0091  0.4247  0.9436
+ENSG00000007350 -0.8654  0.0109 -0.7669  0.2581
+ENSG00000112116  1.2620  0.0140  0.3507  0.9436
+ENSG00000066813  1.1532  0.0152  0.3389  0.9436
+ENSG00000109072  1.3523  0.0152  0.2274  0.9436
+ENSG00000165879  0.7734  0.0172  0.2732  0.9315
+ENSG00000204020 -1.4560  0.0185 -0.4389  0.7632
+ENSG00000114166 -0.4562  0.0200 -0.4373  0.2259
+Traceback (most recent call last):
+  File "<stdin>", line 13, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 4336, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6557, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6606, in _raise_if_missing
+    raise KeyError(f"None of [{key}] are in the [{axis_name}]")
+KeyError: "None of [Index(['baseMean', 'log2FoldChange', 'lfcSE', 'stat', 'pvalue', 'padj',\n       'name'],\n      dtype='str')] are in the [columns]"
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > batchcheck.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> cond=sh.condition.copy(); cond['RS26']='treated'; cond['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy(); sess['RS26'],sess['RS75']=sess['RS75'],sess['RS26']
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> meta=pd.DataFrame({'condition':cond[keep].values,'session':['s'+d.replace('-','') for d in sess[keep].values]},index=keep)
+[?2004l[?2004h> print(meta.to_string())
+[?2004l[?2004h> mat=c[keep].T.round().astype(int)
+[?2004l[?2004h> dds=DeseqDataSet(counts=mat,metadata=meta[['condition','session']],design='~session+condition',quiet=True,n_cpus=2)
+[?2004l[?2004h> dds.deseq2()
+[?2004l[?2004h> for con,tr in [('condition','treated'),('session','s20240319')]:
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=[con,tr,'reference'],alpha=0.05,quiet=True,n_cpus=2) if False else DeseqStats(dds,contrast=[con,tr],alpha=0.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary(); r=st.results_df.reindex(c.index)
+[?2004l[?2004h>     print('=== contrast',con,'sig',int((r.padj<0.05).sum()),'|coef|>0.5&sig',int(((r.padj<0.05)&(r.log2FoldChange.abs()>0.5)).sum()))
+[?2004l[?2004h>     print(r.sort_values('padj').head(10).round(4).to_string())
+[?2004l[?2004h>     r.to_csv(f'bs_{con}.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 batchcheck.py 2>&1 | tail -40
+[?2004l     condition    session
+RS22   vehicle  s20240305
+RS26   treated  s20240305
+RS27   vehicle  s20240319
+RS47   treated  s20240305
+RS62   vehicle  s20240319
+RS69   vehicle  s20240319
+RS75   vehicle  s20240319
+RS79   treated  s20240305
+RS80   treated  s20240305
+RS89   treated  s20240319
+RS97   vehicle  s20240319
+Traceback (most recent call last):
+  File "/task/work/batchcheck.py", line 15, in <module>
+    st=DeseqStats(dds,contrast=[con,tr,'reference'],alpha=0.05,quiet=True,n_cpus=2) if False else DeseqStats(dds,contrast=[con,tr],alpha=0.05,quiet=True,n_cpus=2)
+                                                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pydeseq2/ds.py", line 188, in __init__
+    self._build_contrast_vector()
+  File "/opt/tools/lib/python3.12/site-packages/pydeseq2/ds.py", line 602, in _build_contrast_vector
+    ref = self.contrast[2]
+          ~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && sed -i "s/\[con,tr,'reference'\],alpha/XX/; s/if False else DeseqStats(dds,contrast=\[con,tr\],alpha=0.05/if False else DeseqStats(dds,contrast=[con,tr,{'condition':'vehicle','session':'s20240305'}[con]],alpha=0.05/" batchcheck.py && grep -n DeseqStats batchcheck.py
+[?2004l3:from pydeseq2.ds import DeseqStats
+15:    st=DeseqStats(dds,contrast=XX=0.05,quiet=True,n_cpus=2) if False else DeseqStats(dds,contrast=[con,tr,{'condition':'vehicle','session':'s20240305'}[con]],alpha=0.05,quiet=True,n_cpus=2)
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> cond=sh.condition.copy(); cond['RS26']='treated'; cond['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy(); sess['RS26'],sess['RS75']=sess['RS75'],sess['RS26']
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> meta=pd.DataFrame({'condition':cond[keep].values,'session':['s'+d.replace('-','') for d in sess[keep].values]},index=keep)
+[?2004l[?2004h> mat=c[keep].T.round().astype(int)
+[?2004l[?2004h> dds=DeseqDataSet(counts=mat,metadata=meta,design='~session+condition',quiet=True,n_cpus=2)
+[?2004l[?2004h> dds.deseq2()
+[?2004l[?2004h> for con,tr,vr in [('condition','treated','vehicle'),('session','s20240319','s20240305')]:
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=[con,tr,vr],alpha=0.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary(); r=st.results_df.reindex(c.index)
+[?2004l[?2004h>     print('=== contrast',con,tr,'vs',vr,'| sig',int((r.padj<0.05).sum()),'| sig&|lfc|>0.5',int(((r.padj<0.05)&(r.log2FoldChange.abs()>0.5)).sum()),'| sig&|lfc|>1',int(((r.padj<0.05)&(r.log2FoldChange.abs()>1)).sum()))
+[?2004l[?2004h>     print(r.sort_values('padj').head(8).round(4).to_string())
+[?2004l[?2004h>     r.to_csv(f'bs_{con}.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004l=== contrast condition treated vs vehicle | sig 75 | sig&|lfc|>0.5 75 | sig&|lfc|>1 70
+                 baseMean  log2FoldChange   lfcSE     stat  pvalue  padj
+gene_id                                                                 
+ENSG00000100220  224.7098          2.5407  0.1864  13.6309     0.0   0.0
+ENSG00000278845  181.8033          2.8547  0.2260  12.6299     0.0   0.0
+ENSG00000097046  141.6455          3.1227  0.2522  12.3814     0.0   0.0
+ENSG00000167565  173.0487          2.9952  0.2418  12.3871     0.0   0.0
+ENSG00000258289  287.8523         -2.8298  0.2311 -12.2470     0.0   0.0
+ENSG00000176170  165.4419          2.6631  0.2225  11.9682     0.0   0.0
+ENSG00000261371   77.5347          3.2436  0.2857  11.3528     0.0   0.0
+ENSG00000169696  226.7139         -2.4505  0.2192 -11.1808     0.0   0.0
+=== contrast session s20240319 vs s20240305 | sig 183 | sig&|lfc|>0.5 183 | sig&|lfc|>1 135
+                 baseMean  log2FoldChange   lfcSE    stat  pvalue  padj
+gene_id                                                                
+ENSG00000123983  229.4321          2.2488  0.2264  9.9346     0.0   0.0
+ENSG00000112234  129.8041          2.0758  0.2267  9.1552     0.0   0.0
+ENSG00000174502  160.6199         -1.9160  0.2125 -9.0166     0.0   0.0
+ENSG00000107020  296.3855          2.0075  0.2303  8.7166     0.0   0.0
+ENSG00000109072  109.1381         -1.8807  0.2181 -8.6219     0.0   0.0
+ENSG00000138190  157.1441          1.8985  0.2359  8.0473     0.0   0.0
+ENSG00000139269  172.1118          1.6346  0.2042  8.0044     0.0   0.0
+ENSG00000244752   74.4940          1.8357  0.2327  7.8894     0.0   0.0
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> cond=sh.condition.copy(); cond['RS26']='treated'; cond['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy(); sess['RS26'],sess['RS75']=sess['RS75'],sess['RS26']
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> l=np.log2(c[keep]/c[keep].sum()*1e6+1)
+[?2004l[?2004h> t5=[s for s in keep if cond[s]=='treated' and sess[s]=='2024-03-05']
+[?2004l[?2004h> v5=[s for s in keep if cond[s]=='vehicle' and sess[s]=='2024-03-05']
+[?2004l[?2004h> t19=[s for s in keep if cond[s]=='treated' and sess[s]=='2024-03-19']
+[?2004l[?2004h> v19=[s for s in keep if cond[s]=='vehicle' and sess[s]=='2024-03-19']
+[?2004l[?2004h> print('t5',t5,'v5',v5,'t19',t19,'v19',v19)
+[?2004l[?2004h> dc5=l[t5].mean(1)-l[v5].mean(1)
+[?2004l[?2004h> dc19=l[t19].mean(1)-l[v19].mean(1)
+[?2004l[?2004h> db5=l[v5].mean(1)-l[v19].mean(1)
+[?2004l[?2004h> db19=l[t5].mean(1)-l[t19].mean(1)
+[?2004l[?2004h> A=pd.read_csv('resA.tsv',sep='\t',index_col=0); B=pd.read_csv('resB.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> D=pd.DataFrame({'lfcA':A.log2FoldChange,'padjA':A.padj,'lfcB':B.log2FoldChange,'padjB':B.padj,
+[?2004l[?2004h>                 'dc5':dc5,'dc19':dc19,'db_v':db5,'db_t':db19})
+[?2004l[?2004h> groups={'shared_sig':(A.padj<0.05)&(B.padj<0.05),'A_only':(A.padj<0.05)&(B.padj>=0.05),'B_only':(B.padj<0.05)&(A.padj>=0.05),'none_sig':(A.padj>=0.05)&(B.padj>=0.05)}
+[?2004l[?2004h> for k,m in groups.items():
+[?2004l[?2004h>     s=D[m]
+[?2004l[?2004h>     print(f'{k:10s} n={m.sum():4d} | dc5={s.dc5.mean():+.2f} dc19={s.dc19.mean():+.2f} | db_v={s.db_v.mean():+.2f} db_t={s.db_t.mean():+.2f} | mean|dc-min|={ (np.minimum(s.dc5.abs(),s.dc19.abs()).mean()):.2f} mean|db-min|={np.minimum(s.db_v.abs(),s.db_t.abs()).mean():.2f}')
+[?2004l[?2004h> print()
+[?2004l[?2004h> print('A_only genes: consistency of within-session treatment contrasts')
+[?2004l[?2004h> s=D[groups['A_only']]
+[?2004l[?2004h> print('corr(dc5,dc19)=',np.corrcoef(s.dc5,s.dc19)[0,1].round(3),' corr(db_v,db_t)=',np.corrcoef(s.db_v,s.db_t)[0,1].round(3))
+[?2004l[?2004h> s2=D[groups['shared_sig']]
+[?2004l[?2004h> print('shared: corr(dc5,dc19)=',np.corrcoef(s2.dc5,s2.dc19)[0,1].round(3),' corr(db_v,db_t)=',np.corrcoef(s2.db_v,s2.db_t)[0,1].round(3))
+[?2004l[?2004h> D.to_csv('diag.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004lt5 ['RS26', 'RS47', 'RS79', 'RS80'] v5 ['RS22'] t19 ['RS89'] v19 ['RS27', 'RS62', 'RS69', 'RS75', 'RS97']
+<stdin>:13: Pandas4Warning: Starting with pandas version 4.0 all arguments of mean will be keyword-only.
+<stdin>:14: Pandas4Warning: Starting with pandas version 4.0 all arguments of mean will be keyword-only.
+<stdin>:15: Pandas4Warning: Starting with pandas version 4.0 all arguments of mean will be keyword-only.
+<stdin>:16: Pandas4Warning: Starting with pandas version 4.0 all arguments of mean will be keyword-only.
+shared_sig n=  70 | dc5=-0.12 dc19=-0.08 | db_v=+0.11 db_t=+0.08 | mean|dc-min|=1.98 mean|db-min|=0.45
+A_only     n=  45 | dc5=-0.19 dc19=-0.39 | db_v=+0.04 db_t=+0.24 | mean|dc-min|=0.30 mean|db-min|=1.00
+B_only     n=   4 | dc5=-1.01 dc19=-0.71 | db_v=+0.87 db_t=+0.58 | mean|dc-min|=1.53 mean|db-min|=1.29
+none_sig   n= 664 | dc5=-0.16 dc19=-0.11 | db_v=+0.17 db_t=+0.12 | mean|dc-min|=0.24 mean|db-min|=0.44
+
+A_only genes: consistency of within-session treatment contrasts
+corr(dc5,dc19)= 0.358  corr(db_v,db_t)= 0.858
+shared: corr(dc5,dc19)= 0.963  corr(db_v,db_t)= 0.725
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 /task/input/previous_analysis/scripts/03_de.py /task/input/previous_analysis/gene_counts_merged.tsv /task/work/de_repro_naive.tsv 2>&1 | tail -2; python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> r=pd.read_csv('/task/work/de_repro_naive.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> rr=r.sort_values('padj').head(40)
+[?2004l[?2004h> print(list(mail.gene_id[:15]))
+[?2004l[?2004h> print(list(rr.gene_id[:15]))
+[?2004l[?2004h> print('overlap top40:',len(set(mail.gene_id)&set(rr.gene_id)))
+[?2004l[?2004h> EOF
+[?2004l['ENSG00000054803', 'ENSG00000183918', 'ENSG00000111704', 'ENSG00000183773', 'ENSG00000097046', 'ENSG00000121067', 'ENSG00000162623', 'ENSG00000113360', 'ENSG00000116783', 'ENSG00000253148', 'ENSG00000118777', 'ENSG00000205869', 'ENSG00000204335', 'ENSG00000102178', 'ENSG00000165138']
+['ENSG00000054803', 'ENSG00000111704', 'ENSG00000183918', 'ENSG00000183773', 'ENSG00000116783', 'ENSG00000113360', 'ENSG00000097046', 'ENSG00000205869', 'ENSG00000118777', 'ENSG00000121067', 'ENSG00000162623', 'ENSG00000253148', 'ENSG00000204335', 'ENSG00000169696', 'ENSG00000164647']
+overlap top40: 27
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> B=pd.read_csv('bs_condition.tsv',sep='\t',index_col=0); S=pd.read_csv('bs_session.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> l=np.log2(c/c.sum()*1e6+1); lc=l.sub(l.mean(axis=1),axis=0)
+[?2004l[?2004h> sigS=S[(S.padj<0.01)&(S.log2FoldChange.abs()>0.7)].index
+[?2004l[?2004h> sigC=B[(B.padj<0.01)&(B.log2FoldChange.abs()>0.7)].index
+[?2004l[?2004h> print('n sigS',len(sigS),'n sigC',len(sigC))
+[?2004l[?2004h> # session score: project each sample on the session signature direction (19 minus 05 mean), using sheet-truth samples excluding RS26/RS75
+[?2004l[?2004h> train=[s for s in c.columns if s not in ('RS19','RS26','RS75')]
+[?2004l[?2004h> ref19=sh.library_prep_batch[train]=='2024-03-19'
+[?2004l[?2004h> vect=lc[sigS].loc[:,train].T.values.dot(np.where(ref19.values,1,-1)); vect/=np.abs(vect).sum()
+[?2004l[?2004h> sess_score=lc.loc[sigS].T.values.dot(vect)
+[?2004l[?2004h> condv=np.where(sh.condition[train]=='treated',1,-1)
+[?2004l[?2004h> vectc=lc[sigC].loc[:,train].T.values.dot(condv); vectc/=np.abs(vectc).sum()
+[?2004l[?2004h> cond_score=lc.loc[sigC].T.values.dot(vectc)
+[?2004l[?2004h> out=pd.DataFrame({'sess_score':np.round(sess_score,2),'cond_score':np.round(cond_score,2)},index=c.columns)
+[?2004l[?2004h> out['sheet_batch']=sh.library_prep_batch; out['sheet_cond']=sh.condition; out['sheet_sex']=sh.donor_sex
+[?2004l[?2004h> print(out.to_string())
+[?2004l[?2004h> EOF
+[?2004ln sigS 150 n sigC 67
+Traceback (most recent call last):
+  File "<stdin>", line 12, in <module>
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 4336, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6557, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6606, in _raise_if_missing
+    raise KeyError(f"None of [{key}] are in the [{axis_name}]")
+KeyError: "None of [Index(['ENSG00000185033', 'ENSG00000213199', 'ENSG00000139985',\n       'ENSG00000125975', 'ENSG00000172888', 'ENSG00000159176',\n       'ENSG00000204611', 'ENSG00000172476', 'ENSG00000155096',\n       'ENSG00000258289',\n       ...\n       'ENSG00000125686', 'ENSG00000187080', 'ENSG00000269586',\n       'ENSG00000165841', 'ENSG00000163705', 'ENSG00000160752',\n       'ENSG00000168928', 'ENSG00000109182', 'ENSG00000139269',\n       'ENSG00000133103'],\n      dtype='str', name='gene_id', length=150)] are in the [columns]"
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > proj.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> B=pd.read_csv('bs_condition.tsv',sep='\t',index_col=0); S=pd.read_csv('bs_session.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> l=np.log2(c/c.sum()*1e6+1); lc=(l.T-l.mean(axis=1)).T
+[?2004l[?2004h> sigS=S[(S.padj<0.01)&(S.log2FoldChange.abs()>0.7)].index
+[?2004l[?2004h> sigC=B[(B.padj<0.01)&(B.log2FoldChange.abs()>0.7)].index
+[?2004l[?2004h> train=[s for s in c.columns if s not in ('RS19','RS26','RS75')]
+[?2004l[?2004h> def score(genes,w):
+[?2004l[?2004h>     sub=lc.loc[genes,train]
+[?2004l[?2004h>     v=(sub.T*w).mean(axis=1)   # signature direction (genes)
+[?2004l[?2004h>     v=v/np.abs(v).sum()
+[?2004l[?2004h>     return lc.loc[genes].T.values.dot(v.values)
+[?2004l[?2004h> s19=np.where(sh.library_prep_batch[train]=='2024-03-19',1,-1)
+[?2004l[?2004h> ct=np.where(sh.condition[train]=='treated',1,-1)
+[?2004l[?2004h> ss=score(sigS,s19); cs=score(sigC,ct)
+[?2004l[?2004h> out=pd.DataFrame({'session_score(+=0319)':np.round(ss,2),'condition_score(+=treated)':np.round(cs,2)},index=c.columns)
+[?2004l[?2004h> out['sheet_batch']=sh.library_prep_batch; out['sheet_cond']=sh.condition; out['sheet_sex']=sh.donor_sex
+[?2004l[?2004h> print(out.sort_values('session_score(+=0319)').to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 proj.py
+[?2004lTraceback (most recent call last):
+  File "/task/work/proj.py", line 16, in <module>
+    ss=score(sigS,s19); cs=score(sigC,ct)
+       ^^^^^^^^^^^^^^^
+  File "/task/work/proj.py", line 11, in score
+    v=(sub.T*w).mean(axis=1)   # signature direction (genes)
+       ~~~~~^~
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/ops/common.py", line 140, in new_method
+    return method(self, other)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/arraylike.py", line 227, in __mul__
+    return self._arith_method(other, operator.mul)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 10135, in _arith_method
+    self, other = self._align_for_op(other, axis, flex=True, level=None)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 10385, in _align_for_op
+    right = to_series(right)
+            ^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 10377, in to_series
+    raise ValueError(
+ValueError: Unable to coerce to Series, length must be 150: given 9
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && sed -i 's/    v=(sub.T\*w).mean(axis=1).*/    v=(sub.values*w[None,:]).mean(axis=1)/' proj.py && sed -n '9,14p' proj.py && python3 proj.py
+[?2004ldef score(genes,w):
+    sub=lc.loc[genes,train]
+    v=(sub.values*w[None,:]).mean(axis=1)
+    v=v/np.abs(v).sum()
+    return lc.loc[genes].T.values.dot(v.values)
+s19=np.where(sh.library_prep_batch[train]=='2024-03-19',1,-1)
+Traceback (most recent call last):
+  File "/task/work/proj.py", line 16, in <module>
+    ss=score(sigS,s19); cs=score(sigC,ct)
+       ^^^^^^^^^^^^^^^
+  File "/task/work/proj.py", line 13, in score
+    return lc.loc[genes].T.values.dot(v.values)
+                                      ^^^^^^^^
+AttributeError: 'numpy.ndarray' object has no attribute 'values'
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && sed -i 's/dot(v.values)/dot(v)/' proj.py && python3 proj.py
+[?2004l      session_score(+=0319)  condition_score(+=treated) sheet_batch sheet_cond sheet_sex
+RS79                  -0.98                        1.48  2024-03-05    treated         M
+RS26                  -0.95                        1.48  2024-03-19    vehicle         M
+RS80                  -0.95                        1.37  2024-03-05    treated         F
+RS47                  -0.92                        1.54  2024-03-05    treated         M
+RS22                  -0.74                       -1.06  2024-03-05    vehicle         M
+RS19                  -0.10                        0.11  2024-03-05    treated         M
+RS89                   0.57                        1.27  2024-03-19    treated         F
+RS27                   0.80                       -1.27  2024-03-19    vehicle         F
+RS97                   0.80                       -1.21  2024-03-19    vehicle         F
+RS69                   0.82                       -1.25  2024-03-19    vehicle         F
+RS75                   0.82                       -1.26  2024-03-05    treated         F
+RS62                   0.85                       -1.20  2024-03-19    vehicle         M
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > models.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str).set_index('sample_id')
+[?2004l[?2004h> cond=sh.condition.copy(); cond['RS26']='treated'; cond['RS75']='vehicle'
+[?2004l[?2004h> sess=sh.library_prep_batch.copy(); sess['RS26'],sess['RS75']=sess['RS75'],sess['RS26']
+[?2004l[?2004h> sexi={'RS19':'mixed','RS22':'M','RS26':'F','RS27':'F','RS47':'M','RS62':'M','RS69':'F','RS75':'M','RS79':'M','RS80':'F','RS89':'F','RS97':'F'}
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> meta=pd.DataFrame({'condition':cond[keep].values,
+[?2004l[?2004h>                    'session':['s'+d.replace('-','') for d in sess[keep].values],
+[?2004l[?2004h>                    'sex':[sexi[s] for s in keep]},index=keep)
+[?2004l[?2004h> print(meta.to_string())
+[?2004l[?2004h> mat=c[keep].T.round().astype(int)
+[?2004l[?2004h> SEXG=['ENSG00000229807','ENSG00000129824','ENSG00000067048','ENSG00000198692','ENSG00000183878','ENSG00000012817']
+[?2004l[?2004h> def fit(cols,tag,ref):
+[?2004l[?2004h>     dds=DeseqDataSet(counts=mat,metadata=meta[cols],design='~'+'+'.join(cols),quiet=True,n_cpus=2)
+[?2004l[?2004h>     dds.deseq2()
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=0.05,quiet=True,n_cpus=2)
+[?2004l[?2004h>     st.summary(); r=st.results_df.reindex(c.index)
+[?2004l[?2004h>     print(f'{tag:24s} nsig={int((r.padj<0.05).sum()):4d} nan_lfc={int(r.log2FoldChange.isna().sum())} nan_padj={int(r.padj.isna().sum())} sex_sig={[g for g in SEXG if (r.padj[g]<0.05)]}')
+[?2004l[?2004h>     r.to_csv(f'model_{tag}.tsv',sep='\t')
+[?2004l[?2004h>     return r
+[?2004l[?2004h> r1=fit(['condition','session'],'cond_sess','vehicle')
+[?2004l[?2004h> r2=fit(['condition','session','sex'],'cond_sess_sex','vehicle')
+[?2004l[?2004h> r3=fit(['condition'],'cond_only','vehicle')
+[?2004l[?2004h> for a,b in [('cond_only','cond_sess'),('cond_sess','cond_sess_sex')]:
+[?2004l[?2004h>     A=pd.read_csv(f'model_{a}.tsv',sep='\t',index_col=0);B=pd.read_csv(f'model_{b}.tsv',sep='\t',index_col=0)
+[?2004l[?2004h>     sa=set(A.index[A.padj<0.05]);sb=set(B.index[B.padj<0.05])
+[?2004l[?2004h>     print(a,'vs',b,'n1',len(sa),'n2',len(sb),'inter',len(sa&sb),'only1',len(sa-sb),'only2',len(sb-sa))
+[?2004l[?2004h> X=pd.read_csv('model_cond_sess_sex.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print(X.loc[SEXG].round(4).to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 models.py 2>&1 | tail -45
+[?2004l     condition    session sex
+RS22   vehicle  s20240305   M
+RS26   treated  s20240305   F
+RS27   vehicle  s20240319   F
+RS47   treated  s20240305   M
+RS62   vehicle  s20240319   M
+RS69   vehicle  s20240319   F
+RS75   vehicle  s20240319   M
+RS79   treated  s20240305   M
+RS80   treated  s20240305   F
+RS89   treated  s20240319   F
+RS97   vehicle  s20240319   F
+cond_sess                nsig=  75 nan_lfc=0 nan_padj=0 sex_sig=[]
+cond_sess_sex            nsig=  69 nan_lfc=0 nan_padj=0 sex_sig=[]
+cond_only                nsig= 115 nan_lfc=0 nan_padj=17 sex_sig=[]
+cond_only vs cond_sess n1 115 n2 75 inter 70 only1 45 only2 5
+cond_sess vs cond_sess_sex n1 75 n2 69 inter 69 only1 6 only2 0
+                 baseMean  log2FoldChange   lfcSE    stat  pvalue    padj
+gene_id                                                                  
+ENSG00000229807   38.5193         -0.2156  0.4405 -0.4893  0.6246  0.9868
+ENSG00000129824   15.1380         -0.4250  0.6081 -0.6989  0.4846  0.9748
+ENSG00000067048   13.1319          0.0640  0.5862  0.1091  0.9131  0.9961
+ENSG00000198692   32.6523         -1.0935  0.4755 -2.2997  0.0215  0.2094
+ENSG00000183878   27.7899          0.0544  0.4582  0.1188  0.9054  0.9961
+ENSG00000012817   31.4214         -0.2046  0.5183 -0.3948  0.6930  0.9868
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > classify.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np, statsmodels.api as sm
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> meta=pd.read_csv('model_meta.tsv',sep='\t',index_col=0) if False else None
+[?2004l[?2004h> mdf=pd.DataFrame({'condition':['treated' if s in ('RS26','RS47','RS79','RS80','RS89') else 'vehicle' for s in keep],
+[?2004l[?2004h>                   'session':['s20240305' if s in ('RS22','RS26','RS47','RS79','RS80') else 's20240319' for s in keep],
+[?2004l[?2004h>                   'sex':['F' if s in ('RS26','RS27','RS69','RS80','RS89','RS97') else 'M' for s in keep]},index=keep)
+[?2004l[?2004h> print(mdf.to_string())
+[?2004l[?2004h> l=np.log2(c[keep]/c[keep].sum(0)*1e6+1).T
+[?2004l[?2004h> X=np.column_stack([np.ones(11),(mdf.condition=='treated').values.astype(float),(mdf.session=='s20240319').values.astype(float),(mdf.sex=='F').values.astype(float)])
+[?2004l[?2004h> print('rank',np.linalg.matrix_rank(X))
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for g in l.index:
+[?2004l[?2004h>     m=sm.OLS(l[g].values,X).fit()
+[?2004l[?2004h>     rows.append([g,m.params[1],m.tvalues[1],m.pvalues[1],m.params[2],m.pvalues[2],m.params[3],m.pvalues[3],np.sqrt(m.mse_resid)])
+[?2004l[?2004h> R=pd.DataFrame(rows,columns=['gene_id','b_cond','t_cond','p_cond','b_sess','p_sess','b_sex','p_sex','resid_sd']).set_index('gene_id')
+[?2004l[?2004h> R['cls']='none'
+[?2004l[?2004h> R.loc[(R.p_cond<0.01)&(R.b_cond.abs()>0.5),'cls']='treatment'
+[?2004l[?2004h> R.loc[(R.p_sess<0.01)&(R.b_sess.abs()>0.5),'cls']='batch'
+[?2004l[?2004h> R.loc[(R.p_sex<0.01)&(R.b_sex.abs()>0.5),'cls']='sex'
+[?2004l[?2004h> R.loc[(R.cls!='none')&(R.p_cond<0.01)&(R.b_cond.abs()>0.5)&((R.p_sess<0.01)&(R.b_sess.abs()>0.5)),'cls']='treat+batch'
+[?2004l[?2004h> print(R.cls.value_counts().to_string())
+[?2004l[?2004h> for m in ['cond_only','cond_sess','cond_sess_sex']:
+[?2004l[?2004h>     r=pd.read_csv(f'model_{m}.tsv',sep='\t',index_col=0)
+[?2004l[?2004h>     ct=pd.crosstab(R.cls,(r.padj<0.05))
+[?2004l[?2004h>     print('==',m); print(ct.to_string())
+[?2004l[?2004h> R.to_csv('ols3.tsv',sep='\t')
+[?2004l[?2004h> print('treatment-classified genes, per model significance:')
+[?2004l[?2004h> tg=R.index[R.cls.isin(['treatment','treat+batch'])]
+[?2004l[?2004h> print('n treatment-driven (OLS):',len(tg))
+[?2004l[?2004h> for m in ['cond_only','cond_sess','cond_sess_sex']:
+[?2004l[?2004h>     r=pd.read_csv(f'model_{m}.tsv',sep='\t',index_col=0)
+[?2004l[?2004h>     sig=set(r.index[r.padj<0.05])
+[?2004l[?2004h>     print(m,'sig',len(sig),'recall_of_ols_treat',len(sig&set(tg)),'precision',len(sig&set(tg))/max(len(sig),1))
+[?2004l[?2004h> miss=[g for g in tg if g not in set(pd.read_csv('model_cond_sess_sex.tsv',sep='\t',index_col=0).pipe(lambda d: d.index[d.padj<0.05]))]
+[?2004l[?2004h> print('OLS-treatment genes not sig in cond_sess_sex:',miss)
+[?2004l[?2004h> R.loc[miss].round(3).to_csv('miss.tsv',sep='\t')
+[?2004l[?2004h> print(R.loc[miss].round(3).to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 classify.py 2>&1 | tail -50
+[?2004l/task/work/classify.py:9: Pandas4Warning: Starting with pandas version 4.0 all arguments of sum will be keyword-only.
+  l=np.log2(c[keep]/c[keep].sum(0)*1e6+1).T
+     condition    session sex
+RS22   vehicle  s20240305   M
+RS26   treated  s20240305   F
+RS27   vehicle  s20240319   F
+RS47   treated  s20240305   M
+RS62   vehicle  s20240319   M
+RS69   vehicle  s20240319   F
+RS75   vehicle  s20240319   M
+RS79   treated  s20240305   M
+RS80   treated  s20240305   F
+RS89   treated  s20240319   F
+RS97   vehicle  s20240319   F
+rank 4
+Traceback (most recent call last):
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3816, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pandas/_libs/index.pyx", line 172, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 201, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7726, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7734, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'RS22'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/task/work/classify.py", line 14, in <module>
+    m=sm.OLS(l[g].values,X).fit()
+             ~^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 4330, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3823, in get_loc
+    raise KeyError(key) from err
+KeyError: 'RS22'
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && sed -i 's|l=np.log2(c\[keep\]/c\[keep\].sum(0)\*1e6+1).T|l=np.log2(c[keep]/c[keep].sum(axis=0)*1e6+1)|' classify.py && python3 classify.py 2>&1 | tail -45
+[?2004l     condition    session sex
+RS22   vehicle  s20240305   M
+RS26   treated  s20240305   F
+RS27   vehicle  s20240319   F
+RS47   treated  s20240305   M
+RS62   vehicle  s20240319   M
+RS69   vehicle  s20240319   F
+RS75   vehicle  s20240319   M
+RS79   treated  s20240305   M
+RS80   treated  s20240305   F
+RS89   treated  s20240319   F
+RS97   vehicle  s20240319   F
+rank 4
+Traceback (most recent call last):
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3816, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pandas/_libs/index.pyx", line 172, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 201, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7726, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7734, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'ENSG00000134851'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/task/work/classify.py", line 14, in <module>
+    m=sm.OLS(l[g].values,X).fit()
+             ~^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 4330, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3823, in get_loc
+    raise KeyError(key) from err
+KeyError: 'ENSG00000134851'
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && sed -i 's|sm.OLS(l\[g\].values,X)|sm.OLS(l.loc[g].values,X)|' classify.py && python3 classify.py 2>&1 | tail -45
+[?2004lbatch          125
+treatment       57
+treat+batch     16
+sex             14
+== cond_only
+padj         False  True 
+cls                      
+batch           96     29
+none           567     21
+sex             14      0
+treat+batch      5     11
+treatment        3     54
+== cond_sess
+padj         False  True 
+cls                      
+batch          123      2
+none           581      7
+sex             14      0
+treat+batch      2     14
+treatment        5     52
+== cond_sess_sex
+padj         False  True 
+cls                      
+batch          124      1
+none           584      4
+sex             14      0
+treat+batch      2     14
+treatment        7     50
+treatment-classified genes, per model significance:
+n treatment-driven (OLS): 73
+cond_only sig 115 recall_of_ols_treat 65 precision 0.5652173913043478
+cond_sess sig 75 recall_of_ols_treat 66 precision 0.88
+cond_sess_sex sig 69 recall_of_ols_treat 64 precision 0.927536231884058
+OLS-treatment genes not sig in cond_sess_sex: ['ENSG00000183921', 'ENSG00000171649', 'ENSG00000183723', 'ENSG00000104938', 'ENSG00000151240', 'ENSG00000131069', 'ENSG00000180914', 'ENSG00000106823', 'ENSG00000161277']
+                 b_cond  t_cond  p_cond  b_sess  p_sess  b_sex  p_sex  resid_sd          cls
+gene_id                                                                                     
+ENSG00000183921  -1.310  -5.126   0.001   0.120   0.662  0.200  0.362     0.305    treatment
+ENSG00000171649  -1.178  -4.288   0.004  -0.006   0.985 -0.100  0.663     0.327    treatment
+ENSG00000183723  -0.931  -4.409   0.003  -0.307   0.202 -0.132  0.461     0.252    treatment
+ENSG00000104938  -0.779  -4.309   0.004  -0.501   0.031 -0.035  0.815     0.215    treatment
+ENSG00000151240   0.674   3.775   0.007   1.278   0.000  0.036  0.807     0.213  treat+batch
+ENSG00000131069  -0.656  -4.310   0.004  -0.452   0.024 -0.119  0.363     0.181    treatment
+ENSG00000180914  -1.101  -3.884   0.006   0.073   0.810  0.421  0.107     0.338    treatment
+ENSG00000106823  -0.988  -3.706   0.008  -0.437   0.157  0.409  0.098     0.318    treatment
+ENSG00000161277  -0.725  -3.882   0.006   0.978   0.001  0.174  0.283     0.223  treat+batch
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> r=pd.read_csv('model_cond_sess.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print(r.shape, r.isna().sum().to_dict())
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> print('all-zero genes:',int((c.sum(axis=1)==0).sum()))
+[?2004l[?2004h> print('genes baseMean==0:',int((r.baseMean==0).sum()))
+[?2004l[?2004h> print(r[r.baseMean<1].head(5).round(4).to_string())
+[?2004l[?2004h> print('kept-sample total per gene min',c[[x for x in c.columns if x!='RS19']].sum(axis=1).min())
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> sf=pd.read_csv('quant/RS19/quant.sf',sep='\t')
+[?2004l[?2004h> print('tx in quant:',sf.Name.isin(t2g.transcript_id).sum(),'of',t2g.transcript_id.nunique(),'genes:',t2g.gene_id.nunique())
+[?2004l[?2004h> print('dup transcripts?',t2g.transcript_id.duplicated().sum())
+[?2004l[?2004h> print('mapping-rate lines:')
+[?2004l[?2004h> import subprocess
+[?2004l[?2004h> for s in ['RS19','RS26','RS75']:
+[?2004l[?2004h>     out=subprocess.run(['grep','-iE','Mapping rate|percent|libary type|library type',f'quant/{s}/quant.sf.log'],capture_output=True,text=True).stdout
+[?2004l[?2004h>     print(s,out.strip()[:300])
+[?2004l[?2004h> EOF
+[?2004l(800, 6) {'baseMean': 0, 'log2FoldChange': 0, 'lfcSE': 0, 'stat': 0, 'pvalue': 0, 'padj': 0}
+all-zero genes: 0
+genes baseMean==0: 0
+Empty DataFrame
+Columns: [baseMean, log2FoldChange, lfcSE, stat, pvalue, padj]
+Index: []
+kept-sample total per gene min 42.0
+tx in quant: 928 of 928 genes: 800
+dup transcripts? 0
+mapping-rate lines:
+RS19 
+RS26 
+RS75 
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > loo.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> keep=[s for s in c.columns if s!='RS19']
+[?2004l[?2004h> sess=dict(zip(keep,['s20240305']*5+['s20240319']*6))
+[?2004l[?2004h> sess={'RS22':'s20240305','RS26':'s20240305','RS47':'s20240305','RS79':'s20240305','RS80':'s20240305','RS27':'s20240319','RS62':'s20240319','RS69':'s20240319','RS75':'s20240319','RS89':'s20240319','RS97':'s20240319'}
+[?2004l[?2004h> cond={'RS22':'vehicle','RS26':'treated','RS27':'vehicle','RS47':'treated','RS62':'vehicle','RS69':'vehicle','RS75':'vehicle','RS79':'treated','RS80':'treated','RS89':'treated','RS97':'vehicle'}
+[?2004l[?2004h> base=pd.read_csv('model_cond_sess.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sigb=set(base.index[base.padj<0.05])
+[?2004l[?2004h> print('base sig',len(sigb))
+[?2004l[?2004h> for drop in keep:
+[?2004l[?2004h>     ss=[s for s in keep if s!=drop]
+[?2004l[?2004h>     meta=pd.DataFrame({'condition':[cond[s] for s in ss],'session':[sess[s] for s in ss]},index=ss)
+[?2004l[?2004h>     dds=DeseqDataSet(counts=c[ss].T.round().astype(int),metadata=meta,design='~session+condition',quiet=True,n_cpus=2)
+[?2004l[?2004h>     dds.deseq2(); st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=0.05,quiet=True,n_cpus=2); st.summary()
+[?2004l[?2004h>     r=st.results_df
+[?2004l[?2004h>     sg=set(r.index[r.padj<0.05])
+[?2004l[?2004h>     lfc=np.sign(r.log2FoldChange[list(sigb)])==np.sign(base.log2FoldChange[list(sigb)])
+[?2004l[?2004h>     print(f'drop {drop}: nsig={len(sg)} retained_base_sig={len(sg&sigb)} signflip={int((~lfc).sum())}')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 loo.py 2>&1 | tail -15
+[?2004lbase sig 75
+drop RS22: nsig=59 retained_base_sig=57 signflip=0
+drop RS26: nsig=73 retained_base_sig=72 signflip=0
+drop RS27: nsig=73 retained_base_sig=72 signflip=0
+drop RS47: nsig=74 retained_base_sig=74 signflip=0
+drop RS62: nsig=73 retained_base_sig=73 signflip=0
+drop RS69: nsig=74 retained_base_sig=74 signflip=0
+drop RS75: nsig=73 retained_base_sig=73 signflip=0
+drop RS79: nsig=74 retained_base_sig=73 signflip=0
+drop RS80: nsig=72 retained_base_sig=72 signflip=0
+drop RS89: nsig=63 retained_base_sig=63 signflip=0
+drop RS97: nsig=72 retained_base_sig=72 signflip=0
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > final.py <<'PYEOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Final release pipeline: gene counts, sample QC, DE, erratum.
+[?2004l[?2004h> usage: python3 final.py <work_dir_with_quant> <out_dir> [PROJECT_INPUT]
+[?2004l[?2004h> """
+[?2004l[?2004h> import os, sys
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> 
+[?2004l[?2004h> WORK, OUT = sys.argv[1], sys.argv[2]
+[?2004l[?2004h> IN = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('PROJECT_INPUT', '/task/input')
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> samples = pd.read_csv(f'{IN}/samples.tsv', sep='\t', dtype=str).set_index('sample_id')
+[?2004l[?2004h> t2g = pd.read_csv(f'{IN}/reference/tx2gene.tsv', sep='\t', dtype=str)
+[?2004l[?2004h> tx2gene = dict(zip(t2g.transcript_id, t2g.gene_id))
+[?2004l[?2004h> genes = list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> name = t2g.drop_duplicates('gene_id').set_index('gene_id').gene_name
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------- 1. gene-level counts (estimated reads per gene) -------------
+[?2004l[?2004h> cols = {}
+[?2004l[?2004h> for sid in samples.index:
+[?2004l[?2004h>     sf = pd.read_csv(f'{WORK}/quant/{sid}/quant.sf', sep='\t')
+[?2004l[?2004h>     g = sf.groupby(sf.Name.map(tx2gene))['NumReads'].sum()
+[?2004l[?2004h>     cols[sid] = g.reindex(genes).fillna(0.0)
+[?2004l[?2004h> counts = pd.DataFrame(cols)
+[?2004l[?2004h> counts.index.name = 'gene_id'
+[?2004l[?2004h> counts.round(3).to_csv(f'{OUT}/gene_counts.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------- 2. sample QC: sex from the data, condition actually used ----
+[?2004l[?2004h> Y_GENES = [g for g in genes if name.get(g, '') in
+[?2004l[?2004h>            ('RPS4Y1', 'DDX3Y', 'EIF1AY', 'UTY', 'KDM5D', 'RPS4Y2', 'TXLNGY', 'ZFY', 'SRY', 'NLGN4Y', 'USP9Y')]
+[?2004l[?2004h> XIST = [g for g in genes if name.get(g, '') == 'XIST']
+[?2004l[?2004h> cpm = counts / counts.sum() * 1e6
+[?2004l[?2004h> y_cpm, x_cpm = cpm.loc[Y_GENES].sum(), cpm.loc[XIST].sum()
+[?2004l[?2004h> # reference levels from the unambiguous libraries
+[?2004l[?2004h> pure_y = float(np.median([v for s, v in y_cpm.items() if v > 100]))
+[?2004l[?2004h> pure_x = float(np.median([v for s, v in x_cpm.items() if v > 100]))
+[?2004l[?2004h> 
+[?2004l[?2004h> SEX_FROM_SHEET = samples.donor_sex.to_dict()
+[?2004l[?2004h> inferred, reason = {}, {}
+[?2004l[?2004h> for s in samples.index:
+[?2004l[?2004h>     fy, fx = y_cpm[s] / pure_y, x_cpm[s] / pure_x
+[?2004l[?2004h>     if fy > 0.15 and fx > 0.15:                      # markers of both donors present
+[?2004l[?2004h>         inferred[s], reason[s] = 'mixed', f'Y-markers {fy:.2f}x and XIST {fx:.2f}x of pure levels -> >=2 donors'
+[?2004l[?2004h>     elif fy > 0.15 and fx <= 0.15:
+[?2004l[?2004h>         inferred[s], reason[s] = 'M', f'Y-marker reads {fy:.2f}x reference, XIST absent'
+[?2004l[?2004h>     elif fx > 0.15 and fy <= 0.15:
+[?2004l[?2004h>         inferred[s], reason[s] = 'F', f'XIST {fx:.2f}x reference, no Y-marker reads'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         inferred[s], reason[s] = 'mixed', 'no sex-chromosome markers above threshold'
+[?2004l[?2004h> 
+[?2004l[?2004h> # Library-prep session of the material in each FASTQ, from the data (signature of the
+[?2004l[?2004h> # two prep sessions recovered from the libraries whose label is unambiguous).
+[?2004l[?2004h> SESSION_BATCH = samples.library_prep_batch.to_dict()
+[?2004l[?2004h> 
+[?2004l[?2004h> # A library whose inferred sex contradicts its own sample-sheet record but matches another
+[?2004l[?2004h> # record (same session group, opposite condition) is a tube swap: the material entered the
+[?2004l[?2004h> # other record's processing. The observed condition of such a library is taken from the
+[?2004l[?2004h> # response/batch fingerprint of the FASTQ file, which is only trusted together with the
+[?2004l[?2004h> # donor sex, i.e. the library enters under the condition its cells actually received.
+[?2004l[?2004h> condition_used, notes = {}, {}
+[?2004l[?2004h> for s in samples.index:
+[?2004l[?2004h>     if inferred[s] == 'mixed':
+[?2004l[?2004h>         condition_used[s], notes[s] = 'excluded', reason[s]
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     if SEX_FROM_SHEET[s] == inferred[s]:
+[?2004l[?2004h>         condition_used[s], notes[s] = samples.condition[s], 'data agree with sample sheet; ' + reason[s]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         condition_used[s], notes[s] = None, 'sex from data (' + inferred[s] + ') contradicts sheet (' + SEX_FROM_SHEET[s] + ') -> re-labelled tube'
+[?2004l[?2004h> qc = pd.DataFrame({'sample_id': samples.index,
+[?2004l[?2004h>                    'inferred_sex': [inferred[s] for s in samples.index],
+[?2004l[?2004h>                    'condition_used': [condition_used[s] for s in samples.index],
+[?2004l[?2004h>                    'donor_sex_sheet': [SEX_FROM_SHEET[s] for s in samples.index],
+[?2004l[?2004h>                    'donor_id_sheet': samples.donor_id.values,
+[?2004l[?2004h>                    'condition_sheet': samples.condition.values,
+[?2004l[?2004h>                    'library_prep_batch_sheet': samples.library_prep_batch.values,
+[?2004l[?2004h>                    'XIST_cpm': x_cpm.values.round(1), 'Y_gene_cpm': y_cpm.values.round(1),
+[?2004l[?2004h>                    'note': [notes[s] for s in samples.index]})
+[?2004l[?2004h> 
+[?2004l[?2004h> # resolve the swapped tubes: the two mis-assigned libraries must be given the condition of
+[?2004l[?2004h> # the record whose cells they contain. Both the donor sex and the library-prep session of
+[?2004l[?2004h> # the material (read from the expression fingerprints) identify that record.
+[?2004l[?2004h> sw = [s for s in qc.sample_id if qc.condition_used[s] is None]
+[?2004l[?2004h> assert len(sw) == 2, sw
+[?2004l[?2004h> a, b = sw
+[?2004l[?2004h> # the two swapped tubes belong to different records, hence different conditions
+[?2004l[?2004h> cond_a = samples.condition[a]; cond_b = samples.condition[b]
+[?2004l[?2004h> if SEX_FROM_SHEET[a] == inferred[b] and SEX_FROM_SHEET[b] == inferred[a]:
+[?2004l[?2004h>     # classic reciprocal swap: FASTQ a holds the library prepared for record b and vice versa
+[?2004l[?2004h>     qc.loc[qc.sample_id == a, 'condition_used'] = samples.condition[b]
+[?2004l[?2004h>     qc.loc[qc.sample_id == b, 'condition_used'] = samples.condition[a]
+[?2004l[?2004h>     for s, other in ((a, b), (b, a)):
+[?2004l[?2004h>         qc.loc[qc.sample_id == s, 'note'] += f'; file contains the library of record {other} ({samples.donor_id[other]}, {samples.condition[other]})'
+[?2004l[?2004h> else:
+[?2004l[?2004h>     raise SystemExit('unexpected QC pattern: ' + str(qc[['sample_id', 'inferred_sex', 'donor_sex_sheet']]))
+[?2004l[?2004h> qc.to_csv(f'{OUT}/sample_qc.tsv', sep='\t', index=False, na_rep='NA')
+[?2004l[?2004h> 
+[?2004l[?2004h> used = {r.sample_id: r.condition_used for r in qc.itertuples() if r.condition_used != 'excluded'}
+[?2004l[?2004h> keep = [s for s in samples.index if s in used]
+[?2004l[?2004h> sys.stderr.write('kept %d libraries: %s\n' % (len(keep), used))
+[?2004l[?2004h> 
+[?2004l[?2004h> # library-prep session of the material inside each FASTQ file = the session of the record
+[?2004l[?2004h> # whose tube it is (the tubes, not the labels, were swapped)
+[?2004l[?2004h> session_used = {}
+[?2004l[?2004h> for r in qc.itertuples():
+[?2004l[?2004h>     if r.condition_used == 'excluded':
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     s = r.sample_id
+[?2004l[?2004h>     if SEX_FROM_SHEET[s] == r.inferred_sex:
+[?2004l[?2004h>         session_used[s] = SESSION_BATCH[s]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         other = [x for x in sw if x != s][0]
+[?2004l[?2004h>         session_used[s] = SESSION_BATCH[other]
+[?2004l[?2004h> 
+[?2004l[?2004h> meta = pd.DataFrame({'condition': [used[s] for s in keep],
+[?2004l[?2004h>                      'session': ['s' + session_used[s].replace('-', '') for s in keep]}, index=keep)
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------- 3. differential expression ---------------------------------
+[?2004l[?2004h> cnt = counts[keep].T.round().astype(int)
+[?2004l[?2004h> dds = DeseqDataSet(counts=cnt, metadata=meta, design='~session+condition', quiet=True, n_cpus=2)
+[?2004l[?2004h> dds.deseq2()
+[?2004l[?2004h> st = DeseqStats(dds, contrast=['condition', 'treated', 'vehicle'], alpha=0.05, quiet=True, n_cpus=2)
+[?2004l[?2004h> st.summary()
+[?2004l[?2004h> res = st.results_df.reindex(genes)
+[?2004l[?2004h> de = pd.DataFrame({'gene_id': genes,
+[?2004l[?2004h>                    'gene_name': name.reindex(genes).values,
+[?2004l[?2004h>                    'base_mean': res.baseMean.values,
+[?2004l[?2004h>                    'log2fc': np.nan_to_num(res.log2FoldChange.values, nan=0.0, posinf=0.0, neginf=0.0),
+[?2004l[?2004h>                    'lfcSE': res.lfcSE.values,
+[?2004l[?2004h>                    'stat': res.stat.values,
+[?2004l[?2004h>                    'pvalue': res.pvalue.values,
+[?2004l[?2004h>                    'padj': res.padj.values,
+[?2004l[?2004h>                    'tested': np.where(res.pvalue.isna().values, 'no', 'yes')})
+[?2004l[?2004h> de['significant'] = ((de.padj < 0.05) & de.padj.notna()).astype(int)
+[?2004l[?2004h> de.loc[de.tested == 'no', 'significant'] = 0
+[?2004l[?2004h> de.loc[de.tested == 'no', 'padj'] = np.nan
+[?2004l[?2004h> de.to_csv(f'{OUT}/de_results.tsv', sep='\t', index=False, na_rep='NA', float_format='%.6g')
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------- 4. erratum for the mailed list -----------------------------
+[?2004l[?2004h> mail = pd.read_csv(f'{IN}/previous_analysis/mail_top_responders.tsv', sep='\t', dtype=str)
+[?2004l[?2004h> sig = set(de.gene_id[de.significant == 1])
+[?2004l[?2004h> er = pd.DataFrame({'gene_id': mail.gene_id,
+[?2004l[?2004h>                    'gene_name': [name.get(g, '') for g in mail.gene_id],
+[?2004l[?2004h>                    'mail_rank': mail.get('rank', pd.Series([''] * len(mail))).values,
+[?2004l[?2004h>                    'log2fc': de.set_index('gene_id').log2fc.reindex(mail.gene_id).values,
+[?2004l[?2004h>                    'padj': de.set_index('gene_id').padj.reindex(mail.gene_id).values,
+[?2004l[?2004h>                    'verdict': ['confirmed' if g in sig else 'retracted' for g in mail.gene_id]})
+[?2004l[?2004h> er.to_csv(f'{OUT}/erratum.tsv', sep='\t', index=False, na_rep='NA', float_format='%.6g')
+[?2004l[?2004h> print('genes tested:', (de.tested == 'yes').sum(), 'significant:', de.significant.sum(),
+[?2004l[?2004h>       'confirmed:', (er.verdict == 'confirmed').sum(), 'retracted:', (er.verdict == 'retracted').sum())
+[?2004l[?2004h> print(qc[['sample_id', 'inferred_sex', 'condition_used']].to_string(index=False))
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# echo written
+[?2004lwritten
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 final.py /task/work /task/output 2>&1 | tail -25
+[?2004lTraceback (most recent call last):
+  File "/task/work/final.py", line 84, in <module>
+    sw = [s for s in qc.sample_id if qc.condition_used[s] is None]
+                                     ~~~~~~~~~~~~~~~~~^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 1102, in __getitem__
+    return self._get_value(key)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 1189, in _get_value
+    loc = self.index.get_loc(label)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/range.py", line 549, in get_loc
+    raise KeyError(key)
+KeyError: 'RS19'
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat > final2.py <<'PYEOF'
+[?2004l[?2004h> #!/usr/bin/env python3
+[?2004l[?2004h> """Release pipeline for the compound-vs-vehicle RNA-seq project.
+[?2004l[?2004h> 
+[?2004l[?2004h> usage: python3 final2.py <work_dir_with_quant> <out_dir> [input_dir]
+[?2004l[?2004h> 
+[?2004l[?2004h> Steps
+[?2004l[?2004h>  1. gene-level estimated read counts from the salmon quantifications (all 12 FASTQ)
+[?2004l[?2004h>  2. per-sample QC: donor sex / multi-donor detection from the sex-chromosome control
+[?2004l[?2004h>     genes of the panel, and the condition the reads of each FASTQ really came from
+[?2004l[?2004h>     (expression fingerprints learned from the libraries whose label is unambiguous)
+[?2004l[?2004h>  3. DE, compound vs vehicle, with pydeseq2 and the library-prep session as covariate
+[?2004l[?2004h>  4. erratum for the mailed top-responder list
+[?2004l[?2004h> """
+[?2004l[?2004h> import os
+[?2004l[?2004h> import sys
+[?2004l[?2004h> 
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> 
+[?2004l[?2004h> WORK, OUT = sys.argv[1], sys.argv[2]
+[?2004l[?2004h> IN = sys.argv[3] if len(sys.argv) > 3 else os.environ.get("PROJECT_INPUT", "/task/input")
+[?2004l[?2004h> os.makedirs(OUT, exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> samples = pd.read_csv(f"{IN}/samples.tsv", sep="\t", dtype=str).set_index("sample_id")
+[?2004l[?2004h> t2g = pd.read_csv(f"{IN}/reference/tx2gene.tsv", sep="\t", dtype=str)
+[?2004l[?2004h> tx2gene = dict(zip(t2g["transcript_id"], t2g["gene_id"]))
+[?2004l[?2004h> genes = list(dict.fromkeys(t2g["gene_id"]))
+[?2004l[?2004h> gname = t2g.drop_duplicates("gene_id").set_index("gene_id")["gene_name"]
+[?2004l[?2004h> 
+[?2004l[?2004h> # ------------------------------------------------------------------ 1. counts
+[?2004l[?2004h> qcols = {}
+[?2004l[?2004h> for sid in samples.index:
+[?2004l[?2004h>     sf = pd.read_csv(f"{WORK}/quant/{sid}/quant.sf", sep="\t")
+[?2004l[?2004h>     qcols[sid] = sf.groupby(sf["Name"].map(tx2gene))["NumReads"].sum().reindex(genes).fillna(0.0)
+[?2004l[?2004h> counts = pd.DataFrame(qcols)
+[?2004l[?2004h> counts.index.name = "gene_id"
+[?2004l[?2004h> counts.round(3).to_csv(f"{OUT}/gene_counts.tsv", sep="\t")
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------------------------------------------------- 2. QC: donor sex
+[?2004l[?2004h> Y_MARKERS = [g for g in genes if gname.get(g, "").startswith(("RPS4Y", "DDX3Y", "EIF1AY", "UTY",
+[?2004l[?2004h>                                                               "KDM5D", "TXLNGY", "USP9Y", "NLGN4Y", "ZFY", "SRY"))
+[?2004l[?2004h>              and gname.get(g, "") != "ZFYVE1"]
+[?2004l[?2004h> X_MARKERS = [g for g in genes if gname.get(g, "") in ("XIST", "TSIX")]
+[?2004l[?2004h> cpm = counts / counts.sum() * 1e6
+[?2004l[?2004h> y_cpm, x_cpm = cpm.loc[Y_MARKERS].sum(), cpm.loc[X_MARKERS].sum()
+[?2004l[?2004h> pure_y = float(np.median(y_cpm[y_cpm > 100][x_cpm[y_cpm > 100] < 10])) if (y_cpm > 100).any() else np.nan
+[?2004l[?2004h> pure_x = float(np.median(x_cpm[x_cpm > 100][y_cpm[x_cpm > 100] < 10])) if (x_cpm > 100).any() else np.nan
+[?2004l[?2004h> fy, fx = y_cpm / pure_y, x_cpm / pure_x
+[?2004l[?2004h> CUT = 0.25
+[?2004l[?2004h> inferred_sex = np.where((fy >= CUT) & (fx >= CUT), "mixed",
+[?2004l[?2004h>                np.where(fy >= CUT, "M", np.where(fx >= CUT, "F", "mixed")))
+[?2004l[?2004h> inferred_sex = pd.Series(inferred_sex, index=y_cpm.index)
+[?2004l[?2004h> frac = pd.DataFrame({"Y_marker_frac": fy.round(3), "XIST_frac": fx.round(3)})
+[?2004l[?2004h> 
+[?2004l[?2004h> # ----------------------------------- 2b. condition of the material in each FASTQ
+[?2004l[?2004h> # Libraries whose label is corroborated by their own donor sex (and is not a mixture).
+[?2004l[?2004h> sheet_sex = samples["donor_sex"]
+[?2004l[?2004h> unamb = [s for s in samples.index if inferred_sex[s] != "mixed" and inferred_sex[s] == sheet_sex[s]]
+[?2004l[?2004h> amb = [s for s in samples.index if inferred_sex[s] not in ("mixed",) and inferred_sex[s] != sheet_sex[s]]
+[?2004l[?2004h> mixed = [s for s in samples.index if inferred_sex[s] == "mixed"]
+[?2004l[?2004h> sys.stderr.write(f"unambiguous: {unamb}\nsex-vs-sheet mismatches: {amb}\nmulti-donor: {mixed}\n")
+[?2004l[?2004h> 
+[?2004l[?2004h> lcpm = np.log2(cpm + 1)
+[?2004l[?2004h> cent = lcpm.sub(lcpm.mean(axis=1), axis=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fit(sample_list, covar):
+[?2004l[?2004h>     """pydeseq2 with ~library_prep_session + condition on the given libraries."""
+[?2004l[?2004h>     meta = pd.DataFrame({"condition": samples.loc[sample_list, "condition"].values,
+[?2004l[?2004h>                          "session": ["s" + d.replace("-", "") for d in samples.loc[sample_list, "library_prep_batch"]]},
+[?2004l[?2004h>                         index=sample_list)
+[?2004l[?2004h>     if covar == "session":
+[?2004l[?2004h>         con, ref = "session", "s" + samples.loc[sample_list[0], "library_prep_batch"].replace("-", "")
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         con, ref = "condition", "vehicle"
+[?2004l[?2004h>     dds = DeseqDataSet(counts=counts[sample_list].T.round().astype(int), metadata=meta,
+[?2004l[?2004h>                        design="~session+condition", quiet=True, n_cpus=2)
+[?2004l[?2004h>     dds.deseq2()
+[?2004l[?2004h>     lvl = sorted(meta[con].unique())
+[?2004l[?2004h>     st = DeseqStats(dds, contrast=[con, lvl[-1], lvl[0]], alpha=0.05, quiet=True, n_cpus=2)
+[?2004l[?2004h>     st.summary()
+[?2004l[?2004h>     return st.results_df.reindex(genes), con, lvl
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> res_c, _, _ = fit(unamb, "condition")          # responder signature, unambiguous libraries only
+[?2004l[?2004h> res_s, _, _ = fit(unamb, "session")            # library-prep signature
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> def fingerprint(sig, direction, group_of, target):
+[?2004l[?2004h>     sig = [g for g in sig.index if (sig.loc[g, "padj"] < 0.05) & (sig.loc[g, "log2FoldChange"].abs() > 0.5)]
+[?2004l[?2004h>     d = np.sign(sig if isinstance(sig, pd.Series) else direction.reindex(sig))
+[?2004l[?2004h>     score = (cent.loc[sig].T * d).mean(axis=1)
+[?2004l[?2004h>     ref = pd.Series({k: np.mean([score[s] for s in unamb if group_of[s] == k]) for k in set(group_of.values())})
+[?2004l[?2004h>     lab = {t: min(ref.index, key=lambda k: abs(score[t] - ref[k])) for t in target}
+[?2004l[?2004h>     return score, ref, lab, len(sig)
+[?2004l[?2004h> 
+[?2004l[?2004h> 
+[?2004l[?2004h> cond_dir = res_c["log2FoldChange"]
+[?2004l[?2004h> genes_c = res_c[(res_c["padj"] < 0.05) & (res_c["log2FoldChange"].abs() > 0.5)].index
+[?2004l[?2004h> cond_score = (cent.loc[genes_c].T * np.sign(cond_dir.reindex(genes_c))).mean(axis=1)
+[?2004l[?2004h> cond_ref = pd.Series({k: float(np.mean([cond_score[s] for s in unamb if samples.loc[s, "condition"] == k]))
+[?2004l[?2004h>                       for k in ("treated", "vehicle")})
+[?2004l[?2004h> cond_call = {s: cond_ref.idxmin(axis=0) if False else min(cond_ref.index, key=lambda k: abs(cond_score[s] - cond_ref[k]))
+[?2004l[?2004h>              for s in samples.index}
+[?2004l[?2004h> 
+[?2004l[?2004h> genes_s = res_s[(res_s["padj"] < 0.05) & (res_s["log2FoldChange"].abs() > 0.5)].index
+[?2004l[?2004h> sess_dir = res_s["log2FoldChange"].reindex(genes_s)
+[?2004l[?2004h> sess_lab = pd.Series({s: "s" + samples.loc[s, "library_prep_batch"].replace("-", "") for s in unamb})
+[?2004l[?2004h> sess_score = (cent.loc[genes_s].T * np.sign(sess_dir)).mean(axis=1)
+[?2004l[?2004h> ss_ref = pd.Series({k: float(np.mean([sess_score[s] for s in unamb if sess_lab[s] == k])) for k in sess_lab.unique()})
+[?2004l[?2004h> sess_call = {s: min(ss_ref.index, key=lambda k: abs(sess_score[s] - ss_ref[k])) for s in samples.index}
+[?2004l[?2004h> sys.stderr.write("condition fingerprint ref: %s\n" % cond_ref.round(3).to_dict())
+[?2004l[?2004h> sys.stderr.write("session fingerprint ref: %s\n" % ss_ref.round(3).to_dict())
+[?2004l[?2004h> for s in samples.index:
+[?2004l[?2004h>     sys.stderr.write(f"{s}: sex={inferred_sex[s]:5s} sheet_sex={sheet_sex[s]} cond_score={cond_score[s]:+.2f} "
+[?2004l[?2004h>                      f"fingerprint_cond={cond_call[s]:7s} sheet_cond={samples.loc[s,'condition']:7s} "
+[?2004l[?2004h>                      f"sess_score={sess_score[s]:+.2f} fingerprint_sess={sess_call[s]} "
+[?2004l[?2004h>                      f"sheet_sess={sess_lab.get(s,'')}\n")
+[?2004l[?2004h> 
+[?2004l[?2004h> condition_used, session_used, note = {}, {}, {}
+[?2004l[?2004h> for s in samples.index:
+[?2004l[?2004h>     if s in mixed:
+[?2004l[?2004h>         condition_used[s] = "excluded"
+[?2004l[?2004h>         session_used[s] = ""
+[?2004l[?2004h>         note[s] = ("library contains material of more than one donor "
+[?2004l[?2004h>                    f"({fy[s]:.2f}x male-marker and {fx[s]:.2f}x XIST signal of pure libraries; "
+[?2004l[?2004h>                    f"condition/session fingerprints in between both groups) -> left out of the model")
+[?2004l[?2004h>     elif inferred_sex[s] != sheet_sex[s]:
+[?2004l[?2004h>         condition_used[s] = cond_call[s]
+[?2004l[?2004h>         session_used[s] = sess_call[s]
+[?2004l[?2004h>         note[s] = (f"donor sex from the data ({inferred_sex[s]}) contradicts the sample-sheet record "
+[?2004l[?2004h>                    f"({sheet_sex[s]}): the tube was re-labelled from the illegible box map. Expression "
+[?2004l[?2004h>                    f"fingerprints put the reads in the {cond_call[s]} group of prep session {sess_call[s]}, "
+[?2004l[?2004h>                    f"so the library enters the model as {cond_call[s]}")
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         condition_used[s] = samples.loc[s, "condition"]
+[?2004l[?2004h>         session_used[s] = sess_lab[s]
+[?2004l[?2004h>         note[s] = (f"donor sex from the data ({inferred_sex[s]}) agrees with the sample sheet; "
+[?2004l[?2004h>                    f"fingerprints also consistent with {cond_call[s]} / {sess_call[s]}")
+[?2004l[?2004h> 
+[?2004l[?2004h> # sanity check: the mismatches must form a reciprocal swap of two records
+[?2004l[?2004h> if len(amb) == 2 and len({condition_used[s] for s in amb}) == 2:
+[?2004l[?2004h>     a, b = amb
+[?2004l[?2004h>     if inferred_sex[a] == sheet_sex[b] and inferred_sex[b] == sheet_sex[a] and len(set(samples.loc[[a, b], "library_prep_batch"])) == 2:
+[?2004l[?2004h>         for s, o in ((a, b), (b, a)):
+[?2004l[?2004h>             note[s] += f"; the file holds the library of record {o} (donor {samples.loc[o,'donor_id']}, {samples.loc[o,'condition']})"
+[?2004l[?2004h> qc = pd.DataFrame({"sample_id": list(samples.index),
+[?2004l[?2004h>                    "inferred_sex": [inferred_sex[s] for s in samples.index],
+[?2004l[?2004h>                    "condition_used": [condition_used[s] for s in samples.index],
+[?2004l[?2004h>                    "donor_id_sheet": samples["donor_id"].values,
+[?2004l[?2004h>                    "donor_sex_sheet": sheet_sex.values,
+[?2004l[?2004h>                    "condition_sheet": samples["condition"].values,
+[?2004l[?2004h>                    "library_prep_batch_sheet": samples["library_prep_batch"].values,
+[?2004l[?2004h>                    "prep_session_of_material": [session_used[s] for s in samples.index],
+[?2004l[?2004h>                    "inferred_sex_source": "XIST vs RPS4Y1/DDX3Y/EIF1AY/UTY/KDM5D estimated counts",
+[?2004l[?2004h>                    "Y_marker_frac_of_pure": fy.values,
+[?2004l[?2004h>                    "XIST_frac_of_pure": fx.values,
+[?2004l[?2004h>                    "condition_fingerprint_score": cond_score.values.round(3),
+[?2004l[?2004h>                    "prep_session_fingerprint_score": sess_score.values.round(3),
+[?2004l[?2004h>                    "note": [note[s] for s in samples.index]})
+[?2004l[?2004h> qc.to_csv(f"{OUT}/sample_qc.tsv", sep="\t", index=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> keep = [s for s in samples.index if condition_used[s] != "excluded"]
+[?2004l[?2004h> meta = pd.DataFrame({"condition": [condition_used[s] for s in keep],
+[?2004l[?2004h>                     "session": [session_used[s] for s in keep]}, index=keep)
+[?2004l[?2004h> sys.stderr.write("libraries entering the model: %d\n%s\n" % (len(keep), meta.to_string()))
+[?2004l[?2004h> 
+[?2004l[?2004h> # ---------------------------------------------------------------------- 3. DE
+[?2004l[?2004h> dds = DeseqDataSet(counts=counts[keep].T.round().astype(int), metadata=meta,
+[?2004l[?2004h>                    design="~session+condition", quiet=True, n_cpus=2)
+[?2004l[?2004h> dds.deseq2()
+[?2004l[?2004h> st = DeseqStats(dds, contrast=["condition", "treated", "vehicle"], alpha=0.05, quiet=True, n_cpus=2)
+[?2004l[?2004h> st.summary()
+[?2004l[?2004h> r = st.results_df.reindex(genes)
+[?2004l[?2004h> de = pd.DataFrame({"gene_id": genes,
+[?2004l[?2004h>                    "gene_name": gname.reindex(genes).values,
+[?2004l[?2004h>                    "base_mean": r["baseMean"].values,
+[?2004l[?2004h>                    "log2fc": np.nan_to_num(r["log2FoldChange"].values.astype(float), nan=0.0,
+[?2004l[?2004h>                                            posinf=0.0, neginf=0.0),
+[?2004l[?2004h>                    "lfcSE": r["lfcSE"].values,
+[?2004l[?2004h>                    "stat": r["stat"].values,
+[?2004l[?2004h>                    "pvalue": r["pvalue"].values,
+[?2004l[?2004h>                    "padj": r["padj"].values,
+[?2004l[?2004h>                    "design": "~library_prep_session + condition (treated vs vehicle)",
+[?2004l[?2004h>                    "n_libraries_used": len(keep)})
+[?2004l[?2004h> untested = de["pvalue"].isna().values | (de["base_mean"].values == 0)
+[?2004l[?2004h> de["padj"] = np.where(untested, np.nan, de["padj"])
+[?2004l[?2004h> de["significant"] = np.where(de["padj"].notna() & (de["padj"] < 0.05), 1, 0)
+[?2004l[?2004h> de["tested"] = np.where(untested, "no", "yes")
+[?2004l[?2004h> de.to_csv(f"{OUT}/de_results.tsv", sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004l[?2004h> 
+[?2004l[?2004h> # ------------------------------------------------------------------ 4. erratum
+[?2004l[?2004h> mail = pd.read_csv(f"{IN}/previous_analysis/mail_top_responders.tsv", sep="\t", dtype=str)
+[?2004l[?2004h> sig = set(de.loc[de["significant"] == 1, "gene_id"])
+[?2004l[?2004h> dei = de.set_index("gene_id")
+[?2004l[?2004h> er = pd.DataFrame({"gene_id": mail["gene_id"].values,
+[?2004l[?2004h>                    "gene_name": [gname.get(g, "") for g in mail["gene_id"]],
+[?2004l[?2004h>                    "mail_rank": mail["rank"].values if "rank" in mail else "",
+[?2004l[?2004h>                    "final_log2fc": dei["log2fc"].reindex(mail["gene_id"]).values,
+[?2004l[?2004h>                    "final_pvalue": dei["pvalue"].reindex(mail["gene_id"]).values,
+[?2004l[?2004h>                    "final_padj": dei["padj"].reindex(mail["gene_id"]).values,
+[?2004l[?2004h>                    "significant_final": dei["significant"].reindex(mail["gene_id"]).values,
+[?2004l[?2004h>                    "verdict": ["confirmed" if g in sig else "retracted" for g in mail["gene_id"]]})
+[?2004l[?2004h> er.to_csv(f"{OUT}/erratum.tsv", sep="\t", index=False, na_rep="NA", float_format="%.6g")
+[?2004l[?2004h> 
+[?2004l[?2004h> print("rows in gene_counts.tsv:", len(counts), "samples:", len(counts.columns))
+[?2004l[?2004h> print("genes tested:", int((~untested).sum()), "of", len(genes), "| significant:", int(de["significant"].sum()))
+[?2004l[?2004h> print("erratum: confirmed", int((er["verdict"] == "confirmed").sum()), "retracted", int((er["verdict"] == "retracted").sum()))
+[?2004l[?2004h> print(qc[["sample_id", "inferred_sex", "condition_used"]].to_string(index=False))
+[?2004l[?2004h> PYEOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 final2.py /task/work /task/output 2>&1 | tail -45
+[?2004lsex-vs-sheet mismatches: ['RS26', 'RS75']
+multi-donor: ['RS19']
+condition fingerprint ref: {'treated': -1.245, 'vehicle': 1.057}
+session fingerprint ref: {'s20240305': -0.728, 's20240319': 0.62}
+RS19: sex=mixed sheet_sex=M cond_score=-0.17 fingerprint_cond=treated sheet_cond=treated sess_score=-0.10 fingerprint_sess=s20240305 sheet_sess=
+RS22: sex=M     sheet_sex=M cond_score=+1.04 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=-0.76 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS26: sex=F     sheet_sex=M cond_score=-1.22 fingerprint_cond=treated sheet_cond=vehicle sess_score=-0.71 fingerprint_sess=s20240305 sheet_sess=
+RS27: sex=F     sheet_sex=F cond_score=+1.10 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS47: sex=M     sheet_sex=M cond_score=-1.28 fingerprint_cond=treated sheet_cond=treated sess_score=-0.70 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS62: sex=M     sheet_sex=M cond_score=+1.06 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.64 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS69: sex=F     sheet_sex=F cond_score=+1.06 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.62 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS75: sex=M     sheet_sex=F cond_score=+1.09 fingerprint_cond=vehicle sheet_cond=treated sess_score=+0.63 fingerprint_sess=s20240319 sheet_sess=
+RS79: sex=M     sheet_sex=M cond_score=-1.26 fingerprint_cond=treated sheet_cond=treated sess_score=-0.74 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS80: sex=F     sheet_sex=F cond_score=-1.23 fingerprint_cond=treated sheet_cond=treated sess_score=-0.71 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS89: sex=F     sheet_sex=F cond_score=-1.21 fingerprint_cond=treated sheet_cond=treated sess_score=+0.65 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS97: sex=F     sheet_sex=F cond_score=+1.03 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+libraries entering the model: 11
+     condition    session
+RS22   vehicle  s20240305
+RS26   treated  s20240305
+RS27   vehicle  s20240319
+RS47   treated  s20240305
+RS62   vehicle  s20240319
+RS69   vehicle  s20240319
+RS75   vehicle  s20240319
+RS79   treated  s20240305
+RS80   treated  s20240305
+RS89   treated  s20240319
+RS97   vehicle  s20240319
+rows in gene_counts.tsv: 800 samples: 12
+genes tested: 800 of 800 | significant: 75
+erratum: confirmed 16 retracted 24
+sample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+[?2004hroot@03b0b295779b:/task/work# grep -E 'Mapping and quantification took|percent|Mapping rate|percent mapped|NumQuant' -i /task/work/quant/RS19.log | tail -8; echo ---; grep -E 'Mapping rate|percent' -i /task/work/quant/RS26.log | tail -4
+[?2004l---
+[?2004hroot@03b0b295779b:/task/work# cd /task/output && ls -la && head -1 gene_counts.tsv | tr '\t' '\n' | paste -sd' ' && awk 'NR>1{n++;for(i=2;i<=NF;i++) if($i<0) bad++}END{print "rows",n,"neg",bad+0}' gene_counts.tsv && cat sample_qc.tsv | cut -f1-3 | column -t
+[?2004ltotal 192
+drwxr-xr-x 1 root root   4096 Nov 12 22:03 .
+drwxr-xr-x 1 root root   4096 Nov 12 21:33 ..
+-rw-rw-rw- 1 root root 112249 Nov 12 22:03 de_results.tsv
+-rw-rw-rw- 1 root root   2741 Nov 12 22:03 erratum.tsv
+-rw-rw-rw- 1 root root  61412 Nov 12 22:03 gene_counts.tsv
+-rw-rw-rw- 1 root root   3784 Nov 12 22:03 sample_qc.tsv
+gene_id RS19 RS22 RS26 RS27 RS47 RS62 RS69 RS75 RS79 RS80 RS89 RS97
+rows 800 neg 0
+bash: column: command not found
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> gc=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> genes=list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> print('gc shape',gc.shape,'cols ok',list(gc.columns)==list(sh.sample_id),'index ok',list(gc.index)==genes)
+[?2004l[?2004h> print('non-negative:',bool((gc>=0).all().all()),'finite:',bool(np.isfinite(gc.values).all()),'sums:',gc.sum().round(0).to_dict())
+[?2004l[?2004h> qc=pd.read_csv('sample_qc.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> print('qc cols',list(qc.columns)[:3],'rows',len(qc),'ids ok',list(qc.sample_id)==list(sh.sample_id))
+[?2004l[?2004h> print(qc[['sample_id','inferred_sex','condition_used']].to_string(index=False))
+[?2004l[?2004h> de=pd.read_csv('de_results.tsv',sep='\t')
+[?2004l[?2004h> print('de cols',list(de.columns)[:8],'rows',len(de),'index ok',list(de.gene_id)==genes)
+[?2004l[?2004h> print('log2fc finite:',bool(np.isfinite(de.log2fc).all()),'min',de.log2fc.min(),'max',de.log2fc.max())
+[?2004l[?2004h> print('padj NA count',int(de.padj.isna().sum()),'padj range',np.nanmin(de.padj),np.nanmax(de.padj))
+[?2004l[?2004h> print('significant vs padj consistent:',bool(((de.padj<0.05)&de.padj.notna()).astype(int).equals(de.significant)))
+[?2004l[?2004h> print('sig n',int(de.significant.sum()))
+[?2004l[?2004h> er=pd.read_csv('erratum.tsv',sep='\t',dtype={'gene_id':str})
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> print('erratum rows',len(er),'ids match mail:',list(er.gene_id)==list(mail.gene_id))
+[?2004l[?2004h> sig=set(de.gene_id[de.significant==1])
+[?2004l[?2004h> print('verdict consistent:',all(((g in sig) and v=='confirmed') or ((g not in sig) and v=='retracted') for g,v in zip(er.gene_id,er.verdict)))
+[?2004l[?2004h> print(er.verdict.value_counts().to_dict())
+[?2004l[?2004h> EOF
+[?2004lgc shape (800, 12) cols ok True index ok True
+non-negative: True finite: True sums: {'RS19': 42743.0, 'RS22': 43311.0, 'RS26': 40964.0, 'RS27': 38556.0, 'RS47': 46413.0, 'RS62': 48864.0, 'RS69': 44604.0, 'RS75': 43379.0, 'RS79': 45195.0, 'RS80': 44262.0, 'RS89': 54429.0, 'RS97': 44933.0}
+qc cols ['sample_id', 'inferred_sex', 'condition_used'] rows 12 ids ok True
+sample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+de cols ['gene_id', 'gene_name', 'base_mean', 'log2fc', 'lfcSE', 'stat', 'pvalue', 'padj'] rows 800 index ok True
+log2fc finite: True min -5.4085 max 4.38013
+padj NA count 0 padj range 2.09981e-39 0.998447
+significant vs padj consistent: True
+sig n 75
+erratum rows 40 ids match mail: True
+verdict consistent: True
+{'retracted': 24, 'confirmed': 16}
+[?2004hroot@03b0b295779b:/task/output# grep -iE 'mapping rate|percent|library type|fold' /task/work/quant/RS19.log | tail -12
+[?2004l[2m2026-11-12T21:33:12.186416Z[0m [33m WARN[0m [2msalmon_quant[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:33:12.186630Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:33:12.211721Z[0m [33m WARN[0m [2msalmon_align::rad[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:33:12.212573Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && head -3 gene_counts.tsv | cut -c1-160 && echo ... && head -2 de_results.tsv && sort -t$'\t' -k6,6g de_results.tsv | head -6 | cut -f1-4,8-9 && echo ... && head -6 erratum.tsv
+[?2004lgene_id	RS19	RS22	RS26	RS27	RS47	RS62	RS69	RS75	RS79	RS80	RS89	RS97
+ENSG00000134851	29.0	28.0	26.0	19.0	18.0	24.0	36.0	18.0	41.0	30.0	41.0	30.0
+ENSG00000185033	85.0	62.0	69.0	87.0	60.0	130.0	145.0	138.0	80.0	47.0	199.0	125.0
+...
+gene_id	gene_name	base_mean	log2fc	lfcSE	stat	pvalue	padj	design	n_libraries_used	significant	tested
+ENSG00000134851	TMEM165	27.6484	0.336612	0.332692	1.01178	0.311642	0.943641	~library_prep_session + condition (treated vs vehicle)	11	0	yes
+gene_id	gene_name	base_mean	log2fc	padj	design
+ENSG00000258289	CHURC1	287.852	-2.82982	2.78897e-32	~library_prep_session + condition (treated vs vehicle)
+ENSG00000169696	ASPSCR1	226.714	-2.45052	5.06224e-27	~library_prep_session + condition (treated vs vehicle)
+ENSG00000138400	MDH1B	88.3737	-2.68076	3.21839e-22	~library_prep_session + condition (treated vs vehicle)
+ENSG00000189067	LITAF	104.409	-2.41195	2.42918e-19	~library_prep_session + condition (treated vs vehicle)
+ENSG00000169432	SCN9A	55.379	-3.0456	3.21419e-19	~library_prep_session + condition (treated vs vehicle)
+...
+gene_id	gene_name	mail_rank	final_log2fc	final_pvalue	final_padj	significant_final	verdict
+ENSG00000054803	CBLN4	1	-1.75676	5.38353e-08	8.61364e-07	1	confirmed
+ENSG00000183918	SH2D1A	2	-2.11523	0.0010372	0.0120255	1	confirmed
+ENSG00000111704	NANOG	3	2.86138	1.73596e-26	1.26251e-24	1	confirmed
+ENSG00000183773	AIFM3	4	1.77313	7.19951e-13	1.79988e-11	1	confirmed
+ENSG00000097046	CDC7	5	3.12268	3.29444e-35	6.58888e-33	1	confirmed
+[?2004hroot@03b0b295779b:/task/output# grep -iE 'Mapping rate|percent mapped|NumQuery|fold change' /task/work/quant/RS19.log | tail -5; tail -20 /task/work/quant/RS19.log | head -12
+[?2004l[2m2026-11-12T21:33:12.182188Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"eff_length_collapse" [3melapsed_s[0m[2m=[0m0.000115527
+[2m2026-11-12T21:33:12.186377Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"em_bias" [3melapsed_s[0m[2m=[0m0.004186386
+[2m2026-11-12T21:33:12.186403Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"posterior" [3melapsed_s[0m[2m=[0m2.8563e-5
+[2m2026-11-12T21:33:12.186416Z[0m [33m WARN[0m [2msalmon_quant[0m[2m:[0m specified library type 'SR' disagrees with the observed format 'U' — check the -l strandedness setting
+[2m2026-11-12T21:33:12.186517Z[0m [32m INFO[0m [2msalmon_quant[0m[2m:[0m writing results to /task/work/quant/RS19
+[2m2026-11-12T21:33:12.186630Z[0m [33m WARN[0m [2msalmon_core::libtype[0m[2m:[0m greater than 5% of the fragments disagreed with the expected library type (SR); see lib_format_counts.json for details
+[2m2026-11-12T21:33:12.187719Z[0m [32m INFO[0m [2msalmon::timing[0m[2m:[0m phase complete [3mphase[0m[2m=[0m"output" [3melapsed_s[0m[2m=[0m0.001315322
+[2m2026-11-12T21:33:12.187750Z[0m [32m INFO[0m [2msalmon[0m[2m:[0m deterministic: mapped 42743 / 88799 fragments (48.13%); quantifying from intermediate RAD
+[2m2026-11-12T21:33:12.187967Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m quantifying from RAD (salmon SA), 928 references
+[2m2026-11-12T21:33:12.188094Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m using fragment-length distribution baked in the RAD header
+[2m2026-11-12T21:33:12.188126Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m single-end fragment-length term: default prior widened to mean=250.0, sd=100.0 (pass --fldMean/--fldSD to use a known distribution as given)
+[2m2026-11-12T21:33:12.208576Z[0m [32m INFO[0m [2msalmon_align::rad[0m[2m:[0m mapped 42743 / 88799 fragments from RAD
+[?2004hroot@03b0b295779b:/task/output# cd /task/work && mkdir -p quantA && for f in /task/input/fastq/*.fastq.gz; do sid=$(basename $f .fastq.gz); salmon quant -i /task/work/index -l A -r $f --validateMappings -p 2 -o quantA/$sid > quantA/$sid.log 2>&1 < /dev/null; done; echo done; ls quantA | head
+[?2004ldone
+RS19
+RS19.log
+RS22
+RS22.log
+RS26
+RS26.log
+RS27
+RS27.log
+RS47
+RS47.log
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && for s in RS19 RS26 RS75 RS22; do echo -n "$s SR_total="; awk 'NR>1{t+=$5}END{printf "%.0f ",t}' quant/$s/quant.sf; echo -n " A_total="; awk 'NR>1{t+=$5}END{printf "%.0f\n",t}' quantA/$s/quant.sf; grep -o 'mapped [0-9]* / [0-9]* fragments ([0-9.]*%)' quantA/$s.log | tail -1; done
+[?2004lRS19 SR_total=42743  A_total=85482
+mapped 85482 / 88799 fragments (96.26%)
+RS26 SR_total=40964  A_total=81722
+mapped 81722 / 84822 fragments (96.35%)
+RS75 SR_total=43379  A_total=86790
+mapped 86790 / 90111 fragments (96.31%)
+RS22 SR_total=43311  A_total=86754
+mapped 86754 / 90012 fragments (96.38%)
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && cat quantA/RS22/lib_format_counts.json 2>/dev/null; echo; grep -iE 'WARN|library type' quantA/RS22.log | head -4
+[?2004l{
+  "read_files": [
+    "/task/input/fastq/RS22.fastq.gz"
+  ],
+  "expected_format": "U",
+  "compatible_fragment_ratio": 1.0,
+  "num_compatible_fragments": 86754,
+  "num_incompatible_fragments": 0,
+  "num_assigned_fragments": 86754,
+  "num_frags_with_concordant_consistent_mappings": 86758,
+  "num_frags_with_inconsistent_or_orphan_mappings": 0,
+  "strand_mapping_bias": 0.5007837893911801,
+  "IU": 0,
+  "ISF": 0,
+  "ISR": 0,
+  "OU": 0,
+  "OSF": 0,
+  "OSR": 0,
+  "MU": 0,
+  "MSF": 0,
+  "MSR": 0,
+  "U": 0,
+  "SF": 43447,
+  "SR": 43311
+}
+[2m2026-11-12T22:05:25.032726Z[0m [33m WARN[0m [2msalmon[0m[2m:[0m --validateMappings has no effect (deprecated in salmon too): selective alignment is the default mapping mode; pass --sketch for pseudoalignment.
+[?2004hroot@03b0b295779b:/task/work# mkdir -p /task/workA && ln -sfn /task/work/quantA /task/workA/quant && ls /task/workA/quant/RS19/quant.sf
+[?2004l/task/workA/quant/RS19/quant.sf
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 final2.py /task/workA /task/output 2>&1 | tail -40
+[?2004lRS22: sex=M     sheet_sex=M cond_score=+0.94 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=-0.73 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS26: sex=F     sheet_sex=M cond_score=-1.13 fingerprint_cond=treated sheet_cond=vehicle sess_score=-0.71 fingerprint_sess=s20240305 sheet_sess=
+RS27: sex=F     sheet_sex=F cond_score=+1.05 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS47: sex=M     sheet_sex=M cond_score=-1.16 fingerprint_cond=treated sheet_cond=treated sess_score=-0.67 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS62: sex=M     sheet_sex=M cond_score=+0.98 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS69: sex=F     sheet_sex=F cond_score=+1.00 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS75: sex=M     sheet_sex=F cond_score=+1.04 fingerprint_cond=vehicle sheet_cond=treated sess_score=+0.62 fingerprint_sess=s20240319 sheet_sess=
+RS79: sex=M     sheet_sex=M cond_score=-1.19 fingerprint_cond=treated sheet_cond=treated sess_score=-0.71 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS80: sex=F     sheet_sex=F cond_score=-1.17 fingerprint_cond=treated sheet_cond=treated sess_score=-0.67 fingerprint_sess=s20240305 sheet_sess=s20240305
+RS89: sex=F     sheet_sex=F cond_score=-1.17 fingerprint_cond=treated sheet_cond=treated sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+RS97: sex=F     sheet_sex=F cond_score=+0.97 fingerprint_cond=vehicle sheet_cond=vehicle sess_score=+0.60 fingerprint_sess=s20240319 sheet_sess=s20240319
+libraries entering the model: 11
+     condition    session
+RS22   vehicle  s20240305
+RS26   treated  s20240305
+RS27   vehicle  s20240319
+RS47   treated  s20240305
+RS62   vehicle  s20240319
+RS69   vehicle  s20240319
+RS75   vehicle  s20240319
+RS79   treated  s20240305
+RS80   treated  s20240305
+RS89   treated  s20240319
+RS97   vehicle  s20240319
+rows in gene_counts.tsv: 800 samples: 12
+genes tested: 800 of 800 | significant: 78
+erratum: confirmed 16 retracted 24
+sample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+[?2004hroot@03b0b295779b:/task/work# cd /task/output && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> gc=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> genes=list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> print('cols ok',list(gc.columns)==list(sh.sample_id),'rows',len(gc),'index ok',list(gc.index)==genes)
+[?2004l[?2004h> print('nonneg',bool((gc>=0).all().all()),'finite',bool(np.isfinite(gc.values).all()))
+[?2004l[?2004h> print('sums',gc.sum().round(0).to_dict())
+[?2004l[?2004h> qc=pd.read_csv('sample_qc.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> print(qc[['sample_id','inferred_sex','condition_used','Y_marker_frac_of_pure','XIST_frac_of_pure']].to_string(index=False))
+[?2004l[?2004h> de=pd.read_csv('de_results.tsv',sep='\t')
+[?2004l[?2004h> print('de rows',len(de),'index ok',list(de.gene_id)==genes,'log2fc finite',bool(np.isfinite(de.log2fc).all()),'padj NA',int(de.padj.isna().sum()))
+[?2004l[?2004h> print('sig consistent',bool(((de.padj<0.05)&de.padj.notna()).astype(int).equals(de.significant)),'sig n',int(de.significant.sum()))
+[?2004l[?2004h> SEXG=['ENSG00000229807','ENSG00000129824','ENSG00000067048','ENSG00000198692','ENSG00000183878','ENSG00000012817']
+[?2004l[?2004h> print(de[de.gene_id.isin(SEXG)][['gene_name','base_mean','log2fc','padj','significant']].round(4).to_string(index=False))
+[?2004l[?2004h> er=pd.read_csv('erratum.tsv',sep='\t',dtype={'gene_id':str})
+[?2004l[?2004h> mail=pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> sig=set(de.gene_id[de.significant==1])
+[?2004l[?2004h> print('erratum rows',len(er),'ids ok',list(er.gene_id)==list(mail.gene_id),'verdict ok',all(((g in sig)==(v=='confirmed') for g,v in zip(er.gene_id,er.verdict))))
+[?2004l[?2004h> print(er.verdict.value_counts().to_dict())
+[?2004l[?2004h> print('confirmed genes:',[er.gene_name[i] for i in range(len(er)) if er.verdict[i]=='confirmed'])
+[?2004l[?2004h> EOF
+[?2004lcols ok True rows 800 index ok True
+nonneg True finite True
+sums {'RS19': 85482.0, 'RS22': 86754.0, 'RS26': 81722.0, 'RS27': 77070.0, 'RS47': 92814.0, 'RS62': 97573.0, 'RS69': 89212.0, 'RS75': 86790.0, 'RS79': 90599.0, 'RS80': 88484.0, 'RS89': 108477.0, 'RS97': 89595.0}
+sample_id inferred_sex condition_used Y_marker_frac_of_pure    XIST_frac_of_pure
+     RS19        mixed       excluded    0.5367934421266071  0.46330473463978333
+     RS22            M        vehicle     1.181019606063536                  0.0
+     RS26            F        treated                   0.0   0.6021051592705893
+     RS27            F        vehicle                   0.0   1.0511044934450422
+     RS47            M        treated    0.9498355078656777                  0.0
+     RS62            M        vehicle    0.8197607785123604 0.006149896489124142
+     RS69            F        vehicle                   0.0   0.9685826691022723
+     RS75            M        vehicle    1.0501644921343223                  0.0
+     RS79            M        treated    0.7839963765128086                  0.0
+     RS80            F        treated                   0.0   1.3631033586318753
+     RS89            F        treated                   0.0   0.7135912594117363
+     RS97            F        vehicle                   0.0   1.0314173308977277
+de rows 800 index ok True log2fc finite True padj NA 0
+sig consistent True sig n 78
+gene_name  base_mean  log2fc   padj  significant
+    DDX3Y    27.7691 -4.5079 0.8082            0
+     XIST    78.0129  4.6422 0.6255            0
+   EIF1AY    64.9207 -5.7748 0.6784            0
+      UTY    53.7212 -5.1064 0.7589            0
+   RPS4Y1    31.4716 -4.9045 0.7812            0
+    KDM5D    62.7652 -5.3966 0.7365            0
+erratum rows 40 ids ok True verdict ok True
+{'retracted': 24, 'confirmed': 16}
+confirmed genes: ['CBLN4', 'SH2D1A', 'NANOG', 'AIFM3', 'CDC7', 'TYW3', 'DROSHA', 'KRTAP5-1', 'SP5', 'UBL4A', 'GJB4', 'SH2B3', 'SERTAD3', 'FASTKD3', 'ZNF559-ZNF177', 'RERE']
+[?2004hroot@03b0b295779b:/task/output# cd /task/work && cat > cmp_models.py <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np, statsmodels.api as sm
+[?2004l[?2004h> from pydeseq2.dds import DeseqDataSet
+[?2004l[?2004h> from pydeseq2.ds import DeseqStats
+[?2004l[?2004h> c=pd.read_csv('/task/output/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> keep=['RS22','RS26','RS27','RS47','RS62','RS69','RS75','RS79','RS80','RS89','RS97']
+[?2004l[?2004h> cond={'RS22':'vehicle','RS26':'treated','RS27':'vehicle','RS47':'treated','RS62':'vehicle','RS69':'vehicle','RS75':'vehicle','RS79':'treated','RS80':'treated','RS89':'treated','RS97':'vehicle'}
+[?2004l[?2004h> sess={'RS22':'s20240305','RS26':'s20240305','RS27':'s20240319','RS47':'s20240305','RS62':'s20240319','RS69':'s20240319','RS75':'s20240319','RS79':'s20240305','RS80':'s20240305','RS89':'s20240319','RS97':'s20240319'}
+[?2004l[?2004h> sexd={'RS22':'M','RS26':'F','RS27':'F','RS47':'M','RS62':'M','RS69':'F','RS75':'M','RS79':'M','RS80':'F','RS89':'F','RS97':'F'}
+[?2004l[?2004h> mat=c[keep].T.round().astype(int)
+[?2004l[?2004h> designs={'cond':['condition'],'cond_sess':['session','condition'],'cond_sess_sex':['session','condition','sex']}
+[?2004l[?2004h> res={}
+[?2004l[?2004h> for tag,cols in designs.items():
+[?2004l[?2004h>     meta=pd.DataFrame({k:[v[s] for s in keep] for k,v in zip(cols,[sess,cond,sexd][:3])},index=keep) if False else pd.DataFrame({'condition':[cond[s] for s in keep],'session':[sess[s] for s in keep],'sex':[sexd[s] for s in keep]},index=keep)[cols]
+[?2004l[?2004h>     dds=DeseqDataSet(counts=mat,metadata=meta,design='~'+'+'.join(cols),quiet=True,n_cpus=2); dds.deseq2()
+[?2004l[?2004h>     st=DeseqStats(dds,contrast=['condition','treated','vehicle'],alpha=0.05,quiet=True,n_cpus=2); st.summary()
+[?2004l[?2004h>     r=st.results_df.reindex(c.index); res[tag]=r
+[?2004l[?2004h>     print(tag,'nsig',int((r.padj<0.05).sum()))
+[?2004l[?2004h> # independent per-gene classification
+[?2004l[?2004h> l=np.log2(c[keep]/c[keep].sum()*1e6+1)
+[?2004l[?2004h> X=np.column_stack([np.ones(len(keep)),[cond[s]=='treated' for s in keep],[sess[s]=='s20240319' for s in keep],[sexd[s]=='F' for s in keep]]).astype(float)
+[?2004l[?2004h> print('rank',np.linalg.matrix_rank(X))
+[?2004l[?2004h> rows=[]
+[?2004l[?2004h> for g in l.index:
+[?2004l[?2004h>     m=sm.OLS(l.loc[g].values,X).fit()
+[?2004l[?2004h>     rows.append([g,m.params[1],m.pvalues[1],m.params[2],m.pvalues[2],m.params[3],m.pvalues[3]])
+[?2004l[?2004h> R=pd.DataFrame(rows,columns=['gene','b_cond','p_cond','b_sess','p_sess','b_sex','p_sex']).set_index('gene')
+[?2004l[?2004h> STR=(R.p_cond<0.005)&(R.b_cond.abs()>0.4)
+[?2004l[?2004h> B=(R.p_sess<0.005)&(R.b_sess.abs()>0.4)
+[?2004l[?2004h> SX=(R.p_sex<0.005)&(R.b_sex.abs()>0.4)
+[?2004l[?2004h> cls=pd.Series('none',index=R.index); cls[B]='batch'; cls[SX&~B&~STR]='sex'; cls[STR]='treatment'
+[?2004l[?2004h> cls[STR&B]='treatment'; cls[STR&SX]='treatment'
+[?2004l[?2004h> print(cls.value_counts().to_dict())
+[?2004l[?2004h> truth=set(cls.index[cls=='treatment'])
+[?2004l[?2004h> for tag,r in res.items():
+[?2004l[?2004h>     sig=set(r.index[r.padj<0.05])
+[?2004l[?2004h>     tp=len(sig&truth); prec=tp/max(len(sig),1); rec=tp/len(truth)
+[?2004l[?2004h>     badd=len(sig&set(cls.index[cls.isin(['batch','sex'])]))
+[?2004l[?2004h>     print(f'{tag:14s} nsig={len(sig):3d} treatment={tp:3d} batch/sex-in-sig={badd:2d} precision={prec:.3f} recall={rec:.3f} F1={2*prec*rec/max(prec+rec,1e-9):.3f}')
+[?2004l[?2004h> for tag,r in res.items():
+[?2004l[?2004h>     r[['baseMean','log2FoldChange','lfcSE','pvalue','padj']].to_csv(f'cm_{tag}.tsv',sep='\t')
+[?2004l[?2004h> sexg=['ENSG00000229807','ENSG00000129824','ENSG00000067048','ENSG00000198692','ENSG00000183878','ENSG00000012817']
+[?2004l[?2004h> print(pd.DataFrame({t:res[t].loc[sexg,'log2FoldChange'].round(2) for t in res}).to_string())
+[?2004l[?2004h> print(pd.DataFrame({t:res[t].loc[sexg,'padj'].round(3) for t in res}).to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@03b0b295779b:/task/work# python3 cmp_models.py 2>&1 | tail -30
+[?2004lcond nsig 122
+cond_sess nsig 78
+cond_sess_sex nsig 76
+rank 4
+{'none': 596, 'batch': 122, 'treatment': 76, 'sex': 6}
+cond           nsig=122 treatment= 67 batch/sex-in-sig=30 precision=0.549 recall=0.882 F1=0.677
+cond_sess      nsig= 78 treatment= 69 batch/sex-in-sig= 1 precision=0.885 recall=0.908 F1=0.896
+cond_sess_sex  nsig= 76 treatment= 68 batch/sex-in-sig= 1 precision=0.895 recall=0.895 F1=0.895
+                 cond  cond_sess  cond_sess_sex
+gene_id                                        
+ENSG00000229807  0.10       4.64          -0.37
+ENSG00000129824 -0.42      -4.90          -0.34
+ENSG00000067048 -0.09      -4.51           0.22
+ENSG00000198692 -0.96      -5.77          -0.87
+ENSG00000183878 -0.22      -5.11          -0.04
+ENSG00000012817 -0.55      -5.40          -0.19
+                  cond  cond_sess  cond_sess_sex
+gene_id                                         
+ENSG00000229807  0.990      0.626          0.876
+ENSG00000129824  0.973      0.781          0.876
+ENSG00000067048  0.990      0.808          0.942
+ENSG00000198692  0.917      0.678          0.231
+ENSG00000183878  0.985      0.759          0.994
+ENSG00000012817  0.958      0.737          0.966
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> A=pd.read_csv('cm_cond_sess.tsv',sep='\t',index_col=0); B=pd.read_csv('cm_cond_sess_sex.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> c=pd.read_csv('/task/output/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str).drop_duplicates('gene_id').set_index('gene_id').gene_name
+[?2004l[?2004h> sa=set(A.index[A.padj<0.05]); sb=set(B.index[B.padj<0.05])
+[?2004l[?2004h> print('onlyA',[(t2g[g],round(A.log2FoldChange[g],2),float(A.padj[g]),round(B.log2FoldChange[g],2),float(B.padj[g])) for g in sorted(sa-sb)])
+[?2004l[?2004h> print('onlyB',[(t2g[g],round(B.log2FoldChange[g],2),float(B.padj[g]),round(A.log2FoldChange[g],2),float(A.padj[g])) for g in sorted(sb-sa)])
+[?2004l[?2004h> l=np.log2(c/c.sum()*1e6+1)
+[?2004l[?2004h> keep=['RS22','RS26','RS27','RS47','RS62','RS69','RS75','RS79','RS80','RS89','RS97']
+[?2004l[?2004h> cond={'RS22':'v','RS26':'t','RS27':'v','RS47':'t','RS62':'v','RS69':'v','RS75':'v','RS79':'t','RS80':'t','RS89':'t','RS97':'v'}
+[?2004l[?2004h> sess={'RS22':'5','RS26':'5','RS27':'9','RS47':'5','RS62':'9','RS69':'9','RS75':'9','RS79':'5','RS80':'5','RS89':'9','RS97':'9'}
+[?2004l[?2004h> sex={'RS22':'M','RS26':'F','RS27':'F','RS47':'M','RS62':'M','RS69':'F','RS75':'M','RS79':'M','RS80':'F','RS89':'F','RS97':'F'}
+[?2004l[?2004h> def grp(p): return [s for s in keep if all(p[k][s]==v for k,v in [])]
+[?2004l[?2004h> import itertools
+[?2004l[?2004h> def cell(**kw):
+[?2004l[?2004h>     out=[s for s in keep if all(kw[k][s]==v for k,v in kw.items())]
+[?2004l[?2004h>     return out
+[?2004l[?2004h> for name,sel,selv in [('sess05',sess,sess),]:
+[?2004l[?2004h>     pass
+[?2004l[?2004h> c5t=cell(condition=cond,session=sess)
+[?2004l[?2004h> # within-session treatment contrasts
+[?2004l[?2004h> t5=[s for s in keep if sess[s]=='5' and cond[s]=='t']; v5=[s for s in keep if sess[s]=='5' and cond[s]=='v']
+[?2004l[?2004h> t9=[s for s in keep if sess[s]=='9' and cond[s]=='t']; v9=[s for s in keep if sess[s]=='9' and cond[s]=='v']
+[?2004l[?2004h> fT=[s for s in keep if sex[s]=='F' and cond[s]=='t']; fV=[s for s in keep if sex[s]=='F' and cond[s]=='v']
+[?2004l[?2004h> mT=[s for s in keep if sex[s]=='M' and cond[s]=='t']; mV=[s for s in keep if sex[s]=='M' and cond[s]=='v']
+[?2004l[?2004h> D=pd.DataFrame({'dc5':l[t5].mean(axis=1)-l[v5].mean(axis=1),'dc9':l[t9].mean(axis=1)-l[v9].mean(axis=1),
+[?2004l[?2004h>                 'dcF':l[fT].mean(axis=1)-l[fV].mean(axis=1),'dcM':l[mT].mean(axis=1)-l[mV].mean(axis=1)})
+[?2004l[?2004h> D['lfcB']=B.log2FoldChange; D['sigA']=(A.padj<0.05); D['sigB']=(B.padj<0.05)
+[?2004l[?2004h> sub=D[D.sigB]
+[?2004l[?2004h> print('sigB genes: corr(dc5,dc9)=',np.corrcoef(sub.dc5,sub.dc9)[0,1].round(3),' corr(dcF,dcM)=',np.corrcoef(sub.dcF,sub.dcM)[0,1].round(3),' mean|min|=',np.minimum(sub.dc5.abs(),sub.dc9.abs()).mean().round(2))
+[?2004l[?2004h> print('background: corr=',np.corrcoef(D.dc5,D.dc9)[0,1].round(3),'mean|min|=',np.minimum(D.dc5.abs(),D.dc9.abs()).mean().round(2))
+[?2004l[?2004h> print('sign agreement dc5 vs lfcB:',(np.sign(sub.dc5)==np.sign(sub.lfcB)).mean().round(3),' dc9 vs lfcB:',(np.sign(sub.dc9)==np.sign(sub.lfcB)).mean().round(3))
+[?2004l[?2004h> EOF
+[?2004lonlyA [('CLEC4M', np.float64(-0.6), 0.022944652541575607, np.float64(-0.6), 0.06337404928213485), ('RBAK', np.float64(0.84), 0.04712709338326315, np.float64(0.62), 0.35038007717442593), ('RGS18', np.float64(-0.63), 0.02831554377630905, np.float64(-0.65), 0.054229902861443274)]
+onlyB [('MYLK3', np.float64(0.78), 0.04591637762276095, np.float64(0.67), 0.06732756222012176)]
+sigB genes: corr(dc5,dc9)= 0.978  corr(dcF,dcM)= 0.972  mean|min|= 1.96
+background: corr= 0.807 mean|min|= 0.38
+sign agreement dc5 vs lfcB: 1.0  dc9 vs lfcB: 1.0
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> A=pd.read_csv('cm_cond_sess.tsv',sep='\t',index_col=0); B=pd.read_csv('cm_cond_sess_sex.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> R=pd.read_csv('ols3.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> c=pd.read_csv('/task/output/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str).drop_duplicates('gene_id').set_index('gene_id').gene_name
+[?2004l[?2004h> mail=list(pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str).gene_id)
+[?2004l[?2004h> sigA=set(A.index[A.padj<0.05]); sigB=set(B.index[B.padj<0.05])
+[?2004l[?2004h> print('mail sig in A',sum(g in sigA for g in mail),'in B',sum(g in sigB for g in mail))
+[?2004l[?2004h> diffA=[(t2g[g],round(A.log2FoldChange[g],2),float(A.padj[g]),round(B.padj[g],3)) for g in mail if (g in sigA)!=(g in sigB)]
+[?2004l[?2004h> print('mailed genes differing:',diffA)
+[?2004l[?2004h> same=len(sigA&sigB); print('shared sig',same,'onlyA',len(sigA-sigB),'onlyB',len(sigB-sigA))
+[?2004l[?2004h> weak=[(t2g[g],round(B.log2FoldChange[g],2),float(B.padj[g])) for g in sorted(sigB) if abs(B.log2FoldChange[g])<0.6]
+[?2004l[?2004h> print('sig(B) with |lfc|<0.6:',weak)
+[?2004l[?2004h> print('lfc magnitudes sigB:',np.round(np.sort(B.loc[sorted(sigB),'log2FoldChange'].abs().values)[:8],2), '...max',round(B.loc[sorted(sigB),'log2FoldChange'].abs().max(),2))
+[?2004l[?2004h> # stratified consensus: effect present in both sessions AND both sex strata
+[?2004l[?2004h> def cell(ss,cc,sx): return [s for s in ['RS22','RS26','RS27','RS47','RS62','RS69','RS75','RS79','RS80','RS89','RS97'] if ss[s]==sx[0] and cc[s]==sx[1]]
+[?2004l[?2004h> EOF
+[?2004lmail sig in A 16 in B 16
+mailed genes differing: []
+shared sig 75 onlyA 3 onlyB 1
+sig(B) with |lfc|<0.6: []
+lfc magnitudes sigB: [0.78 0.88 0.88 0.99 1.   1.08 1.17 1.3 ] ...max 3.43
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> A=pd.read_csv('cm_cond_sess.tsv',sep='\t',index_col=0); B=pd.read_csv('cm_cond_sess_sex.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> genes=list(A.index)
+[?2004l[?2004h> keep=['RS22','RS26','RS27','RS47','RS62','RS69','RS75','RS79','RS80','RS89','RS97']
+[?2004l[?2004h> cond={'RS22':'v','RS26':'t','RS27':'v','RS47':'t','RS62':'v','RS69':'v','RS75':'v','RS79':'t','RS80':'t','RS89':'t','RS97':'v'}
+[?2004l[?2004h> sess={'RS22':'5','RS26':'5','RS27':'9','RS47':'5','RS62':'9','RS69':'9','RS75':'9','RS79':'5','RS80':'5','RS89':'9','RS97':'9'}
+[?2004l[?2004h> sex={'RS22':'M','RS26':'F','RS27':'F','RS47':'M','RS62':'M','RS69':'F','RS75':'M','RS79':'M','RS80':'F','RS89':'F','RS97':'F'}
+[?2004l[?2004h> c=pd.read_csv('/task/output/gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> l=np.log2(c[keep]/c[keep].sum()*1e6+1)
+[?2004l[?2004h> def mk(ss,sx,cs,cv):
+[?2004l[?2004h>     a=[s for s in keep if sess[s]==ss and sex[s]==sx and cond[s]=='t' and cs]
+[?2004l[?2004h>     b=[s for s in keep if sess[s]==ss and sex[s]==sx and cond[s]=='v']
+[?2004l[?2004h>     return a,b
+[?2004l[?2004h> strata=[]
+[?2004l[?2004h> for ss in ['5','9']:
+[?2004l[?2004h>     for sx in ['F','M']:
+[?2004l[?2004h>         t=[s for s in keep if sess[s]==ss and sex[s]==sx and cond[s]=='t']
+[?2004l[?2004h>         v=[s for s in keep if sess[s]==ss and sex[s]==sx and cond[s]=='v']
+[?2004l[?2004h>         if t and v: strata.append((ss+sx,t,v))
+[?2004l[?2004h> print(strata)
+[?2004l[?2004h> E=pd.DataFrame({name: l[t].mean(axis=1)-l[v].mean(axis=1) for name,t,v in strata})
+[?2004l[?2004h> E['minabs']=E.abs().min(axis=1); E['signok']=(np.sign(E.iloc[:,:len(strata)]).nunique(axis=1)==1)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str).drop_duplicates('gene_id').set_index('gene_id').gene_name
+[?2004l[?2004h> E['name']=t2g.reindex(E.index)
+[?2004l[?2004h> strong=E[(E.signok)&(E.minabs>0.6)]
+[?2004l[?2004h> print('strata-consensus strong responders:',len(strong))
+[?2004l[?2004h> for tag,r in [('sess',A),('sess_sex',B)]:
+[?2004l[?2004h>     sig=set(r.index[r.padj<0.05]); st=set(strong.index)
+[?2004l[?2004h>     print(tag,'nsig',len(sig),'in_consensus',len(sig&st),'not_in_consensus',len(sig-st),'consensus_missed',len(st-sig))
+[?2004l[?2004h>     print('   not_in_consensus:',[strong.name if False else t2g[g] for g in sorted(sig-st)][:12])
+[?2004l[?2004h>     print('   consensus_missed:',[t2g[g] for g in sorted(st-sig)][:12])
+[?2004l[?2004h> E.to_csv('strata.tsv',sep='\t')
+[?2004l[?2004h> EOF
+[?2004l[('5M', ['RS47', 'RS79'], ['RS22']), ('9F', ['RS89'], ['RS27', 'RS69', 'RS97'])]
+strata-consensus strong responders: 83
+sess nsig 78 in_consensus 75 not_in_consensus 3 consensus_missed 8
+   not_in_consensus: ['SLC11A2', 'RBAK', 'RGS18']
+   consensus_missed: ['CLXN', 'C14orf93', 'PON3', 'PIWIL4', 'CFAP47', 'SOAT2', 'OXTR', 'INF2']
+sess_sex nsig 76 in_consensus 74 not_in_consensus 2 consensus_missed 9
+   not_in_consensus: ['SLC11A2', 'MYLK3']
+   consensus_missed: ['CLXN', 'C14orf93', 'CLEC4M', 'PON3', 'PIWIL4', 'CFAP47', 'SOAT2', 'OXTR', 'INF2']
+[?2004hroot@03b0b295779b:/task/work# cd /task/work && python3 - <<'EOF'
+[?2004l[?2004h> src=open('final2.py').read()
+[?2004l[?2004h> src=src.replace('''meta = pd.DataFrame({"condition": [condition_used[s] for s in keep],
+[?2004l[?2004h>                     "session": [session_used[s] for s in keep]}, index=keep)''','''meta = pd.DataFrame({"condition": [condition_used[s] for s in keep],
+[?2004l[?2004h>                     "session": [session_used[s] for s in keep],
+[?2004l[?2004h>                     "sex": [inferred_sex[s] for s in keep]}, index=keep)''')
+[?2004l[?2004h> src=src.replace('''counts=counts[keep].T.round().astype(int), metadata=meta,
+[?2004l[?2004h>                    design="~session+condition"''','''counts=counts[keep].T.round().astype(int), metadata=meta,
+[?2004l[?2004h>                    design="~session+sex+condition"''')
+[?2004l[?2004h> src=src.replace('"design": "~library_prep_session + condition (treated vs vehicle)"','"design": "~library_prep_session + donor_sex + condition (treated vs vehicle)"')
+[?2004l[?2004h> assert '~session+sex+condition' in src and 'donor_sex' in src
+[?2004l[?2004h> open('final3.py','w').write(src)
+[?2004l[?2004h> print('patched')
+[?2004l[?2004h> EOF
+[?2004lpatched
+[?2004hroot@03b0b295779b:/task/work# python3 final3.py /task/workA /task/output 2>&1 | tail -22
+[?2004lRS69   vehicle  s20240319   F
+RS75   vehicle  s20240319   M
+RS79   treated  s20240305   M
+RS80   treated  s20240305   F
+RS89   treated  s20240319   F
+RS97   vehicle  s20240319   F
+rows in gene_counts.tsv: 800 samples: 12
+genes tested: 800 of 800 | significant: 76
+erratum: confirmed 16 retracted 24
+sample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+[?2004hroot@03b0b295779b:/task/work# cd /task/output && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np, csv
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> genes=list(dict.fromkeys(t2g.gene_id)); mail=list(pd.read_csv('/task/input/previous_analysis/mail_top_responders.tsv',sep='\t',dtype=str).gene_id)
+[?2004l[?2004h> ok=True
+[?2004l[?2004h> gc=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> assert list(gc.columns)==list(sh.sample_id) and list(gc.index)==genes
+[?2004l[?2004h> assert (gc.values>=0).all() and np.isfinite(gc.values).all()
+[?2004l[?2004h> print('gene_counts.tsv OK:',gc.shape,'| header0 =',open('gene_counts.tsv').readline().split('\t')[0].strip())
+[?2004l[?2004h> qc=pd.read_csv('sample_qc.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> assert set(['sample_id','inferred_sex','condition_used'])<=set(qc.columns) and list(qc.sample_id)==list(sh.sample_id)
+[?2004l[?2004h> assert set(qc.inferred_sex)<= {'F','M','mixed'} and set(qc.condition_used)<={'treated','vehicle','excluded'}
+[?2004l[?2004h> for r in qc.itertuples():
+[?2004l[?2004h>     if r.inferred_sex=='mixed': assert r.condition_used=='excluded', r
+[?2004l[?2004h> print('sample_qc.tsv OK:',qc.shape, dict(zip(qc.sample_id,qc.condition_used)))
+[?2004l[?2004h> de=pd.read_csv('de_results.tsv',sep='\t')
+[?2004l[?2004h> assert set(['gene_id','log2fc','padj','significant'])<=set(de.columns) and list(de.gene_id)==genes
+[?2004l[?2004h> assert np.isfinite(de.log2fc).all()
+[?2004l[?2004h> assert de.padj.isna().sum()==0 or True
+[?2004l[?2004h> pv=de.padj.dropna(); assert ((pv>=0)&(pv<=1)).all()
+[?2004l[?2004h> assert (((de.padj<0.05)&de.padj.notna()).astype(int)==de.significant).all()
+[?2004l[?2004h> print('de_results.tsv OK:',de.shape,'| design:',de.design.iloc[0],'| n_libraries:',int(de.n_libraries_used.iloc[0]),'| significant:',int(de.significant.sum()),'| log2fc range',round(de.log2fc.min(),2),round(de.log2fc.max(),2))
+[?2004l[?2004h> SEXG={'ENSG00000229807':'XIST','ENSG00000129824':'RPS4Y1','ENSG00000067048':'DDX3Y','ENSG00000198692':'EIF1AY','ENSG00000183878':'UTY','ENSG00000012817':'KDM5D'}
+[?2004l[?2004h> print(de[de.gene_id.isin(SEXG)][['gene_name','base_mean','log2fc','pvalue','padj','significant']].round(4).to_string(index=False))
+[?2004l[?2004h> er=pd.read_csv('erratum.tsv',sep='\t',dtype={'gene_id':str})
+[?2004l[?2004h> assert set(['gene_id','verdict'])<=set(er.columns) and list(er.gene_id)==mail
+[?2004l[?2004h> sig=set(de.gene_id[de.significant==1])
+[?2004l[?2004h> assert all((g in sig)==(v=='confirmed') for g,v in zip(er.gene_id,er.verdict))
+[?2004l[?2004h> print('erratum.tsv OK:',er.shape,'|',er.verdict.value_counts().to_dict())
+[?2004l[?2004h> print(er[['gene_name','mail_rank','final_log2fc','final_padj','verdict']].to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004lgene_counts.tsv OK: (800, 12) | header0 = gene_id
+sample_qc.tsv OK: (12, 14) {'RS19': 'excluded', 'RS22': 'vehicle', 'RS26': 'treated', 'RS27': 'vehicle', 'RS47': 'treated', 'RS62': 'vehicle', 'RS69': 'vehicle', 'RS75': 'vehicle', 'RS79': 'treated', 'RS80': 'treated', 'RS89': 'treated', 'RS97': 'vehicle'}
+de_results.tsv OK: (800, 12) | design: ~library_prep_session + donor_sex + condition (treated vs vehicle) | n_libraries: 11 | significant: 76 | log2fc range -3.43 3.16
+gene_name  base_mean  log2fc  pvalue   padj  significant
+    DDX3Y    27.7691  0.2192  0.6232 0.9423            0
+     XIST    78.0129 -0.3686  0.3651 0.8762            0
+   EIF1AY    64.9207 -0.8737  0.0268 0.2307            0
+      UTY    53.7212 -0.0417  0.9144 0.9939            0
+   RPS4Y1    31.4716 -0.3398  0.4708 0.8762            0
+    KDM5D    62.7652 -0.1909  0.8040 0.9657            0
+erratum.tsv OK: (40, 8) | {'retracted': 24, 'confirmed': 16}
+    gene_name  mail_rank  final_log2fc   final_padj   verdict
+        CBLN4          1     -1.916860 2.156050e-11 confirmed
+       SH2D1A          2     -1.998120 7.489550e-04 confirmed
+        NANOG          3      2.891080 2.393900e-19 confirmed
+        AIFM3          4      1.698970 4.291390e-12 confirmed
+         CDC7          5      2.979310 2.739210e-26 confirmed
+         SPOP          6      0.489797 3.743720e-01 retracted
+         TYW3          7     -2.338110 1.429270e-09 confirmed
+       DROSHA          8      2.430080 1.697440e-13 confirmed
+       TNNI3K          9     -0.515602 7.734050e-01 retracted
+        RGS21         10      0.679984 5.141560e-01 retracted
+        ABCG2         11      0.358483 8.027730e-01 retracted
+     KRTAP5-1         12     -2.703880 2.058220e-12 confirmed
+          SP5         13      2.643660 4.896090e-14 confirmed
+        UBL4A         14      1.612660 7.007250e-07 confirmed
+        ANKS6         15     -0.810089 6.013490e-01 retracted
+         GJB4         16      2.649490 8.272770e-21 confirmed
+        SH2B3         17      2.892990 2.551710e-26 confirmed
+      SERTAD3         18      2.952030 2.739210e-26 confirmed
+      FASTKD3         19      1.941660 2.995720e-09 confirmed
+ZNF559-ZNF177         20     -2.193200 2.614620e-04 confirmed
+         RERE         21     -2.421770 1.173700e-15 confirmed
+          MTR         22      0.259334 8.762090e-01 retracted
+       STEAP1         23     -0.364345 8.762090e-01 retracted
+         CLXN         24     -0.562899 4.267160e-01 retracted
+       TRIM11         25     -0.147485 9.323730e-01 retracted
+       ADAM33         26     -0.767690 6.436950e-01 retracted
+         MID1         27      0.165268 8.762090e-01 retracted
+      POLR2J3         28     -0.188191 8.762090e-01 retracted
+        FLAD1         29     -0.115950 9.533550e-01 retracted
+      SLCO5A1         30      0.176021 9.422830e-01 retracted
+       WASHC3         31     -0.362303 7.844060e-01 retracted
+       C2CD4B         32      0.514936 3.503800e-01 retracted
+        SCYL1         33      0.779454 3.951480e-01 retracted
+        POMT2         34      0.426102 8.027730e-01 retracted
+        IL17F         35      0.322735 8.572630e-01 retracted
+        KDM3A         36      0.262540 8.501920e-01 retracted
+         HPS1         37      0.461254 8.027730e-01 retracted
+       UBE2G1         38      0.148526 9.385650e-01 retracted
+         ECM2         39     -0.569525 5.019790e-01 retracted
+         TTI2         40      0.358566 5.019790e-01 retracted
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && python3 - <<'EOF'
+[?2004l[?2004h> import pandas as pd, numpy as np
+[?2004l[?2004h> sh=pd.read_csv('/task/input/samples.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> t2g=pd.read_csv('/task/input/reference/tx2gene.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> genes=list(dict.fromkeys(t2g.gene_id))
+[?2004l[?2004h> gc=pd.read_csv('gene_counts.tsv',sep='\t',index_col=0)
+[?2004l[?2004h> qc=pd.read_csv('sample_qc.tsv',sep='\t',dtype=str)
+[?2004l[?2004h> de=pd.read_csv('de_results.tsv',sep='\t')
+[?2004l[?2004h> er=pd.read_csv('erratum.tsv',sep='\t',dtype={'gene_id':str})
+[?2004l[?2004h> print('gene_counts.tsv : rows=%d (=tx2gene genes: %s)  cols=%d (=samples: %s)  min=%.3f' % (len(gc),list(gc.index)==genes,len(gc.columns),list(gc.columns)==list(sh.sample_id),gc.values.min()))
+[?2004l[?2004h> print('sample_qc.tsv   : cols ok=%s rows=%d' % (set(['sample_id','inferred_sex','condition_used'])<=set(qc.columns),len(qc)))
+[?2004l[?2004h> print('de_results.tsv  : cols ok=%s rows=%d genes=%d finite_lfc=%s sig=%d padj_NA=%d' % (set(['gene_id','log2fc','padj','significant'])<=set(de.columns),len(de),de.gene_id.nunique(),bool(np.isfinite(de.log2fc).all()),int(de.significant.sum()),int(de.padj.isna().sum())))
+[?2004l[?2004h> print('erratum.tsv     : rows=%d (=mailed: %s) verdicts=%s' % (len(er),len(er)==40,er.verdict.value_counts().to_dict()))
+[?2004l[?2004h> print()
+[?2004l[?2004h> print(qc[['sample_id','inferred_sex','condition_used']].to_string(index=False))
+[?2004l[?2004h> print()
+[?2004l[?2004h> sx=['ENSG00000229807','ENSG00000129824','ENSG00000067048','ENSG00000198692','ENSG00000183878','ENSG00000012817']
+[?2004l[?2004h> print('sex-chromosome control genes (must not respond to the compound):')
+[?2004l[?2004h> print(de[de.gene_id.isin(sx)][['gene_name','log2fc','padj','significant']].round(3).to_string(index=False))
+[?2004l[?2004h> print()
+[?2004l[?2004h> print('top 10 responders:')
+[?2004l[?2004h> print(de.sort_values('padj').head(10)[['gene_name','base_mean','log2fc','padj','significant']].to_string(index=False))
+[?2004l[?2004h> print()
+[?2004l[?2004h> print('files:', sorted(__import__('os').listdir('.')))
+[?2004l[?2004h> EOF
+[?2004lgene_counts.tsv : rows=800 (=tx2gene genes: True)  cols=12 (=samples: True)  min=0.000
+sample_qc.tsv   : cols ok=True rows=12
+de_results.tsv  : cols ok=True rows=800 genes=800 finite_lfc=True sig=76 padj_NA=0
+erratum.tsv     : rows=40 (=mailed: True) verdicts={'retracted': 24, 'confirmed': 16}
+
+sample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+
+sex-chromosome control genes (must not respond to the compound):
+gene_name  log2fc  padj  significant
+    DDX3Y   0.219 0.942            0
+     XIST  -0.369 0.876            0
+   EIF1AY  -0.874 0.231            0
+      UTY  -0.042 0.994            0
+   RPS4Y1  -0.340 0.876            0
+    KDM5D  -0.191 0.966            0
+
+top 10 responders:
+gene_name  base_mean   log2fc         padj  significant
+     RTCB    455.311  2.54538 4.052380e-41            1
+   MRPL45    365.001  2.82862 6.752540e-39            1
+    REXO4    112.743  3.16338 1.359560e-30            1
+   CHURC1    586.211 -2.68961 2.693320e-27            1
+      CGN    341.683  2.32535 1.249450e-26            1
+    SH2B3    118.624  2.89299 2.551710e-26            1
+  SERTAD3    350.647  2.95203 2.739210e-26            1
+     CDC7    275.806  2.97931 2.739210e-26            1
+   PECAM1    158.721  3.12341 2.739210e-26            1
+    SPHK1    329.542  2.62446 1.387160e-25            1
+
+files: ['de_results.tsv', 'erratum.tsv', 'gene_counts.tsv', 'sample_qc.tsv']
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && python3 -c "import pandas as pd; q=pd.read_csv('sample_qc.tsv',sep='\t'); print(q[['sample_id','inferred_sex','condition_used','prep_session_of_material','note']].to_string(index=False)); print('null cells:', q.isna().sum().sum())"
+[?2004lsample_id inferred_sex condition_used prep_session_of_material                                                                                                                                                                                                                                                                                                                        note
+     RS19        mixed       excluded                      NaN                                                                                                                                library contains material of more than one donor (0.54x male-marker and 0.46x XIST signal of pure libraries; condition/session fingerprints in between both groups) -> left out of the model
+     RS22            M        vehicle                s20240305                                                                                                                                                                                                             donor sex from the data (M) agrees with the sample sheet; fingerprints also consistent with vehicle / s20240305
+     RS26            F        treated                s20240305 donor sex from the data (F) contradicts the sample-sheet record (M): the tube was re-labelled from the illegible box map. Expression fingerprints put the reads in the treated group of prep session s20240305, so the library enters the model as treated; the file holds the library of record RS75 (donor D616, treated)
+     RS27            F        vehicle                s20240319                                                                                                                                                                                                             donor sex from the data (F) agrees with the sample sheet; fingerprints also consistent with vehicle / s20240319
+     RS47            M        treated                s20240305                                                                                                                                                                                                             donor sex from the data (M) agrees with the sample sheet; fingerprints also consistent with treated / s20240305
+     RS62            M        vehicle                s20240319                                                                                                                                                                                                             donor sex from the data (M) agrees with the sample sheet; fingerprints also consistent with vehicle / s20240319
+     RS69            F        vehicle                s20240319                                                                                                                                                                                                             donor sex from the data (F) agrees with the sample sheet; fingerprints also consistent with vehicle / s20240319
+     RS75            M        vehicle                s20240319 donor sex from the data (M) contradicts the sample-sheet record (F): the tube was re-labelled from the illegible box map. Expression fingerprints put the reads in the vehicle group of prep session s20240319, so the library enters the model as vehicle; the file holds the library of record RS26 (donor D172, vehicle)
+     RS79            M        treated                s20240305                                                                                                                                                                                                             donor sex from the data (M) agrees with the sample sheet; fingerprints also consistent with treated / s20240305
+     RS80            F        treated                s20240305                                                                                                                                                                                                             donor sex from the data (F) agrees with the sample sheet; fingerprints also consistent with treated / s20240305
+     RS89            F        treated                s20240319                                                                                                                                                                                                             donor sex from the data (F) agrees with the sample sheet; fingerprints also consistent with treated / s20240319
+     RS97            F        vehicle                s20240319                                                                                                                                                                                                             donor sex from the data (F) agrees with the sample sheet; fingerprints also consistent with vehicle / s20240319
+null cells: 1
+[?2004hroot@03b0b295779b:/task/output# ls -la /task/output && wc -l /task/output/*.tsv
+[?2004ltotal 204
+drwxr-xr-x 1 root root   4096 Nov 12 22:03 .
+drwxr-xr-x 1 root root   4096 Nov 12 22:06 ..
+-rw-rw-rw- 1 root root 121838 Nov 12 22:13 de_results.tsv
+-rw-rw-rw- 1 root root   2747 Nov 12 22:13 erratum.tsv
+-rw-rw-rw- 1 root root  64328 Nov 12 22:13 gene_counts.tsv
+-rw-rw-rw- 1 root root   3813 Nov 12 22:13 sample_qc.tsv
+   801 /task/output/de_results.tsv
+    41 /task/output/erratum.tsv
+   801 /task/output/gene_counts.tsv
+    13 /task/output/sample_qc.tsv
+  1656 total
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && python3 - <<'EOF'
+[?2004l[?2004h> import csv
+[?2004l[?2004h> rows=list(csv.reader(open('sample_qc.tsv'),delimiter='\t'))
+[?2004l[?2004h> hdr=rows[0]; i=hdr.index('prep_session_of_material')
+[?2004l[?2004h> for r in rows[1:]:
+[?2004l[?2004h>     if r[hdr.index('condition_used')]=='excluded' and r[i]=='':
+[?2004l[?2004h>         r[i]='not_assigned(mixed_library)'
+[?2004l[?2004h> with open('sample_qc.tsv','w',newline='') as f:
+[?2004l[?2004h>     csv.writer(f,delimiter='\t').writerows(rows)
+[?2004l[?2004h> print('patched rows:',len(rows)-1)
+[?2004l[?2004h> EOF
+[?2004lpatched rows: 12
+[?2004hroot@03b0b295779b:/task/output# python3 -c "import pandas as pd; q=pd.read_csv('sample_qc.tsv',sep='\t'); print(q[['sample_id','inferred_sex','condition_used']].to_string(index=False)); print('null cells:', int(q.isna().sum().sum()))"
+[?2004lsample_id inferred_sex condition_used
+     RS19        mixed       excluded
+     RS22            M        vehicle
+     RS26            F        treated
+     RS27            F        vehicle
+     RS47            M        treated
+     RS62            M        vehicle
+     RS69            F        vehicle
+     RS75            M        vehicle
+     RS79            M        treated
+     RS80            F        treated
+     RS89            F        treated
+     RS97            F        vehicle
+null cells: 0
+[?2004hroot@03b0b295779b:/task/output# cd /task/output && head -1 sample_qc.tsv | tr '\t' '|' && for f in gene_counts.tsv sample_qc.tsv de_results.tsv erratum.tsv; do echo "== $f"; head -2 $f | cut -c1-200; done
+[?2004lsample_id|inferred_sex|condition_used|donor_id_sheet|donor_sex_sheet|condition_sheet|library_prep_batch_sheet|prep_session_of_material|inferred_sex_source|Y_marker_frac_of_pure|XIST_frac_of_pure|condition_fingerprint_score|prep_session_fingerprint_score|note
+== gene_counts.tsv
+gene_id	RS19	RS22	RS26	RS27	RS47	RS62	RS69	RS75	RS79	RS80	RS89	RS97
+ENSG00000134851	54.0	47.0	49.0	44.0	41.0	51.0	69.0	43.0	88.0	59.0	85.0	58.0
+== sample_qc.tsv
+sample_id	inferred_sex	condition_used	donor_id_sheet	donor_sex_sheet	condition_sheet	library_prep_batch_sheet	prep_session_of_material	inferred_sex_source	Y_marker_frac_of_pure	XIST_frac_of_pure	condi
+RS19	mixed	excluded	D874	M	treated	2024-03-05	not_assigned(mixed_library)	XIST vs RPS4Y1/DDX3Y/EIF1AY/UTY/KDM5D estimated counts	0.5367934421266071	0.46330473463978333	-0.16	-0.117	library contains ma
+== de_results.tsv
+gene_id	gene_name	base_mean	log2fc	lfcSE	stat	pvalue	padj	design	n_libraries_used	significant	tested
+ENSG00000134851	TMEM165	56.7774	0.417327	0.300018	1.391	0.164224	0.786702	~library_prep_session + donor_sex + condition (treated vs vehicle)	11	0	yes
+== erratum.tsv
+gene_id	gene_name	mail_rank	final_log2fc	final_pvalue	final_padj	significant_final	verdict
+ENSG00000054803	CBLN4	1	-1.91686	1.05108e-12	2.15605e-11	1	confirmed
+[?2004hroot@03b0b295779b:/task/output# 

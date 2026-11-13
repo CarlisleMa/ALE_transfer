@@ -1,0 +1,2431 @@
+[?2004hroot@967688696ad6:/task# ls -la /task /task/input /task/output
+[?2004l/task:
+total 20
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:54 ..
+dr-xr-xr-x 1 root root 4096 Nov 12 14:35 input
+drwxr-xr-x 2 root root 4096 Nov 12 01:56 output
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 software
+
+/task/input:
+total 32
+dr-xr-xr-x 1 root root 4096 Nov 12 14:35 .
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 ..
+-r--r--r-- 1 root root 1188 Nov 12 14:35 acquisition_notes.md
+-r--r--r-- 1 root root  787 Nov 12 14:35 controls.tsv
+dr-xr-xr-x 1 root root 4096 Nov 12 14:35 fcs
+-r--r--r-- 1 root root 2265 Nov 12 14:35 gating_sop.md
+-r--r--r-- 1 root root  264 Nov 12 14:35 panel.tsv
+-r--r--r-- 1 root root  229 Nov 12 14:35 samples.tsv
+
+/task/output:
+total 8
+drwxr-xr-x 2 root root 4096 Nov 12 01:56 .
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 ..
+[?2004hroot@967688696ad6:/task# cat /task/input/samples.tsv
+[?2004lsample_id	fcs_file	donor	acquisition_order
+PBMC_D617	PBMC_D617.fcs	D617	1
+PBMC_D685	PBMC_D685.fcs	D685	2
+PBMC_D735	PBMC_D735.fcs	D735	3
+PBMC_D829	PBMC_D829.fcs	D829	4
+PBMC_D858	PBMC_D858.fcs	D858	5
+PBMC_D960	PBMC_D960.fcs	D960	6
+[?2004hroot@967688696ad6:/task# echo '--- controls.tsv ---'
+[?2004l--- controls.tsv ---
+[?2004hroot@967688696ad6:/task# cat /task/input/controls.tsv
+[?2004lfcs_file	control_type	fluorochrome	detector	carrier	reagent_lot
+ctrl_unstained.fcs	unstained	NA	NA	cells	NA
+ctrl_BV421.fcs	single_stain	BV421	V450-A	beads	5201427
+ctrl_ZombieAqua.fcs	single_stain	Zombie Aqua	V525-A	cells	8967001
+ctrl_FITC.fcs	single_stain	FITC	B530-A	beads	7508584
+ctrl_PerCPCy55.fcs	single_stain	PerCP-Cy5.5	B710-A	beads	2807268
+ctrl_PE.fcs	single_stain	PE	YG586-A	beads	7334476
+ctrl_PECy7.fcs	single_stain	PE-Cy7	YG780-A	beads	4155267
+ctrl_APC.fcs	single_stain	APC	R670-A	beads	9007454
+ctrl_APCCy7.fcs	single_stain	APC-Cy7	R780-A	beads	6515199
+ctrl_PerCPCy55_cells.fcs	single_stain	PerCP-Cy5.5	B710-A	cells	3066970
+ctrl_PECy7_rerun.fcs	single_stain	PE-Cy7	YG780-A	beads	4155267
+fmo_HLADR.fcs	fmo	PE-Cy7	YG780-A	cells	NA
+fmo_HLADR_rerun.fcs	fmo	PE-Cy7	YG780-A	cells	NA
+[?2004hroot@967688696ad6:/task# echo '--- panel.tsv ---'
+[?2004l--- panel.tsv ---
+[?2004hroot@967688696ad6:/task# cat /task/input/panel.tsv
+[?2004ldetector	fluorochrome	marker	reagent_lot
+V450-A	BV421	CD3	5201427
+V525-A	Zombie Aqua	Viability	8967001
+B530-A	FITC	CD14	7508584
+B710-A	PerCP-Cy5.5	CD8	3066970
+YG586-A	PE	CD4	7334476
+YG780-A	PE-Cy7	HLA-DR	4155267
+R670-A	APC	CD56	9007454
+R780-A	APC-Cy7	CD19	6515199
+[?2004hroot@967688696ad6:/task# cat /task/input/gating_sop.md
+[?2004l# Gating SOP IMM-FC-012 (PBMC lineage panel with T-cell activation read-out, 8 colours)
+
+Marker names are those of `panel.tsv`. "+" means that the cell carries the marker, i.e. its signal
+from that reagent is clearly above the signal of cells that do not carry it; "-" means that it does not.
+Populations are nested: an event can only belong to a population if it belongs to the parent.
+
+| population | parent | definition |
+|---|---|---|
+| cells | all_events | intact cells of any kind; sub-cellular debris is excluded |
+| singlets | cells | events that consist of exactly one cell |
+| live | singlets | Viability dye - (membrane-intact cells) |
+| lymphocytes | live | mononuclear cells with low side scatter, CD14 - |
+| monocytes | live | CD14 + |
+| T_cells | lymphocytes | CD3 + |
+| CD4_T | T_cells | CD4 + CD8 - |
+| CD8_T | T_cells | CD4 - CD8 + |
+| DP_T | T_cells | CD4 + CD8 + |
+| DN_T | T_cells | CD4 - CD8 - |
+| B_cells | lymphocytes | CD3 - CD19 + |
+| NK_cells | lymphocytes | CD3 - CD19 - CD56 + |
+| activated_CD4_T | CD4_T | HLA-DR + by the FMO gate of section 2 |
+| activated_CD8_T | CD8_T | HLA-DR + by the FMO gate of section 2 |
+
+`all_events` denotes every event recorded in the file.
+
+## 1. Controls of the HLA-DR read-out
+
+HLA-DR on T cells is a dim, continuous signal without a separate positive peak. Its gate is
+therefore not set on the stained sample but on a fluorescence-minus-one control ("FMO HLA-DR"):
+PBMC of the laboratory's reference pool, stained with the complete panel except the HLA-DR reagent
+and processed like a sample.
+
+## 2. FMO gate for HLA-DR + (populations activated_CD4_T and activated_CD8_T)
+
+1. The FMO tube is analysed exactly like a sample: same compensation as the samples that were
+   recorded with the same fluorescence-detector voltages, same gates down to CD4_T and CD8_T.
+2. For each of the two parent populations P (CD4_T, CD8_T), the threshold is the 99th percentile of
+   the compensated signal of the HLA-DR detector (linear scale, detector units) over the events of
+   P in the FMO tube.
+3. An event of P in a sample is HLA-DR + if its compensated HLA-DR-detector signal is greater than
+   the threshold of P from the FMO tube that was recorded with the same fluorescence-detector
+   voltages as the sample.
+[?2004hroot@967688696ad6:/task# echo '--- acquisition_notes.md ---'
+[?2004l--- acquisition_notes.md ---
+[?2004hroot@967688696ad6:/task# cat /task/input/acquisition_notes.md
+[?2004l# Acquisition notes - experiment IMM-FC-012_PBMC_lineage (16-SEP-2025)
+
+- Instrument: LSRFortessa X-20 (405/488/561/640 nm), FACSDiva 9.0, daily CS&T passed.
+- Parameters recorded: FSC-A, FSC-H, SSC-A, eight fluorescence areas (see panel.tsv), Time. Detector voltages are stored in the files.
+- Staining: surface antibody cocktail plus Zombie Aqua fixable viability dye, 1% PFA fixation. The reagent lots of the cocktail are listed in panel.tsv, the lot used for each control tube in controls.tsv.
+- Material: cryopreserved PBMC, thawed on the day of staining; trypan blue viability after thaw between 80% and 92% depending on the donor.
+- Tubes were vortexed briefly and run at medium flow rate (300-350 events/s) without straining through a filter cap.
+- Controls recorded at the start of the session with the panel voltages: one unstained PBMC tube; antibody-capture beads (positive and negative beads in the same tube) for the seven antibody conjugates; Zombie Aqua on a 1:1 mix of live and heat-killed PBMC; an aliquot of the reference pool stained with CD8 PerCP-Cy5.5 alone (ctrl_PerCPCy55_cells.fcs); the HLA-DR FMO tube (reference pool, complete cocktail without HLA-DR PE-Cy7).
+[?2004hroot@967688696ad6:/task# cat /task/input/acquisition_notes.md
+[?2004l# Acquisition notes - experiment IMM-FC-012_PBMC_lineage (16-SEP-2025)
+
+- Instrument: LSRFortessa X-20 (405/488/561/640 nm), FACSDiva 9.0, daily CS&T passed.
+- Parameters recorded: FSC-A, FSC-H, SSC-A, eight fluorescence areas (see panel.tsv), Time. Detector voltages are stored in the files.
+- Staining: surface antibody cocktail plus Zombie Aqua fixable viability dye, 1% PFA fixation. The reagent lots of the cocktail are listed in panel.tsv, the lot used for each control tube in controls.tsv.
+- Material: cryopreserved PBMC, thawed on the day of staining; trypan blue viability after thaw between 80% and 92% depending on the donor.
+- Tubes were vortexed briefly and run at medium flow rate (300-350 events/s) without straining through a filter cap.
+- Controls recorded at the start of the session with the panel voltages: one unstained PBMC tube; antibody-capture beads (positive and negative beads in the same tube) for the seven antibody conjugates; Zombie Aqua on a 1:1 mix of live and heat-killed PBMC; an aliquot of the reference pool stained with CD8 PerCP-Cy5.5 alone (ctrl_PerCPCy55_cells.fcs); the HLA-DR FMO tube (reference pool, complete cocktail without HLA-DR PE-Cy7).
+[?2004hroot@967688696ad6:/task# wc -l /task/input/acquisition_notes.md
+[?2004l8 /task/input/acquisition_notes.md
+[?2004hroot@967688696ad6:/task# tail -n 20 /task/input/acquisition_notes.md
+[?2004l# Acquisition notes - experiment IMM-FC-012_PBMC_lineage (16-SEP-2025)
+
+- Instrument: LSRFortessa X-20 (405/488/561/640 nm), FACSDiva 9.0, daily CS&T passed.
+- Parameters recorded: FSC-A, FSC-H, SSC-A, eight fluorescence areas (see panel.tsv), Time. Detector voltages are stored in the files.
+- Staining: surface antibody cocktail plus Zombie Aqua fixable viability dye, 1% PFA fixation. The reagent lots of the cocktail are listed in panel.tsv, the lot used for each control tube in controls.tsv.
+- Material: cryopreserved PBMC, thawed on the day of staining; trypan blue viability after thaw between 80% and 92% depending on the donor.
+- Tubes were vortexed briefly and run at medium flow rate (300-350 events/s) without straining through a filter cap.
+- Controls recorded at the start of the session with the panel voltages: one unstained PBMC tube; antibody-capture beads (positive and negative beads in the same tube) for the seven antibody conjugates; Zombie Aqua on a 1:1 mix of live and heat-killed PBMC; an aliquot of the reference pool stained with CD8 PerCP-Cy5.5 alone (ctrl_PerCPCy55_cells.fcs); the HLA-DR FMO tube (reference pool, complete cocktail without HLA-DR PE-Cy7).
+[?2004hroot@967688696ad6:/task# cat /task/input/acquisition_notes.md
+[?2004l# Acquisition notes - experiment IMM-FC-012_PBMC_lineage (16-SEP-2025)
+
+- Instrument: LSRFortessa X-20 (405/488/561/640 nm), FACSDiva 9.0, daily CS&T passed.
+- Parameters recorded: FSC-A, FSC-H, SSC-A, eight fluorescence areas (see panel.tsv), Time. Detector voltages are stored in the files.
+- Staining: surface antibody cocktail plus Zombie Aqua fixable viability dye, 1% PFA fixation. The reagent lots of the cocktail are listed in panel.tsv, the lot used for each control tube in controls.tsv.
+- Material: cryopreserved PBMC, thawed on the day of staining; trypan blue viability after thaw between 80% and 92% depending on the donor.
+- Tubes were vortexed briefly and run at medium flow rate (300-350 events/s) without straining through a filter cap.
+- Controls recorded at the start of the session with the panel voltages: one unstained PBMC tube; antibody-capture beads (positive and negative beads in the same tube) for the seven antibody conjugates; Zombie Aqua on a 1:1 mix of live and heat-killed PBMC; an aliquot of the reference pool stained with CD8 PerCP-Cy5.5 alone (ctrl_PerCPCy55_cells.fcs); the HLA-DR FMO tube (reference pool, complete cocktail without HLA-DR PE-Cy7).
+[?2004hroot@967688696ad6:/task# ls -l /task/input/fcs
+[?2004ltotal 19416
+-r--r--r-- 1 root root 2080886 Nov 12 14:35 PBMC_D617.fcs
+-r--r--r-- 1 root root 1992518 Nov 12 14:35 PBMC_D685.fcs
+-r--r--r-- 1 root root 1836470 Nov 12 14:35 PBMC_D735.fcs
+-r--r--r-- 1 root root 1943990 Nov 12 14:35 PBMC_D829.fcs
+-r--r--r-- 1 root root 1991174 Nov 12 14:35 PBMC_D858.fcs
+-r--r--r-- 1 root root 1749734 Nov 12 14:35 PBMC_D960.fcs
+-r--r--r-- 1 root root  289855 Nov 12 14:35 ctrl_APC.fcs
+-r--r--r-- 1 root root  289862 Nov 12 14:35 ctrl_APCCy7.fcs
+-r--r--r-- 1 root root  289857 Nov 12 14:35 ctrl_BV421.fcs
+-r--r--r-- 1 root root  289856 Nov 12 14:35 ctrl_FITC.fcs
+-r--r--r-- 1 root root  289851 Nov 12 14:35 ctrl_PE.fcs
+-r--r--r-- 1 root root  289861 Nov 12 14:35 ctrl_PECy7.fcs
+-r--r--r-- 1 root root  289867 Nov 12 14:35 ctrl_PECy7_rerun.fcs
+-r--r--r-- 1 root root  289867 Nov 12 14:35 ctrl_PerCPCy55.fcs
+-r--r--r-- 1 root root 1441870 Nov 12 14:35 ctrl_PerCPCy55_cells.fcs
+-r--r--r-- 1 root root  385885 Nov 12 14:35 ctrl_ZombieAqua.fcs
+-r--r--r-- 1 root root  385835 Nov 12 14:35 ctrl_unstained.fcs
+-r--r--r-- 1 root root 1843419 Nov 12 14:35 fmo_HLADR.fcs
+-r--r--r-- 1 root root 1868577 Nov 12 14:35 fmo_HLADR_rerun.fcs
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_fcs.py
+[?2004l[?2004h> import glob, os
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> 
+[?2004l[?2004h> for f in sorted(glob.glob('/task/input/fcs/*.fcs')):
+[?2004l[?2004h>     fo = flowio.FlowData(f)
+[?2004l[?2004h>     base = os.path.basename(f)
+[?2004l[?2004h>     voltages = {k: fo.text[k] for k in sorted(fo.text.keys()) if k.endswith('V') and k.startswith('$P')}
+[?2004l[?2004h>     spills = [k for k in fo.text.keys() if 'SPILL' in k.upper() or 'COMP' in k.upper()]
+[?2004l[?2004h>     time = fo.text.get('$BTIM', '')
+[?2004l[?2004h>     print(f"{base}: events={fo.event_count}, BTIM={time}, spills={spills}")
+[?2004l[?2004h>     print(f"   voltages={voltages}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_fcs.py
+[?2004lPBMC_D617.fcs: events=43312, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+PBMC_D685.fcs: events=41471, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+PBMC_D735.fcs: events=38220, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+PBMC_D829.fcs: events=40460, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+PBMC_D858.fcs: events=41443, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+PBMC_D960.fcs: events=36413, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_APC.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_APCCy7.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_BV421.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_FITC.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_PE.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_PECy7.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_PECy7_rerun.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_PerCPCy55.fcs: events=6000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_PerCPCy55_cells.fcs: events=30000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_ZombieAqua.fcs: events=8000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+ctrl_unstained.fcs: events=8000, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+fmo_HLADR.fcs: events=38365, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+fmo_HLADR_rerun.fcs: events=38889, BTIM=, spills=['apply compensation', 'spillover']
+   voltages={}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_keys.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/PBMC_D617.fcs')
+[?2004l[?2004h> print("Channels:", fo.channels)
+[?2004l[?2004h> for k, v in sorted(fo.text.items()):
+[?2004l[?2004h>     if any(term in k.lower() for term in ['volt', 'spill', 'gain', 'time', 'date', 'cyt', 'tube']):
+[?2004l[?2004h>         print(f"{k}: {v[:100] if len(str(v)) > 100 else v}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_keys.py
+[?2004lChannels: {1: {'pnn': 'FSC-A', 'pns': '', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 2: {'pnn': 'FSC-H', 'pns': '', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 3: {'pnn': 'SSC-A', 'pns': '', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 4: {'pnn': 'V450-A', 'pns': 'CD3', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 5: {'pnn': 'V525-A', 'pns': 'Viability', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 6: {'pnn': 'B530-A', 'pns': 'CD14', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 7: {'pnn': 'B710-A', 'pns': 'CD8', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 8: {'pnn': 'YG586-A', 'pns': 'CD4', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 9: {'pnn': 'YG780-A', 'pns': 'HLA-DR', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 10: {'pnn': 'R670-A', 'pns': 'CD56', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 11: {'pnn': 'R780-A', 'pns': 'CD19', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}, 12: {'pnn': 'Time', 'pns': '', 'pne': (0.0, 0.0), 'png': 1.0, 'pnr': 262144.0}}
+cyt: LSRFortessa X-20
+cytsn: X65811-R0428
+date: 16-SEP-2025
+spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0
+timestep: 0.01
+tube name: PBMC_D617
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > print_notes.py
+[?2004l[?2004h> with open('/task/input/acquisition_notes.md') as f:
+[?2004l[?2004h>     print(repr(f.read()))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 print_notes.py
+[?2004l'# Acquisition notes - experiment IMM-FC-012_PBMC_lineage (16-SEP-2025)\n\n- Instrument: LSRFortessa X-20 (405/488/561/640 nm), FACSDiva 9.0, daily CS&T passed.\n- Parameters recorded: FSC-A, FSC-H, SSC-A, eight fluorescence areas (see panel.tsv), Time. Detector voltages are stored in the files.\n- Staining: surface antibody cocktail plus Zombie Aqua fixable viability dye, 1% PFA fixation. The reagent lots of the cocktail are listed in panel.tsv, the lot used for each control tube in controls.tsv.\n- Material: cryopreserved PBMC, thawed on the day of staining; trypan blue viability after thaw between 80% and 92% depending on the donor.\n- Tubes were vortexed briefly and run at medium flow rate (300-350 events/s) without straining through a filter cap.\n- Controls recorded at the start of the session with the panel voltages: one unstained PBMC tube; antibody-capture beads (positive and negative beads in the same tube) for the seven antibody conjugates; Zombie Aqua on a 1:1 mix of live and heat-killed PBMC; an aliquot of the reference pool stained with CD8 PerCP-Cy5.5 alone (ctrl_PerCPCy55_cells.fcs); the HLA-DR FMO tube (reference pool, complete cocktail without HLA-DR PE-Cy7).\n'
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_all_meta.py
+[?2004l[?2004h> import glob, os, flowio
+[?2004l[?2004h> 
+[?2004l[?2004h> for path in sorted(glob.glob('/task/input/fcs/*.fcs')):
+[?2004l[?2004h>     fo = flowio.FlowData(path)
+[?2004l[?2004h>     fname = os.path.basename(path)
+[?2004l[?2004h>     # Find any key related to voltage, PMT, PnG, or spillover
+[?2004l[?2004h>     interesting = {}
+[?2004l[?2004h>     for k, v in fo.text.items():
+[?2004l[?2004h>         k_lower = k.lower()
+[?2004l[?2004h>         if any(w in k_lower for w in ['volt', 'pmt', 'gain', 'spill', 'tube', 'time', 'stim', 'etim', 'btim']):
+[?2004l[?2004h>             interesting[k] = v
+[?2004l[?2004h>     print(f"=== {fname} ===")
+[?2004l[?2004h>     for k, v in interesting.items():
+[?2004l[?2004h>         val_str = str(v)
+[?2004l[?2004h>         if len(val_str) > 120:
+[?2004l[?2004h>             val_str = val_str[:120] + '...'
+[?2004l[?2004h>         print(f"  {k}: {val_str}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_all_meta.py
+[?2004l=== PBMC_D617.fcs ===
+  btim: 09:39:53
+  etim: 09:41:17
+  timestep: 0.01
+  tube name: PBMC_D617
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== PBMC_D685.fcs ===
+  btim: 09:43:25
+  etim: 09:45:23
+  timestep: 0.01
+  tube name: PBMC_D685
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== PBMC_D735.fcs ===
+  btim: 09:47:35
+  etim: 09:49:29
+  timestep: 0.01
+  tube name: PBMC_D735
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== PBMC_D829.fcs ===
+  btim: 09:50:36
+  etim: 09:52:35
+  timestep: 0.01
+  tube name: PBMC_D829
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== PBMC_D858.fcs ===
+  btim: 10:01:18
+  etim: 10:03:54
+  timestep: 0.01
+  tube name: PBMC_D858
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== PBMC_D960.fcs ===
+  btim: 10:06:44
+  etim: 10:08:01
+  timestep: 0.01
+  tube name: PBMC_D960
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_APC.fcs ===
+  btim: 09:27:41
+  etim: 09:28:29
+  timestep: 0.01
+  tube name: APC Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_APCCy7.fcs ===
+  btim: 09:29:19
+  etim: 09:30:13
+  timestep: 0.01
+  tube name: APC-Cy7 Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_BV421.fcs ===
+  btim: 09:08:40
+  etim: 09:09:04
+  timestep: 0.01
+  tube name: BV421 Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_FITC.fcs ===
+  btim: 09:12:18
+  etim: 09:13:12
+  timestep: 0.01
+  tube name: FITC Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_PE.fcs ===
+  btim: 09:19:52
+  etim: 09:20:41
+  timestep: 0.01
+  tube name: PE Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_PECy7.fcs ===
+  btim: 09:23:28
+  etim: 09:24:24
+  timestep: 0.01
+  tube name: PE-Cy7 Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_PECy7_rerun.fcs ===
+  btim: 09:54:32
+  etim: 09:55:03
+  timestep: 0.01
+  tube name: PE-Cy7 Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_PerCPCy55.fcs ===
+  btim: 09:16:13
+  etim: 09:17:40
+  timestep: 0.01
+  tube name: PerCP-Cy5.5 Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_PerCPCy55_cells.fcs ===
+  btim: 09:32:47
+  etim: 09:34:13
+  timestep: 0.01
+  tube name: PerCP-Cy5.5 Stained Control (cells)
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_ZombieAqua.fcs ===
+  btim: 09:10:26
+  etim: 09:11:40
+  timestep: 0.01
+  tube name: Zombie Aqua Stained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== ctrl_unstained.fcs ===
+  btim: 09:05:36
+  etim: 09:06:47
+  timestep: 0.01
+  tube name: Unstained Control
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== fmo_HLADR.fcs ===
+  btim: 09:35:38
+  etim: 09:37:46
+  timestep: 0.01
+  tube name: FMO HLA-DR
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+=== fmo_HLADR_rerun.fcs ===
+  btim: 09:56:00
+  etim: 09:58:46
+  timestep: 0.01
+  tube name: FMO HLA-DR
+  spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,...
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > dump_keys.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> fo1 = flowio.FlowData('/task/input/fcs/PBMC_D829.fcs')
+[?2004l[?2004h> fo2 = flowio.FlowData('/task/input/fcs/PBMC_D858.fcs')
+[?2004l[?2004h> keys1 = set(fo1.text.keys())
+[?2004l[?2004h> keys2 = set(fo2.text.keys())
+[?2004l[?2004h> for k in sorted(keys1 | keys2):
+[?2004l[?2004h>     v1 = fo1.text.get(k, '<MISSING>')
+[?2004l[?2004h>     v2 = fo2.text.get(k, '<MISSING>')
+[?2004l[?2004h>     if v1 != v2:
+[?2004l[?2004h>         print(f"{k}: D829={v1[:60] if len(str(v1))>60 else v1}  VS  D858={v2[:60] if len(str(v2))>60 else v2}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 dump_keys.py
+[?2004lbtim: D829=09:50:36  VS  D858=10:01:18
+enddata: D829=1943989  VS  D858=1991173
+etim: D829=09:52:35  VS  D858=10:03:54
+fil: D829=PBMC_D829.fcs  VS  D858=PBMC_D858.fcs
+p1v: D829=420  VS  D858=348
+p2v: D829=420  VS  D858=348
+p9v: D829=641  VS  D858=703
+src: D829=donor 829  VS  D858=donor 858
+tot: D829=40460  VS  D858=41443
+tube name: D829=PBMC_D829  VS  D858=PBMC_D858
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > print_all_voltages.py
+[?2004l[?2004h> import glob, os, flowio
+[?2004l[?2004h> 
+[?2004l[?2004h> for path in sorted(glob.glob('/task/input/fcs/*.fcs')):
+[?2004l[?2004h>     fo = flowio.FlowData(path)
+[?2004l[?2004h>     fname = os.path.basename(path)
+[?2004l[?2004h>     volt_dict = {}
+[?2004l[?2004h>     for i in range(1, len(fo.channels) + 1):
+[?2004l[?2004h>         pnn = fo.channels[i]['pnn']
+[?2004l[?2004h>         v = fo.text.get(f'p{i}v')
+[?2004l[?2004h>         volt_dict[pnn] = v
+[?2004l[?2004h>     print(f"{fname:25s}: {volt_dict}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 print_all_voltages.py
+[?2004lPBMC_D617.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+PBMC_D685.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+PBMC_D735.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+PBMC_D829.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+PBMC_D858.fcs            : {'FSC-A': '348', 'FSC-H': '348', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '703', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+PBMC_D960.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '703', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_APC.fcs             : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_APCCy7.fcs          : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_BV421.fcs           : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_FITC.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_PE.fcs              : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_PECy7.fcs           : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_PECy7_rerun.fcs     : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '703', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_PerCPCy55.fcs       : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_PerCPCy55_cells.fcs : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_ZombieAqua.fcs      : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+ctrl_unstained.fcs       : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+fmo_HLADR.fcs            : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '641', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+fmo_HLADR_rerun.fcs      : {'FSC-A': '420', 'FSC-H': '420', 'SSC-A': '265', 'V450-A': '478', 'V525-A': '522', 'B530-A': '506', 'B710-A': '612', 'YG586-A': '498', 'YG780-A': '703', 'R670-A': '587', 'R780-A': '655', 'Time': None}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > check_embedded_spillover.py
+[?2004l[?2004h> import glob, os, flowio
+[?2004l[?2004h> 
+[?2004l[?2004h> for path in sorted(glob.glob('/task/input/fcs/*.fcs')):
+[?2004l[?2004h>     fo = flowio.FlowData(path)
+[?2004l[?2004h>     fname = os.path.basename(path)
+[?2004l[?2004h>     spill = fo.text.get('spillover')
+[?2004l[?2004h>     print(f"{fname}: {spill}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 check_embedded_spillover.py
+[?2004lPBMC_D617.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+PBMC_D685.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+PBMC_D735.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+PBMC_D829.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+PBMC_D858.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+PBMC_D960.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_APC.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_APCCy7.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_BV421.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_FITC.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_PE.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_PECy7.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_PECy7_rerun.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_PerCPCy55.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_PerCPCy55_cells.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_ZombieAqua.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+ctrl_unstained.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+fmo_HLADR.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+fmo_HLADR_rerun.fcs: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0009,0.0005,0.0812,1,0.0601,0.0051,0.014,0.0011,0.0022,0.0034,0.0005,0.0437,1,0.1272,0.1027,0.0018,0.0008,0.0033,0.0014,0.0002,0.0011,1,0.0014,0.0929,0.0224,0.0242,0.0019,0.0019,0.0038,0.361,1,0.0174,0.0019,0.0017,0.0005,0.0009,0.0004,0.055,0.0246,1,0.0025,0.1687,0.0011,0.0008,0.0001,0.1145,0,0.0054,1,0.4842,0.0012,0.0017,0.0003,0.0014,0.0023,0.0616,0.0551,1
+[?2004hroot@967688696ad6:/task# ls -la /task/software
+[?2004ltotal 12
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:56 ..
+-rwxr-xr-x 1 root root   49 Nov 12 14:35 README.txt
+[?2004hroot@967688696ad6:/task# cat /task/software/README.txt
+[?2004lAll tools are on PATH (conda env at /opt/tools).
+[?2004hroot@967688696ad6:/task# which python3; python3 --version
+[?2004l/opt/tools/bin/python3
+Python 3.12.16
+[?2004hroot@967688696ad6:/task# pip list
+[?2004lPackage         Version
+--------------- --------
+anytree         2.13.0
+bokeh           3.10.2
+cloudpickle     3.1.2
+contourpy       1.4.0
+fcsparser       0.2.8
+FlowIO          1.4.0
+FlowKit         1.3.2
+FlowUtils       1.2.2
+Jinja2          3.1.6
+joblib          1.6.0
+lxml            6.1.3
+MarkupSafe      3.0.4
+narwhals        2.28.0
+networkx        3.7
+numpy           2.3.5
+packaging       26.3
+pandas          2.3.3
+pillow          13.0.0
+pip             26.2.2
+psutil          7.2.2
+pyarrow         26.0.1
+python-dateutil 4.0.0
+pytz            2026.6
+PyYAML          6.0.3
+scikit-learn    1.7.2
+scipy           1.16.3
+setuptools      84.2.1
+six             1.17.0
+threadpoolctl   3.8.0
+tornado         6.6.1
+tzdata          2026.6
+wheel           0.48.0
+xyzservices     2026.9.1
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# cat << 'EOF' > parse_spill.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/PBMC_D617.fcs')
+[?2004l[?2004h> raw_spill = fo.text['spillover'].split(',')
+[?2004l[?2004h> n = int(raw_spill[0])
+[?2004l[?2004h> detectors = raw_spill[1:n+1]
+[?2004l[?2004h> vals = [float(x) for x in raw_spill[n+1:]]
+[?2004l[?2004h> mat = np.array(vals).reshape(n, n)
+[?2004l[?2004h> df = pd.DataFrame(mat, index=detectors, columns=detectors)
+[?2004l[?2004h> print('Embedded spillover matrix in PBMC_D617:')
+[?2004l[?2004h> print(df.to_string())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 parse_spill.py
+[?2004lEmbedded spillover matrix in PBMC_D617:
+         V450-A  V525-A  B530-A  B710-A  YG586-A  YG780-A  R670-A  R780-A
+V450-A   1.0000  0.2401  0.0032  0.0034   0.0027   0.0005  0.0009  0.0005
+V525-A   0.0812  1.0000  0.0601  0.0051   0.0140   0.0011  0.0022  0.0034
+B530-A   0.0005  0.0437  1.0000  0.1272   0.1027   0.0018  0.0008  0.0033
+B710-A   0.0014  0.0002  0.0011  1.0000   0.0014   0.0929  0.0224  0.0242
+YG586-A  0.0019  0.0019  0.0038  0.3610   1.0000   0.0174  0.0019  0.0017
+YG780-A  0.0005  0.0009  0.0004  0.0550   0.0246   1.0000  0.0025  0.1687
+R670-A   0.0011  0.0008  0.0001  0.1145   0.0000   0.0054  1.0000  0.4842
+R780-A   0.0012  0.0017  0.0003  0.0014   0.0023   0.0616  0.0551  1.0000
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_spillover_calc.py
+[?2004l[?2004h> import flowio, fcsparser
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> 
+[?2004l[?2004h> meta, data = fcsparser.parse('/task/input/fcs/ctrl_BV421.fcs')
+[?2004l[?2004h> print('BV421 columns:', list(data.columns))
+[?2004l[?2004h> print(data['V450-A'].describe())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_spillover_calc.py
+[?2004lBV421 columns: ['FSC-A', 'FSC-H', 'SSC-A', 'CD3', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A', 'Time']
+Traceback (most recent call last):
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3812, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "pandas/_libs/index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7088, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7096, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: 'V450-A'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/task/test_spillover_calc.py", line 9, in <module>
+    print(data['V450-A'].describe())
+          ~~~~^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/frame.py", line 4113, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3819, in get_loc
+    raise KeyError(key) from err
+KeyError: 'V450-A'
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_spillover_calc.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/ctrl_BV421.fcs')
+[?2004l[?2004h> events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h> ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h> df = pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> print('BV421 event shape:', df.shape)
+[?2004l[?2004h> print('V450-A percentiles:')
+[?2004l[?2004h> print(np.percentile(df['V450-A'], [0, 10, 25, 50, 75, 90, 100]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_spillover_calc.py
+[?2004lBV421 event shape: (6000, 12)
+V450-A percentiles:
+[-7.87069702e+01  1.30501885e+01  4.70251150e+01  4.46370742e+04
+  6.00209609e+04  6.68278539e+04  1.51518016e+05]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > match_spill.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/ctrl_BV421.fcs')
+[?2004l[?2004h> events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h> ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h> df = pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> pos = df[df['V450-A'] > 5000]
+[?2004l[?2004h> neg = df[df['V450-A'] < 1000]
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> med_pos = pos[detectors].median()
+[?2004l[?2004h> med_neg = neg[detectors].median()
+[?2004l[?2004h> diff = med_pos - med_neg
+[?2004l[?2004h> ratio = diff / diff['V450-A']
+[?2004l[?2004h> print('Calculated ratio:')
+[?2004l[?2004h> print(ratio.round(4))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 match_spill.py
+[?2004lCalculated ratio:
+V450-A     1.0000
+V525-A     0.2675
+B530-A     0.0049
+B710-A     0.0022
+YG586-A    0.0023
+YG780-A    0.0007
+R670-A     0.0012
+R780-A     0.0004
+dtype: float32
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > check_ctrl.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> for fname in ['ctrl_unstained.fcs', 'ctrl_BV421.fcs', 'ctrl_PerCPCy55.fcs', 'ctrl_PerCPCy55_cells.fcs']:
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     df = pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h>     print(fname, 'events:', len(df))
+[?2004l[?2004h>     print('  FSC-A:', df['FSC-A'].median(), 'SSC-A:', df['SSC-A'].median())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 check_ctrl.py
+[?2004lctrl_unstained.fcs events: 8000
+  FSC-A: 90476.305 SSC-A: 25536.312
+ctrl_BV421.fcs events: 6000
+  FSC-A: 70077.74 SSC-A: 60197.316
+ctrl_PerCPCy55.fcs events: 6000
+  FSC-A: 70120.65 SSC-A: 60252.473
+ctrl_PerCPCy55_cells.fcs events: 30000
+  FSC-A: 90096.49 SSC-A: 25732.916
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_percp.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> 
+[?2004l[?2004h> for fname in ['ctrl_PerCPCy55.fcs', 'ctrl_PerCPCy55_cells.fcs']:
+[?2004l[?2004h>     df = get_df(fname)
+[?2004l[?2004h>     pos = df[df['B710-A'] > 5000]
+[?2004l[?2004h>     neg = df[df['B710-A'] < 1000]
+[?2004l[?2004h>     diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     ratio = diff / diff['B710-A']
+[?2004l[?2004h>     print(fname, 'ratios:')
+[?2004l[?2004h>     print(ratio.round(4))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_percp.py
+[?2004lctrl_PerCPCy55.fcs ratios:
+V450-A     0.0023
+V525-A     0.0003
+B530-A     0.0025
+B710-A     1.0000
+YG586-A    0.0025
+YG780-A    0.1520
+R670-A     0.0375
+R780-A     0.0315
+dtype: float32
+ctrl_PerCPCy55_cells.fcs ratios:
+V450-A     0.0017
+V525-A    -0.0001
+B530-A     0.0019
+B710-A     1.0000
+YG586-A    0.0020
+YG780-A    0.2536
+R670-A     0.0565
+R780-A     0.0430
+dtype: float32
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > check_diva_xml.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/PBMC_D617.fcs')
+[?2004l[?2004h> for k in sorted(fo.text.keys()):
+[?2004l[?2004h>     if any(w in k.lower() for w in ['xml', 'gate', 'diva', 'bd$']):
+[?2004l[?2004h>         print(k, str(fo.text[k])[:100])
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 check_diva_xml.py
+[?2004l[?2004hroot@967688696ad6:/task# cat << 'EOF' > print_all_keys.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> fo = flowio.FlowData('/task/input/fcs/PBMC_D617.fcs')
+[?2004l[?2004h> for k, v in sorted(fo.text.items()):
+[?2004l[?2004h>     if not k.startswith('p') or len(k) <= 3:
+[?2004l[?2004h>         print(f"{k}: {str(v)[:100]}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 print_all_keys.py
+[?2004lapply compensation: TRUE
+beginanalysis: 0
+begindata: 1910
+beginstext: 0
+btim: 09:39:53
+byteord: 1,2,3,4
+creator: BD FACSDiva Software Version 9.0
+cyt: LSRFortessa X-20
+cytsn: X65811-R0428
+datatype: F
+date: 16-SEP-2025
+endanalysis: 0
+enddata: 2080885
+endstext: 0
+etim: 09:41:17
+experiment name: IMM-FC-012_PBMC_lineage
+fil: PBMC_D617.fcs
+fsc asf: 0.78
+inst: Immunology Core
+mode: L
+nextdata: 0
+op: core-operator-2
+p1b: 32
+p1e: 0,0
+p1n: FSC-A
+p1r: 262144
+p1v: 420
+p2b: 32
+p2e: 0,0
+p2n: FSC-H
+p2r: 262144
+p2v: 420
+p3b: 32
+p3e: 0,0
+p3n: SSC-A
+p3r: 262144
+p3v: 265
+p4b: 32
+p4e: 0,0
+p4n: V450-A
+p4r: 262144
+p4s: CD3
+p4v: 478
+p5b: 32
+p5e: 0,0
+p5n: V525-A
+p5r: 262144
+p5s: Viability
+p5v: 522
+p6b: 32
+p6e: 0,0
+p6n: B530-A
+p6r: 262144
+p6s: CD14
+p6v: 506
+p7b: 32
+p7e: 0,0
+p7n: B710-A
+p7r: 262144
+p7s: CD8
+p7v: 612
+p8b: 32
+p8e: 0,0
+p8n: YG586-A
+p8r: 262144
+p8s: CD4
+p8v: 498
+p9b: 32
+p9e: 0,0
+p9n: YG780-A
+p9r: 262144
+p9s: HLA-DR
+p9v: 641
+par: 12
+spillover: 8,V450-A,V525-A,B530-A,B710-A,YG586-A,YG780-A,R670-A,R780-A,1,0.2401,0.0032,0.0034,0.0027,0.0005,0.0
+src: donor 617
+sys: Windows 10
+timestep: 0.01
+tot: 43312
+tube name: PBMC_D617
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_diva_comp.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> df_un = get_df('ctrl_unstained.fcs')
+[?2004l[?2004h> print('Unstained cells medians:')
+[?2004l[?2004h> print(df_un[detectors].median())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_diva_comp.py
+[?2004lUnstained cells medians:
+V450-A      74.989853
+V525-A     114.445877
+B530-A     125.841888
+B710-A      64.971573
+YG586-A     84.825638
+YG780-A     44.885742
+R670-A      54.211380
+R780-A      43.352272
+dtype: float32
+[?2004hroot@967688696ad6:/task# python3 -c "import flowkit as fk; print(dir(fk))"
+[?2004l['Dimension', 'GatingStrategy', 'Matrix', 'QuadrantDivider', 'RatioDimension', 'Sample', 'Session', 'SpectralMatrix', 'Workspace', '__all__', '__builtins__', '__cached__', '__doc__', '__file__', '__loader__', '__name__', '__package__', '__path__', '__spec__', '__version__', '_conf', '_models', '_resources', '_utils', '_version', 'exceptions', 'export_gatingml', 'extract_fcs_metadata', 'extract_wsp_sample_data', 'gates', 'generate_transforms', 'load_samples', 'parse_gating_xml', 'parse_wsp', 'read_multi_dataset_fcs', 'transforms']
+
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_formula.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> un = get_df('ctrl_unstained.fcs')
+[?2004l[?2004h> bv = get_df('ctrl_BV421.fcs')
+[?2004l[?2004h> pos = bv[bv['V450-A'] > 10000]
+[?2004l[?2004h> neg = bv[bv['V450-A'] < 1000]
+[?2004l[?2004h> 
+[?2004l[?2004h> print('BV421 pos mean - neg mean:')
+[?2004l[?2004h> print(((pos[detectors].mean() - neg[detectors].mean()) / (pos['V450-A'].mean() - neg['V450-A'].mean())).round(4))
+[?2004l[?2004h> print('BV421 pos med - neg med:')
+[?2004l[?2004h> print(((pos[detectors].median() - neg[detectors].median()) / (pos['V450-A'].median() - neg['V450-A'].median())).round(4))
+[?2004l[?2004h> print('BV421 pos med - un med:')
+[?2004l[?2004h> print(((pos[detectors].median() - un[detectors].median()) / (pos['V450-A'].median() - un['V450-A'].median())).round(4))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_formula.py
+[?2004lBV421 pos mean - neg mean:
+V450-A     1.0000
+V525-A     0.2674
+B530-A     0.0049
+B710-A     0.0022
+YG586-A    0.0023
+YG780-A    0.0007
+R670-A     0.0012
+R780-A     0.0004
+dtype: float32
+BV421 pos med - neg med:
+V450-A     1.0000
+V525-A     0.2675
+B530-A     0.0049
+B710-A     0.0022
+YG586-A    0.0023
+YG780-A    0.0007
+R670-A     0.0012
+R780-A     0.0004
+dtype: float32
+BV421 pos med - un med:
+V450-A     1.0000
+V525-A     0.2667
+B530-A     0.0040
+B710-A     0.0018
+YG586-A    0.0017
+YG780-A    0.0006
+R670-A     0.0010
+R780-A     0.0003
+dtype: float32
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_za.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> df = get_df('ctrl_ZombieAqua.fcs')
+[?2004l[?2004h> pos = df[df['V525-A'] > 5000]
+[?2004l[?2004h> neg = df[df['V525-A'] < 1000]
+[?2004l[?2004h> diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h> print((diff / diff['V525-A']).round(4))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_za.py
+[?2004lV450-A     0.0725
+V525-A     1.0000
+B530-A     0.0812
+B710-A     0.0029
+YG586-A    0.0119
+YG780-A    0.0012
+R670-A     0.0028
+R780-A     0.0028
+dtype: float32
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_voltage.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> fo1 = flowio.FlowData('/task/input/fcs/ctrl_PECy7.fcs')
+[?2004l[?2004h> fo2 = flowio.FlowData('/task/input/fcs/ctrl_PECy7_rerun.fcs')
+[?2004l[?2004h> ev1 = np.reshape(fo1.events, (-1, fo1.channel_count))
+[?2004l[?2004h> ev2 = np.reshape(fo2.events, (-1, fo2.channel_count))
+[?2004l[?2004h> ch1 = [fo1.channels[i]['pnn'] for i in range(1, fo1.channel_count + 1)]
+[?2004l[?2004h> ch2 = [fo2.channels[i]['pnn'] for i in range(1, fo2.channel_count + 1)]
+[?2004l[?2004h> i_yg = ch1.index('YG780-A')
+[?2004l[?2004h> print('PECy7 pos median @ 641V:', np.median(ev1[ev1[:, i_yg] > 5000, i_yg]))
+[?2004l[?2004h> print('PECy7 pos median @ 703V:', np.median(ev2[ev2[:, i_yg] > 5000, i_yg]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_voltage.py
+[?2004lPECy7 pos median @ 641V: 30169.312
+PECy7 pos median @ 703V: 57054.49
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_pecy7.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> for ctl in ['ctrl_PECy7.fcs', 'ctrl_PECy7_rerun.fcs']:
+[?2004l[?2004h>     df = get_df(ctl)
+[?2004l[?2004h>     pos = df[df['YG780-A'] > 5000]
+[?2004l[?2004h>     neg = df[df['YG780-A'] < 1000]
+[?2004l[?2004h>     diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     print(ctl, 'ratios:')
+[?2004l[?2004h>     print((diff / diff['YG780-A']).round(4))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_pecy7.py
+[?2004lctrl_PECy7.fcs ratios:
+V450-A     0.0004
+V525-A     0.0009
+B530-A     0.0004
+B710-A     0.0217
+YG586-A    0.0195
+YG780-A    1.0000
+R670-A     0.0028
+R780-A     0.0869
+dtype: float32
+ctrl_PECy7_rerun.fcs ratios:
+V450-A     0.0002
+V525-A     0.0005
+B530-A     0.0002
+B710-A     0.0113
+YG586-A    0.0103
+YG780-A    1.0000
+R670-A     0.0015
+R780-A     0.0459
+dtype: float32
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_gain_ratio.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> df_pe7_1 = get_df('ctrl_PECy7.fcs')
+[?2004l[?2004h> df_pe7_2 = get_df('ctrl_PECy7_rerun.fcs')
+[?2004l[?2004h> 
+[?2004l[?2004h> pos1 = df_pe7_1[df_pe7_1['YG780-A'] > 5000]['YG780-A'].median()
+[?2004l[?2004h> neg1 = df_pe7_1[df_pe7_1['YG780-A'] < 1000]['YG780-A'].median()
+[?2004l[?2004h> diff1 = pos1 - neg1
+[?2004l[?2004h> 
+[?2004l[?2004h> pos2 = df_pe7_2[df_pe7_2['YG780-A'] > 5000]['YG780-A'].median()
+[?2004l[?2004h> neg2 = df_pe7_2[df_pe7_2['YG780-A'] < 1000]['YG780-A'].median()
+[?2004l[?2004h> diff2 = pos2 - neg2
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"PECy7 diff @ 641V: {diff1:.2f}, @ 703V: {diff2:.2f}, ratio: {diff2/diff1:.4f}")
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> for d in detectors:
+[?2004l[?2004h>     p1 = df_pe7_1[df_pe7_1['YG780-A'] > 5000][d].median() - df_pe7_1[df_pe7_1['YG780-A'] < 1000][d].median()
+[?2004l[?2004h>     p2 = df_pe7_2[df_pe7_2['YG780-A'] > 5000][d].median() - df_pe7_2[df_pe7_2['YG780-A'] < 1000][d].median()
+[?2004l[?2004h>     print(f"  {d:8s}: diff1={p1:.2f}, diff2={p2:.2f}, ratio={p2/p1 if p1!=0 else 0:.4f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_gain_ratio.py
+[?2004lPECy7 diff @ 641V: 30132.78, @ 703V: 56985.66, ratio: 1.8912
+  V450-A  : diff1=12.35, diff2=11.84, ratio=0.9589
+  V525-A  : diff1=27.34, diff2=30.13, ratio=1.1022
+  B530-A  : diff1=13.54, diff2=14.22, ratio=1.0506
+  B710-A  : diff1=653.23, diff2=646.13, ratio=0.9891
+  YG586-A : diff1=586.69, diff2=585.79, ratio=0.9985
+  YG780-A : diff1=30132.78, diff2=56985.66, ratio=1.8912
+  R670-A  : diff1=84.39, diff2=83.95, ratio=0.9949
+  R780-A  : diff1=2618.14, diff2=2618.17, ratio=1.0000
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# find /task -type f
+[?2004l/task/test_formula.py
+/task/test_diva_comp.py
+/task/print_all_voltages.py
+/task/match_spill.py
+/task/print_notes.py
+/task/parse_spill.py
+/task/test_pecy7.py
+/task/inspect_all_meta.py
+/task/test_percp.py
+/task/check_diva_xml.py
+/task/check_embedded_spillover.py
+/task/print_all_keys.py
+/task/inspect_fcs.py
+/task/test_voltage.py
+/task/test_gain_ratio.py
+/task/test_za.py
+/task/test_spillover_calc.py
+/task/check_ctrl.py
+/task/dump_keys.py
+/task/inspect_keys.py
+/task/input/panel.tsv
+/task/input/controls.tsv
+/task/input/samples.tsv
+/task/input/acquisition_notes.md
+/task/input/fcs/PBMC_D735.fcs
+/task/input/fcs/ctrl_unstained.fcs
+/task/input/fcs/ctrl_ZombieAqua.fcs
+/task/input/fcs/ctrl_APCCy7.fcs
+/task/input/fcs/ctrl_PECy7_rerun.fcs
+/task/input/fcs/ctrl_PerCPCy55_cells.fcs
+/task/input/fcs/PBMC_D617.fcs
+/task/input/fcs/PBMC_D858.fcs
+/task/input/fcs/ctrl_APC.fcs
+/task/input/fcs/fmo_HLADR_rerun.fcs
+/task/input/fcs/ctrl_FITC.fcs
+/task/input/fcs/ctrl_PECy7.fcs
+/task/input/fcs/fmo_HLADR.fcs
+/task/input/fcs/PBMC_D685.fcs
+/task/input/fcs/ctrl_PerCPCy55.fcs
+/task/input/fcs/PBMC_D829.fcs
+/task/input/fcs/PBMC_D960.fcs
+/task/input/fcs/ctrl_BV421.fcs
+/task/input/fcs/ctrl_PE.fcs
+/task/input/gating_sop.md
+/task/software/README.txt
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_bead_gating.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> df = get_df('ctrl_BV421.fcs')
+[?2004l[?2004h> print('FSC-A percentiles:', np.percentile(df['FSC-A'], [1, 5, 10, 50, 90, 95, 99]))
+[?2004l[?2004h> print('SSC-A percentiles:', np.percentile(df['SSC-A'], [1, 5, 10, 50, 90, 95, 99]))
+[?2004l[?2004h> print('Ratio FSC-A/FSC-H:', np.percentile(df['FSC-A']/df['FSC-H'], [1, 5, 10, 50, 90, 95, 99]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_bead_gating.py
+[?2004lFSC-A percentiles: [ 64244.87730469  65816.50703125  66793.84296875  70077.7421875
+  73697.04921875  75036.1703125  134954.3253125 ]
+SSC-A percentiles: [ 49824.27796875  52553.796875    54055.74492187  60197.31640625
+  67304.0984375   70457.81132812 124093.50695313]
+Ratio FSC-A/FSC-H: [1.03671192 1.05174003 1.05979409 1.08746159 1.11934046 1.132378
+ 2.07229465]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > calc_all_controls.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> controls = pd.read_csv('/task/input/controls.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> for idx, row in controls.iterrows():
+[?2004l[?2004h>     fname = row['fcs_file']
+[?2004l[?2004h>     ctype = row['control_type']
+[?2004l[?2004h>     if ctype in ['unstained', 'fmo']:
+[?2004l[?2004h>         continue
+[?2004l[?2004h>     det = row['detector']
+[?2004l[?2004h>     fl = row['fluorochrome']
+[?2004l[?2004h>     carrier = row['carrier']
+[?2004l[?2004h>     lot = row['reagent_lot']
+[?2004l[?2004h>     df = get_df(fname)
+[?2004l[?2004h>     if carrier == 'beads':
+[?2004l[?2004h>         mask = (df['FSC-A'] > 50000) & (df['FSC-A'] < 100000) & (df['SSC-A'] > 30000) & (df['SSC-A'] < 90000) & ((df['FSC-A']/df['FSC-H']) < 1.3)
+[?2004l[?2004h>         g = df[mask]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         g = df
+[?2004l[?2004h>     pos = g[g[det] > g[det].quantile(0.6)]
+[?2004l[?2004h>     neg = g[g[det] < g[det].quantile(0.4)]
+[?2004l[?2004h>     diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     spill = diff / diff[det]
+[?2004l[?2004h>     print(f"=== {fname} ({fl} on {det}) ===")
+[?2004l[?2004h>     print(spill.round(4).to_dict())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 calc_all_controls.py
+[?2004l=== ctrl_BV421.fcs (BV421 on V450-A) ===
+{'V450-A': 1.0, 'V525-A': 0.26829999685287476, 'B530-A': 0.004999999888241291, 'B710-A': 0.002199999988079071, 'YG586-A': 0.002300000051036477, 'YG780-A': 0.000699999975040555, 'R670-A': 0.0013000000035390258, 'R780-A': 0.00039999998989515007}
+=== ctrl_ZombieAqua.fcs (Zombie Aqua on V525-A) ===
+{'V450-A': 0.0729999989271164, 'V525-A': 1.0, 'B530-A': 0.08190000057220459, 'B710-A': 0.003100000089034438, 'YG586-A': 0.012299999594688416, 'YG780-A': 0.00139999995008111, 'R670-A': 0.003100000089034438, 'R780-A': 0.003000000026077032}
+=== ctrl_FITC.fcs (FITC on B530-A) ===
+{'V450-A': 0.0003000000142492354, 'V525-A': 0.03700000047683716, 'B530-A': 1.0, 'B710-A': 0.04450000077486038, 'YG586-A': 0.06040000170469284, 'YG780-A': 0.0017000000225380063, 'R670-A': 0.0005000000237487257, 'R780-A': 0.002300000051036477}
+=== ctrl_PerCPCy55.fcs (PerCP-Cy5.5 on B710-A) ===
+{'V450-A': 0.002300000051036477, 'V525-A': 0.00039999998989515007, 'B530-A': 0.0024999999441206455, 'B710-A': 1.0, 'YG586-A': 0.0024999999441206455, 'YG780-A': 0.15219999849796295, 'R670-A': 0.037700001150369644, 'R780-A': 0.031599998474121094}
+=== ctrl_PE.fcs (PE on YG586-A) ===
+{'V450-A': 0.002099999925121665, 'V525-A': 0.002400000113993883, 'B530-A': 0.006000000052154064, 'B710-A': 0.23330000042915344, 'YG586-A': 1.0, 'YG780-A': 0.02969999983906746, 'R670-A': 0.00279999990016222, 'R780-A': 0.0015999999595806003}
+=== ctrl_PECy7.fcs (PE-Cy7 on YG780-A) ===
+{'V450-A': 0.00039999998989515007, 'V525-A': 0.0008999999845400453, 'B530-A': 0.0005000000237487257, 'B710-A': 0.021700000390410423, 'YG586-A': 0.019600000232458115, 'YG780-A': 1.0, 'R670-A': 0.00279999990016222, 'R780-A': 0.08739999681711197}
+=== ctrl_APC.fcs (APC on R670-A) ===
+{'V450-A': 0.0008999999845400453, 'V525-A': 0.0008999999845400453, 'B530-A': 9.999999747378752e-05, 'B710-A': 0.05649999901652336, 'YG586-A': 0.0, 'YG780-A': 0.005400000140070915, 'R670-A': 1.0, 'R780-A': 0.33230000734329224}
+=== ctrl_APCCy7.fcs (APC-Cy7 on R780-A) ===
+{'V450-A': 0.0013000000035390258, 'V525-A': 0.0019000000320374966, 'B530-A': 0.0006000000284984708, 'B710-A': 0.0008999999845400453, 'YG586-A': 0.002400000113993883, 'YG780-A': 0.09769999980926514, 'R670-A': 0.07599999755620956, 'R780-A': 1.0}
+=== ctrl_PerCPCy55_cells.fcs (PerCP-Cy5.5 on B710-A) ===
+{'V450-A': 0.11050000041723251, 'V525-A': 0.12280000001192093, 'B530-A': 0.1550000011920929, 'B710-A': 1.0, 'YG586-A': 0.12349999696016312, 'YG780-A': 0.39259999990463257, 'R670-A': 0.351500004529953, 'R780-A': 0.27900001406669617}
+=== ctrl_PECy7_rerun.fcs (PE-Cy7 on YG780-A) ===
+{'V450-A': 0.00019999999494757503, 'V525-A': 0.0005000000237487257, 'B530-A': 0.0003000000142492354, 'B710-A': 0.01140000019222498, 'YG586-A': 0.010300000198185444, 'YG780-A': 1.0, 'R670-A': 0.001500000013038516, 'R780-A': 0.045899998396635056}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_cells_gate.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> df = get_df('ctrl_PerCPCy55_cells.fcs')
+[?2004l[?2004h> print('Total events:', len(df))
+[?2004l[?2004h> print(np.percentile(df['B710-A'], [50, 75, 80, 85, 90, 95, 99]))
+[?2004l[?2004h> 
+[?2004l[?2004h> pos = df[df['B710-A'] > 3000]
+[?2004l[?2004h> neg = df[df['B710-A'] < 500]
+[?2004l[?2004h> print('pos count:', len(pos), 'neg count:', len(neg))
+[?2004l[?2004h> diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h> print('PerCPCy55 cells (pos > 3000 vs neg < 500):')
+[?2004l[?2004h> print((diff / diff['B710-A']).round(4).to_dict())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_cells_gate.py
+[?2004lTotal events: 30000
+[   84.53764725   191.83496094   454.20923462  5969.9777832
+  7685.45795898  9444.77705078 12633.5824707 ]
+pos count: 5286 neg count: 24051
+PerCPCy55 cells (pos > 3000 vs neg < 500):
+{'V450-A': 0.0017000000225380063, 'V525-A': -0.00019999999494757503, 'B530-A': 0.0019000000320374966, 'B710-A': 1.0, 'YG586-A': 0.0020000000949949026, 'YG780-A': 0.2531000077724457, 'R670-A': 0.05640000104904175, 'R780-A': 0.04280000180006027}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > compare_neg_methods.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> un = get_df('ctrl_unstained.fcs')
+[?2004l[?2004h> 
+[?2004l[?2004h> for fname, det, is_cell in [
+[?2004l[?2004h>     ('ctrl_BV421.fcs', 'V450-A', False),
+[?2004l[?2004h>     ('ctrl_ZombieAqua.fcs', 'V525-A', True),
+[?2004l[?2004h>     ('ctrl_FITC.fcs', 'B530-A', False),
+[?2004l[?2004h>     ('ctrl_PerCPCy55_cells.fcs', 'B710-A', True),
+[?2004l[?2004h>     ('ctrl_PE.fcs', 'YG586-A', False),
+[?2004l[?2004h>     ('ctrl_PECy7.fcs', 'YG780-A', False),
+[?2004l[?2004h>     ('ctrl_APC.fcs', 'R670-A', False),
+[?2004l[?2004h>     ('ctrl_APCCy7.fcs', 'R780-A', False)
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     df = get_df(fname)
+[?2004l[?2004h>     if not is_cell:
+[?2004l[?2004h>         df = df[(df['FSC-A'] > 50000) & (df['FSC-A'] < 100000) & (df['SSC-A'] > 30000) & (df['SSC-A'] < 90000)]
+[?2004l[?2004h>     if not is_cell:
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     elif 'Zombie' in fname:
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         pos = df[df[det] > 3000]
+[?2004l[?2004h>         neg = df[df[det] < 500]
+[?2004l[?2004h>     
+[?2004l[?2004h>     diff_within = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     r_within = (diff_within / diff_within[det]).round(4)
+[?2004l[?2004h>     
+[?2004l[?2004h>     diff_un = pos[detectors].median() - un[detectors].median()
+[?2004l[?2004h>     r_un = (diff_un / diff_un[det]).round(4)
+[?2004l[?2004h>     
+[?2004l[?2004h>     print(f'*** {fname} ({det}) ***')
+[?2004l[?2004h>     print('Within-tube:', r_within.to_dict())
+[?2004l[?2004h>     print('Unstained:  ', r_un.to_dict())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 compare_neg_methods.py
+[?2004l*** ctrl_BV421.fcs (V450-A) ***
+Within-tube: {'V450-A': 1.0, 'V525-A': 0.267300009727478, 'B530-A': 0.004999999888241291, 'B710-A': 0.002199999988079071, 'YG586-A': 0.002300000051036477, 'YG780-A': 0.000699999975040555, 'R670-A': 0.0012000000569969416, 'R780-A': 0.00039999998989515007}
+Unstained:   {'V450-A': 1.0, 'V525-A': 0.26649999618530273, 'B530-A': 0.004000000189989805, 'B710-A': 0.0017999999690800905, 'YG586-A': 0.0017000000225380063, 'YG780-A': 0.0006000000284984708, 'R670-A': 0.0010000000474974513, 'R780-A': 0.0003000000142492354}
+*** ctrl_ZombieAqua.fcs (V525-A) ***
+Within-tube: {'V450-A': 0.07249999791383743, 'V525-A': 1.0, 'B530-A': 0.0812000036239624, 'B710-A': 0.002899999963119626, 'YG586-A': 0.011900000274181366, 'YG780-A': 0.0012000000569969416, 'R670-A': 0.00279999990016222, 'R780-A': 0.00279999990016222}
+Unstained:   {'V450-A': 0.07249999791383743, 'V525-A': 1.0, 'B530-A': 0.08110000193119049, 'B710-A': 0.0026000000070780516, 'YG586-A': 0.011900000274181366, 'YG780-A': 0.0010000000474974513, 'R670-A': 0.0027000000700354576, 'R780-A': 0.0027000000700354576}
+*** ctrl_FITC.fcs (B530-A) ***
+Within-tube: {'V450-A': 0.00019999999494757503, 'V525-A': 0.03669999912381172, 'B530-A': 1.0, 'B710-A': 0.04410000145435333, 'YG586-A': 0.06030000001192093, 'YG780-A': 0.0015999999595806003, 'R670-A': 0.0005000000237487257, 'R780-A': 0.002300000051036477}
+Unstained:   {'V450-A': -0.0006000000284984708, 'V525-A': 0.03519999980926514, 'B530-A': 1.0, 'B710-A': 0.04349999874830246, 'YG586-A': 0.05939999967813492, 'YG780-A': 0.0013000000035390258, 'R670-A': 9.999999747378752e-05, 'R780-A': 0.0020000000949949026}
+*** ctrl_PerCPCy55_cells.fcs (B710-A) ***
+Within-tube: {'V450-A': 0.0017000000225380063, 'V525-A': -0.00019999999494757503, 'B530-A': 0.0019000000320374966, 'B710-A': 1.0, 'YG586-A': 0.0020000000949949026, 'YG780-A': 0.2531000077724457, 'R670-A': 0.05640000104904175, 'R780-A': 0.04280000180006027}
+Unstained:   {'V450-A': 0.0019000000320374966, 'V525-A': 9.999999747378752e-05, 'B530-A': 0.0020000000949949026, 'B710-A': 1.0, 'YG586-A': 0.002199999988079071, 'YG780-A': 0.2531999945640564, 'R670-A': 0.05660000070929527, 'R780-A': 0.0430000014603138}
+*** ctrl_PE.fcs (YG586-A) ***
+Within-tube: {'V450-A': 0.002099999925121665, 'V525-A': 0.002400000113993883, 'B530-A': 0.006000000052154064, 'B710-A': 0.23319999873638153, 'YG586-A': 1.0, 'YG780-A': 0.029400000348687172, 'R670-A': 0.0027000000700354576, 'R780-A': 0.001500000013038516}
+Unstained:   {'V450-A': 0.0017000000225380063, 'V525-A': 0.0015999999595806003, 'B530-A': 0.005200000014156103, 'B710-A': 0.2329999953508377, 'YG586-A': 1.0, 'YG780-A': 0.02930000051856041, 'R670-A': 0.0024999999441206455, 'R780-A': 0.00139999995008111}
+*** ctrl_PECy7.fcs (YG780-A) ***
+Within-tube: {'V450-A': 0.00039999998989515007, 'V525-A': 0.0008999999845400453, 'B530-A': 0.0005000000237487257, 'B710-A': 0.021700000390410423, 'YG586-A': 0.019500000402331352, 'YG780-A': 1.0, 'R670-A': 0.00279999990016222, 'R780-A': 0.0869000032544136}
+Unstained:   {'V450-A': -0.0006000000284984708, 'V525-A': -0.0008999999845400453, 'B530-A': -0.00139999995008111, 'B710-A': 0.020800000056624413, 'YG586-A': 0.018400000408291817, 'YG780-A': 1.0, 'R670-A': 0.002300000051036477, 'R780-A': 0.08669999986886978}
+*** ctrl_APC.fcs (R670-A) ***
+Within-tube: {'V450-A': 0.0008999999845400453, 'V525-A': 0.0008999999845400453, 'B530-A': 9.999999747378752e-05, 'B710-A': 0.05649999901652336, 'YG586-A': 0.0, 'YG780-A': 0.005400000140070915, 'R670-A': 1.0, 'R780-A': 0.3330000042915344}
+Unstained:   {'V450-A': 0.0003000000142492354, 'V525-A': -0.00019999999494757503, 'B530-A': -0.0010000000474974513, 'B710-A': 0.0560000017285347, 'YG586-A': -0.000699999975040555, 'YG780-A': 0.005200000014156103, 'R670-A': 1.0, 'R780-A': 0.3328999876976013}
+*** ctrl_APCCy7.fcs (R780-A) ***
+Within-tube: {'V450-A': 0.0013000000035390258, 'V525-A': 0.0017999999690800905, 'B530-A': 0.0006000000284984708, 'B710-A': 0.0008999999845400453, 'YG586-A': 0.002400000113993883, 'YG780-A': 0.09740000218153, 'R670-A': 0.07569999992847443, 'R780-A': 1.0}
+Unstained:   {'V450-A': -0.00019999999494757503, 'V525-A': -0.0008999999845400453, 'B530-A': -0.002199999988079071, 'B710-A': -0.0003000000142492354, 'YG586-A': 0.0006000000284984708, 'YG780-A': 0.09700000286102295, 'R670-A': 0.07509999722242355, 'R780-A': 1.0}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_fmo.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> fmo1 = get_df('fmo_HLADR.fcs')
+[?2004l[?2004h> fmo2 = get_df('fmo_HLADR_rerun.fcs')
+[?2004l[?2004h> 
+[?2004l[?2004h> print('fmo1 events:', len(fmo1), 'fmo2 events:', len(fmo2))
+[?2004l[?2004h> print('fmo1 YG780-A medians:', fmo1['YG780-A'].median(), 'fmo2:', fmo2['YG780-A'].median())
+[?2004l[?2004h> print('Ratio:', fmo2['YG780-A'].median() / fmo1['YG780-A'].median())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_fmo.py
+[?2004lfmo1 events: 38365 fmo2 events: 38889
+fmo1 YG780-A medians: 526.9805 fmo2: 1251.8999
+Ratio: 2.3756094
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_gating_sop.py
+[?2004l[?2004h> with open('/task/input/gating_sop.md') as f:
+[?2004l[?2004h>     print(f.read())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_gating_sop.py
+[?2004l# Gating SOP IMM-FC-012 (PBMC lineage panel with T-cell activation read-out, 8 colours)
+
+Marker names are those of `panel.tsv`. "+" means that the cell carries the marker, i.e. its signal
+from that reagent is clearly above the signal of cells that do not carry it; "-" means that it does not.
+Populations are nested: an event can only belong to a population if it belongs to the parent.
+
+| population | parent | definition |
+|---|---|---|
+| cells | all_events | intact cells of any kind; sub-cellular debris is excluded |
+| singlets | cells | events that consist of exactly one cell |
+| live | singlets | Viability dye - (membrane-intact cells) |
+| lymphocytes | live | mononuclear cells with low side scatter, CD14 - |
+| monocytes | live | CD14 + |
+| T_cells | lymphocytes | CD3 + |
+| CD4_T | T_cells | CD4 + CD8 - |
+| CD8_T | T_cells | CD4 - CD8 + |
+| DP_T | T_cells | CD4 + CD8 + |
+| DN_T | T_cells | CD4 - CD8 - |
+| B_cells | lymphocytes | CD3 - CD19 + |
+| NK_cells | lymphocytes | CD3 - CD19 - CD56 + |
+| activated_CD4_T | CD4_T | HLA-DR + by the FMO gate of section 2 |
+| activated_CD8_T | CD8_T | HLA-DR + by the FMO gate of section 2 |
+
+`all_events` denotes every event recorded in the file.
+
+## 1. Controls of the HLA-DR read-out
+
+HLA-DR on T cells is a dim, continuous signal without a separate positive peak. Its gate is
+therefore not set on the stained sample but on a fluorescence-minus-one control ("FMO HLA-DR"):
+PBMC of the laboratory's reference pool, stained with the complete panel except the HLA-DR reagent
+and processed like a sample.
+
+## 2. FMO gate for HLA-DR + (populations activated_CD4_T and activated_CD8_T)
+
+1. The FMO tube is analysed exactly like a sample: same compensation as the samples that were
+   recorded with the same fluorescence-detector voltages, same gates down to CD4_T and CD8_T.
+2. For each of the two parent populations P (CD4_T, CD8_T), the threshold is the 99th percentile of
+   the compensated signal of the HLA-DR detector (linear scale, detector units) over the events of
+   P in the FMO tube.
+3. An event of P in a sample is HLA-DR + if its compensated HLA-DR-detector signal is greater than
+   the threshold of P from the FMO tube that was recorded with the same fluorescence-detector
+   voltages as the sample.
+
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_pbmc.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> df = get_df('PBMC_D617.fcs')
+[?2004l[?2004h> print('Total events:', len(df))
+[?2004l[?2004h> print('FSC-A:', np.percentile(df['FSC-A'], [0, 1, 5, 10, 20, 50, 90, 99, 100]))
+[?2004l[?2004h> print('SSC-A:', np.percentile(df['SSC-A'], [0, 1, 5, 10, 20, 50, 90, 99, 100]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_pbmc.py
+[?2004lTotal events: 43312
+FSC-A: [  2438.109375     6656.08259277  14291.45429688  62240.31171875
+  74652.5078125   90357.45703125 135536.0390625  209488.31125
+ 262143.        ]
+SSC-A: [  1134.58215332   4549.91575195  13655.36586914  18561.16582031
+  21493.015625    27567.90039062  90963.26484375 128725.335
+ 261515.28125   ]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > build_spillover.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> panel = pd.read_csv('/task/input/panel.tsv', sep='\t')
+[?2004l[?2004h> fluorochromes = list(panel['fluorochrome'])
+[?2004l[?2004h> 
+[?2004l[?2004h> def calc_row(fname, det, is_cell=False):
+[?2004l[?2004h>     df = get_df(fname)
+[?2004l[?2004h>     if not is_cell:
+[?2004l[?2004h>         mask = (df['FSC-A'] > 50000) & (df['FSC-A'] < 100000) & (df['SSC-A'] > 30000) & (df['SSC-A'] < 90000)
+[?2004l[?2004h>         df = df[mask]
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     elif 'Zombie' in fname:
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         pos = df[df[det] > 3000]
+[?2004l[?2004h>         neg = df[df[det] < 500]
+[?2004l[?2004h>     diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     return diff / diff[det]
+[?2004l[?2004h> 
+[?2004l[?2004h> row_BV = calc_row('ctrl_BV421.fcs', 'V450-A')
+[?2004l[?2004h> row_ZA = calc_row('ctrl_ZombieAqua.fcs', 'V525-A', is_cell=True)
+[?2004l[?2004h> row_FITC = calc_row('ctrl_FITC.fcs', 'B530-A')
+[?2004l[?2004h> row_PerCP = calc_row('ctrl_PerCPCy55_cells.fcs', 'B710-A', is_cell=True)
+[?2004l[?2004h> row_PE = calc_row('ctrl_PE.fcs', 'YG586-A')
+[?2004l[?2004h> row_PECy7_g1 = calc_row('ctrl_PECy7.fcs', 'YG780-A')
+[?2004l[?2004h> row_APC = calc_row('ctrl_APC.fcs', 'R670-A')
+[?2004l[?2004h> row_APCCy7 = calc_row('ctrl_APCCy7.fcs', 'R780-A')
+[?2004l[?2004h> 
+[?2004l[?2004h> mat_g1 = pd.DataFrame([row_BV, row_ZA, row_FITC, row_PerCP, row_PE, row_PECy7_g1, row_APC, row_APCCy7], index=fluorochromes)
+[?2004l[?2004h> print('Group 1 matrix:')
+[?2004l[?2004h> print(mat_g1.round(5))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 build_spillover.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_comp_quality.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> 
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> 
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> fo_d858 = flowio.FlowData('/task/input/fcs/PBMC_D858.fcs')
+[?2004l[?2004h> raw_spill = fo_d858.text['spillover'].split(',')
+[?2004l[?2004h> n = int(raw_spill[0])
+[?2004l[?2004h> vals = [float(x) for x in raw_spill[n+1:]]
+[?2004l[?2004h> mat_embedded = pd.DataFrame(np.array(vals).reshape(n, n), index=detectors, columns=detectors)
+[?2004l[?2004h> 
+[?2004l[?2004h> df_d858 = get_df('PBMC_D858.fcs')
+[?2004l[?2004h> lym = df_d858[(df_d858['FSC-A'] > 50000) & (df_d858['FSC-A'] < 120000) & (df_d858['SSC-A'] > 10000) & (df_d858['SSC-A'] < 40000)]
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     return pd.DataFrame(cdata, columns=detectors)
+[?2004l[?2004h> 
+[?2004l[?2004h> for name, smat in [('Embedded', mat_embedded), ('Unscaled', mat_g2_unscaled), ('Scaled', mat_g2_scaled)]:
+[?2004l[?2004h>     comp = compensate(lym, smat)
+[?2004l[?2004h>     pos_dr = comp[comp['B710-A'] > 3000]['YG780-A'].median()
+[?2004l[?2004h>     neg_dr = comp[(comp['B710-A'] < 1000) & (comp['B710-A'] > 0)]['YG780-A'].median()
+[?2004l[?2004h>     print(f"{name:10s}: CD8+ HLA-DR median = {pos_dr:8.2f}, CD8- HLA-DR median = {neg_dr:8.2f}, diff = {pos_dr - neg_dr:8.2f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_comp_quality.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+Embedded  : CD8+ HLA-DR median =  6201.32, CD8- HLA-DR median =      nan, diff =      nan
+Unscaled  : CD8+ HLA-DR median =  3704.13, CD8- HLA-DR median =  1936.49, diff =  1767.64
+Scaled    : CD8+ HLA-DR median =   614.70, CD8- HLA-DR median =   427.05, diff =   187.65
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_fmo_comp.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> 
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> 
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     return pd.DataFrame(cdata, columns=detectors)
+[?2004l[?2004h> 
+[?2004l[?2004h> fmo1 = get_df('fmo_HLADR.fcs')
+[?2004l[?2004h> fmo2 = get_df('fmo_HLADR_rerun.fcs')
+[?2004l[?2004h> 
+[?2004l[?2004h> comp1 = compensate(fmo1, mat_g1)
+[?2004l[?2004h> print('fmo1 compensated YG780-A median in all events:', comp1['YG780-A'].median())
+[?2004l[?2004h> print('fmo1 compensated YG780-A median in CD8+ events (B710-A > 3000):', comp1[comp1['B710-A'] > 3000]['YG780-A'].median())
+[?2004l[?2004h> 
+[?2004l[?2004h> comp2_un = compensate(fmo2, mat_g2_unscaled)
+[?2004l[?2004h> comp2_sc = compensate(fmo2, mat_g2_scaled)
+[?2004l[?2004h> print('fmo2 unscaled compensated YG780-A median in CD8+ events:', comp2_un[comp2_un['B710-A'] > 3000]['YG780-A'].median())
+[?2004l[?2004h> print('fmo2 scaled   compensated YG780-A median in CD8+ events:', comp2_sc[comp2_sc['B710-A'] > 3000]['YG780-A'].median())
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_fmo_comp.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+fmo1 compensated YG780-A median in all events: 29.659458
+fmo1 compensated YG780-A median in CD8+ events (B710-A > 3000): 37.91574
+fmo2 unscaled compensated YG780-A median in CD8+ events: 2055.154
+fmo2 scaled   compensated YG780-A median in CD8+ events: 87.199844
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_gates.py
+[?2004l[?2004h> import flowio
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs, g in [
+[?2004l[?2004h>     ('D617', 'PBMC_D617.fcs', 1),
+[?2004l[?2004h>     ('D685', 'PBMC_D685.fcs', 1),
+[?2004l[?2004h>     ('D735', 'PBMC_D735.fcs', 1),
+[?2004l[?2004h>     ('D829', 'PBMC_D829.fcs', 1),
+[?2004l[?2004h>     ('D858', 'PBMC_D858.fcs', 2),
+[?2004l[?2004h>     ('D960', 'PBMC_D960.fcs', 2),
+[?2004l[?2004h>     ('FMO1', 'fmo_HLADR.fcs', 1),
+[?2004l[?2004h>     ('FMO2', 'fmo_HLADR_rerun.fcs', 2)
+[?2004l[?2004h> ]:
+[?2004l[?2004h>     raw = get_df(fcs)
+[?2004l[?2004h>     comp = compensate(raw, mat_g1 if g==1 else mat_g2_scaled)
+[?2004l[?2004h>     print(f"=== {sname} ({len(comp)} events) ===")
+[?2004l[?2004h>     print("FSC-A < 30k:", (comp['FSC-A'] < 30000).mean().round(3))
+[?2004l[?2004h>     print("Ratio FSC-A/FSC-H > 1.25:", ((comp['FSC-A']/comp['FSC-H']) > 1.25).mean().round(3))
+[?2004l[?2004h>     print("Viability (V525-A) > 1000:", (comp['V525-A'] > 1000).mean().round(3))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_gates.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+=== D617 (43312 events) ===
+FSC-A < 30k: 0.061
+Ratio FSC-A/FSC-H > 1.25: 0.069
+Viability (V525-A) > 1000: 0.184
+=== D685 (41471 events) ===
+FSC-A < 30k: 0.128
+Ratio FSC-A/FSC-H > 1.25: 0.098
+Viability (V525-A) > 1000: 0.166
+=== D735 (38220 events) ===
+FSC-A < 30k: 0.074
+Ratio FSC-A/FSC-H > 1.25: 0.099
+Viability (V525-A) > 1000: 0.117
+=== D829 (40460 events) ===
+FSC-A < 30k: 0.082
+Ratio FSC-A/FSC-H > 1.25: 0.09
+Viability (V525-A) > 1000: 0.153
+=== D858 (41443 events) ===
+FSC-A < 30k: 0.762
+Ratio FSC-A/FSC-H > 1.25: 0.093
+Viability (V525-A) > 1000: 0.15
+=== D960 (36413 events) ===
+FSC-A < 30k: 0.081
+Ratio FSC-A/FSC-H > 1.25: 0.055
+Viability (V525-A) > 1000: 0.145
+=== FMO1 (38365 events) ===
+FSC-A < 30k: 0.125
+Ratio FSC-A/FSC-H > 1.25: 0.095
+Viability (V525-A) > 1000: 0.192
+=== FMO2 (38889 events) ===
+FSC-A < 30k: 0.076
+Ratio FSC-A/FSC-H > 1.25: 0.109
+Viability (V525-A) > 1000: 0.109
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_d858.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> df17 = get_df('PBMC_D617.fcs')
+[?2004l[?2004h> df58 = get_df('PBMC_D858.fcs')
+[?2004l[?2004h> print('D617 FSC-A percentiles:', np.percentile(df17['FSC-A'], [1, 5, 10, 20, 50, 80]))
+[?2004l[?2004h> print('D858 FSC-A percentiles:', np.percentile(df58['FSC-A'], [1, 5, 10, 20, 50, 80]))
+[?2004l[?2004h> print('D617 SSC-A percentiles:', np.percentile(df17['SSC-A'], [1, 5, 10, 20, 50, 80]))
+[?2004l[?2004h> print('D858 SSC-A percentiles:', np.percentile(df58['SSC-A'], [1, 5, 10, 20, 50, 80]))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_d858.py
+[?2004lD617 FSC-A percentiles: [  6656.08259277  14291.45429688  62240.31171875  74652.5078125
+  90357.45703125 120296.93125   ]
+D858 FSC-A percentiles: [ 1595.21821289  2585.4548584   4715.94472656 19473.86054687
+ 24330.15234375 32989.23515625]
+D617 SSC-A percentiles: [ 4549.91575195 13655.36586914 18561.16582031 21493.015625
+ 27567.90039062 57288.99609375]
+D858 SSC-A percentiles: [ 3608.05972168  7545.03017578 15701.0984375  20619.290625
+ 27176.51171875 57066.2875    ]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_singlets.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs in [('D617', 'PBMC_D617.fcs'), ('D685', 'PBMC_D685.fcs'), ('D735', 'PBMC_D735.fcs'), ('D829', 'PBMC_D829.fcs'), ('D858', 'PBMC_D858.fcs'), ('D960', 'PBMC_D960.fcs')]:
+[?2004l[?2004h>     df = get_df(fcs)
+[?2004l[?2004h>     ratio = df['FSC-A'] / df['FSC-H']
+[?2004l[?2004h>     print(f"{sname} FSC-A/H percentiles: {np.percentile(ratio, [1, 5, 50, 90, 95, 99]).round(3)}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_singlets.py
+[?2004lD617 FSC-A/H percentiles: [1.039 1.053 1.089 1.128 1.741 2.003]
+D685 FSC-A/H percentiles: [1.039 1.053 1.09  1.151 1.838 2.024]
+D735 FSC-A/H percentiles: [1.039 1.053 1.09  1.167 1.872 2.032]
+D829 FSC-A/H percentiles: [1.039 1.054 1.09  1.138 1.824 2.023]
+D858 FSC-A/H percentiles: [1.039 1.053 1.09  1.142 1.833 2.026]
+D960 FSC-A/H percentiles: [1.039 1.053 1.089 1.124 1.633 1.987]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_debris.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs in [('D617', 'PBMC_D617.fcs'), ('D685', 'PBMC_D685.fcs'), ('D735', 'PBMC_D735.fcs'), ('D829', 'PBMC_D829.fcs'), ('D858', 'PBMC_D858.fcs'), ('D960', 'PBMC_D960.fcs')]:
+[?2004l[?2004h>     df = get_df(fcs)
+[?2004l[?2004h>     counts, bin_edges = np.histogram(df['FSC-A'], bins=50, range=(0, 150000))
+[?2004l[?2004h>     print(f"{sname} FSC-A histogram:")
+[?2004l[?2004h>     for i in range(20):
+[?2004l[?2004h>         print(f"{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}", end=' | ')
+[?2004l[?2004h>     print()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_debris.py
+[?2004lD617 FSC-A histogram:
+0-3000: 3 | 3000-6000: 298 | 6000-9000: 751 | 9000-12000: 748 | 12000-15000: 429 | 15000-18000: 225 | 18000-21000: 117 | 21000-24000: 37 | 24000-27000: 14 | 27000-30000: 8 | 30000-33000: 2 | 33000-36000: 1 | 36000-39000: 1 | 39000-42000: 2 | 42000-45000: 1 | 45000-48000: 9 | 48000-51000: 33 | 51000-54000: 112 | 54000-57000: 306 | 57000-60000: 562 | 
+D685 FSC-A histogram:
+0-3000: 5 | 3000-6000: 507 | 6000-9000: 1531 | 9000-12000: 1511 | 12000-15000: 918 | 15000-18000: 442 | 18000-21000: 224 | 21000-24000: 100 | 24000-27000: 49 | 27000-30000: 15 | 30000-33000: 11 | 33000-36000: 5 | 36000-39000: 0 | 39000-42000: 0 | 42000-45000: 1 | 45000-48000: 6 | 48000-51000: 18 | 51000-54000: 79 | 54000-57000: 205 | 57000-60000: 449 | 
+D735 FSC-A histogram:
+0-3000: 5 | 3000-6000: 260 | 6000-9000: 841 | 9000-12000: 813 | 12000-15000: 484 | 15000-18000: 245 | 18000-21000: 106 | 21000-24000: 46 | 24000-27000: 14 | 27000-30000: 12 | 30000-33000: 6 | 33000-36000: 3 | 36000-39000: 2 | 39000-42000: 1 | 42000-45000: 1 | 45000-48000: 3 | 48000-51000: 15 | 51000-54000: 60 | 54000-57000: 117 | 57000-60000: 270 | 
+D829 FSC-A histogram:
+0-3000: 3 | 3000-6000: 328 | 6000-9000: 1007 | 9000-12000: 896 | 12000-15000: 575 | 15000-18000: 285 | 18000-21000: 128 | 21000-24000: 64 | 24000-27000: 25 | 27000-30000: 12 | 30000-33000: 2 | 33000-36000: 2 | 36000-39000: 1 | 39000-42000: 0 | 42000-45000: 0 | 45000-48000: 1 | 48000-51000: 15 | 51000-54000: 67 | 54000-57000: 212 | 57000-60000: 423 | 
+D858 FSC-A histogram:
+0-3000: 2740 | 3000-6000: 1681 | 6000-9000: 97 | 9000-12000: 5 | 12000-15000: 173 | 15000-18000: 2319 | 18000-21000: 2292 | 21000-24000: 9616 | 24000-27000: 11484 | 27000-30000: 1174 | 30000-33000: 1577 | 33000-36000: 2901 | 36000-39000: 1650 | 39000-42000: 568 | 42000-45000: 665 | 45000-48000: 788 | 48000-51000: 488 | 51000-54000: 320 | 54000-57000: 363 | 57000-60000: 289 | 
+D960 FSC-A histogram:
+0-3000: 4 | 3000-6000: 281 | 6000-9000: 890 | 9000-12000: 844 | 12000-15000: 488 | 15000-18000: 224 | 18000-21000: 123 | 21000-24000: 49 | 24000-27000: 25 | 27000-30000: 7 | 30000-33000: 2 | 33000-36000: 5 | 36000-39000: 2 | 39000-42000: 1 | 42000-45000: 1 | 45000-48000: 6 | 48000-51000: 17 | 51000-54000: 71 | 54000-57000: 197 | 57000-60000: 371 | 
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_doublets.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs in [('D617', 'PBMC_D617.fcs'), ('D685', 'PBMC_D685.fcs'), ('D858', 'PBMC_D858.fcs')]:
+[?2004l[?2004h>     df = get_df(fcs)
+[?2004l[?2004h>     if sname == 'D858':
+[?2004l[?2004h>         cells = df[df['FSC-A'] > 10000]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         cells = df[df['FSC-A'] > 35000]
+[?2004l[?2004h>     ratio = cells['FSC-A'] / cells['FSC-H']
+[?2004l[?2004h>     counts, bin_edges = np.histogram(ratio, bins=40, range=(1.0, 2.2))
+[?2004l[?2004h>     print(f"{sname} FSC-A/H ratio histogram:")
+[?2004l[?2004h>     for i in range(len(counts)):
+[?2004l[?2004h>         if counts[i] > 0 or (i > 0 and counts[i-1] > 0):
+[?2004l[?2004h>             print(f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}: {counts[i]}", end=' | ')
+[?2004l[?2004h>     print()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_doublets.py
+[?2004lD617 FSC-A/H ratio histogram:
+1.00-1.03: 125 | 1.03-1.06: 3789 | 1.06-1.09: 16983 | 1.09-1.12: 14169 | 1.12-1.15: 2524 | 1.15-1.18: 118 | 1.18-1.21: 3 | 1.21-1.24: 0 | 1.33-1.36: 1 | 1.36-1.39: 1 | 1.39-1.42: 2 | 1.42-1.45: 7 | 1.45-1.48: 18 | 1.48-1.51: 25 | 1.51-1.54: 29 | 1.54-1.57: 45 | 1.57-1.60: 60 | 1.60-1.63: 98 | 1.63-1.66: 111 | 1.66-1.69: 146 | 1.69-1.72: 142 | 1.72-1.75: 167 | 1.75-1.78: 188 | 1.78-1.81: 182 | 1.81-1.84: 179 | 1.84-1.87: 209 | 1.87-1.90: 199 | 1.90-1.93: 230 | 1.93-1.96: 225 | 1.96-1.99: 194 | 1.99-2.02: 181 | 2.02-2.05: 128 | 2.05-2.08: 89 | 2.08-2.11: 61 | 2.11-2.14: 31 | 2.14-2.17: 15 | 2.17-2.20: 1 | 
+D685 FSC-A/H ratio histogram:
+1.00-1.03: 85 | 1.03-1.06: 3144 | 1.06-1.09: 14635 | 1.09-1.12: 11997 | 1.12-1.15: 2148 | 1.15-1.18: 92 | 1.18-1.21: 2 | 1.21-1.24: 0 | 1.39-1.42: 8 | 1.42-1.45: 10 | 1.45-1.48: 20 | 1.48-1.51: 31 | 1.51-1.54: 52 | 1.54-1.57: 65 | 1.57-1.60: 91 | 1.60-1.63: 120 | 1.63-1.66: 183 | 1.66-1.69: 208 | 1.69-1.72: 218 | 1.72-1.75: 236 | 1.75-1.78: 237 | 1.78-1.81: 274 | 1.81-1.84: 241 | 1.84-1.87: 260 | 1.87-1.90: 290 | 1.90-1.93: 322 | 1.93-1.96: 277 | 1.96-1.99: 256 | 1.99-2.02: 217 | 2.02-2.05: 173 | 2.05-2.08: 110 | 2.08-2.11: 77 | 2.11-2.14: 51 | 2.14-2.17: 16 | 2.17-2.20: 3 | 
+D858 FSC-A/H ratio histogram:
+1.00-1.03: 107 | 1.03-1.06: 3347 | 1.06-1.09: 15077 | 1.09-1.12: 12234 | 1.12-1.15: 2215 | 1.15-1.18: 102 | 1.18-1.21: 0 | 1.33-1.36: 1 | 1.36-1.39: 0 | 1.39-1.42: 3 | 1.42-1.45: 11 | 1.45-1.48: 19 | 1.48-1.51: 32 | 1.51-1.54: 27 | 1.54-1.57: 53 | 1.57-1.60: 98 | 1.60-1.63: 93 | 1.63-1.66: 144 | 1.66-1.69: 186 | 1.69-1.72: 219 | 1.72-1.75: 222 | 1.75-1.78: 239 | 1.78-1.81: 233 | 1.81-1.84: 251 | 1.84-1.87: 279 | 1.87-1.90: 286 | 1.90-1.93: 251 | 1.93-1.96: 277 | 1.96-1.99: 247 | 1.99-2.02: 220 | 2.02-2.05: 161 | 2.05-2.08: 142 | 2.08-2.11: 65 | 2.11-2.14: 58 | 2.14-2.17: 16 | 2.17-2.20: 6 | 
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_viability.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs, g in [('D617', 'PBMC_D617.fcs', 1), ('D858', 'PBMC_D858.fcs', 2)]:
+[?2004l[?2004h>     raw = get_df(fcs)
+[?2004l[?2004h>     comp = compensate(raw, mat_g1 if g==1 else mat_g2_scaled)
+[?2004l[?2004h>     fsc_thresh = 10000 if sname == 'D858' else 35000
+[?2004l[?2004h>     singlets = comp[(comp['FSC-A'] > fsc_thresh) & ((comp['FSC-A']/comp['FSC-H']) < 1.25)]
+[?2004l[?2004h>     v_vals = singlets['V525-A']
+[?2004l[?2004h>     print(f"{sname} V525-A percentiles:", np.percentile(v_vals, [1, 10, 50, 75, 80, 85, 90, 95, 99]).round(1))
+[?2004l[?2004h>     counts, bin_edges = np.histogram(v_vals, bins=25, range=(0, 5000))
+[?2004l[?2004h>     print(f"{sname} V525-A histogram 0-5000:")
+[?2004l[?2004h>     for i in range(len(counts)):
+[?2004l[?2004h>         print(f"{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}", end=' | ')
+[?2004l[?2004h>     print()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_viability.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+D617 V525-A percentiles: [ -558.3  -115.3   245.4   526.5   714.4  6746.3 10305.5 14510.8 23093.8]
+D617 V525-A histogram 0-5000:
+0-200: 10266 | 200-400: 9428 | 400-600: 3786 | 600-800: 1316 | 800-1000: 543 | 1000-1200: 137 | 1200-1400: 46 | 1400-1600: 12 | 1600-1800: 0 | 1800-2000: 2 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 2 | 2600-2800: 2 | 2800-3000: 4 | 3000-3200: 3 | 3200-3400: 6 | 3400-3600: 11 | 3600-3800: 14 | 3800-4000: 10 | 4000-4200: 17 | 4200-4400: 20 | 4400-4600: 18 | 4600-4800: 33 | 4800-5000: 42 | 
+D858 V525-A percentiles: [ -557.3  -120.5   226.3   450.5   552.1   785.1  8413.5 13214.1 22234.9]
+D858 V525-A histogram 0-5000:
+0-200: 9741 | 200-400: 8601 | 400-600: 3458 | 600-800: 1184 | 800-1000: 419 | 1000-1200: 124 | 1200-1400: 17 | 1400-1600: 4 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 1 | 2200-2400: 0 | 2400-2600: 1 | 2600-2800: 2 | 2800-3000: 1 | 3000-3200: 4 | 3200-3400: 4 | 3400-3600: 3 | 3600-3800: 6 | 3800-4000: 10 | 4000-4200: 16 | 4200-4400: 16 | 4400-4600: 21 | 4600-4800: 18 | 4800-5000: 24 | 
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_lym_mono.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs, g in [('D617', 'PBMC_D617.fcs', 1), ('D858', 'PBMC_D858.fcs', 2)]:
+[?2004l[?2004h>     raw = get_df(fcs)
+[?2004l[?2004h>     comp = compensate(raw, mat_g1 if g==1 else mat_g2_scaled)
+[?2004l[?2004h>     fsc_thresh = 10000 if sname == 'D858' else 35000
+[?2004l[?2004h>     live = comp[(comp['FSC-A'] > fsc_thresh) & ((comp['FSC-A']/comp['FSC-H']) < 1.25) & (comp['V525-A'] < 2000)]
+[?2004l[?2004h>     print(f"{sname} live count: {len(live)}")
+[?2004l[?2004h>     print(f"{sname} CD14 percentiles:", np.percentile(live['B530-A'], [1, 50, 70, 80, 85, 90, 95, 99]).round(1))
+[?2004l[?2004h>     counts, bin_edges = np.histogram(live['B530-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h>     print(f"{sname} CD14 histogram 0-5000:")
+[?2004l[?2004h>     for i in range(len(counts)):
+[?2004l[?2004h>         print(f"{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}", end=' | ')
+[?2004l[?2004h>     print()
+[?2004l[?2004h>     print(f"{sname} SSC-A in CD14 < 1500:", np.percentile(live[live['B530-A'] < 1500]['SSC-A'], [1, 50, 90, 99]).round(1))
+[?2004l[?2004h>     print(f"{sname} SSC-A in CD14 > 1500:", np.percentile(live[live['B530-A'] > 1500]['SSC-A'], [1, 50, 90, 99]).round(1))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_lym_mono.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+D617 live count: 31320
+D617 CD14 percentiles: [  -29.2   138.2   202.5 11199.6 14108.8 16661.7 20060.9 26482.5]
+D617 CD14 histogram 0-5000:
+0-200: 20907 | 200-400: 2408 | 400-600: 3 | 600-800: 0 | 800-1000: 1 | 1000-1200: 0 | 1200-1400: 1 | 1400-1600: 0 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 0 | 2600-2800: 0 | 2800-3000: 0 | 3000-3200: 0 | 3200-3400: 0 | 3400-3600: 0 | 3600-3800: 0 | 3800-4000: 0 | 4000-4200: 0 | 4200-4400: 0 | 4400-4600: 0 | 4600-4800: 0 | 4800-5000: 0 | 
+D617 SSC-A in CD14 < 1500: [15624.3 24969.7 32284.5 39857.7]
+D617 SSC-A in CD14 > 1500: [ 59204.8  90114.6 112612.6 134817.4]
+D858 live count: 28739
+D858 CD14 percentiles: [  -33.1   136.5   198.   9632.6 12659.3 14969.9 18119.3 23834.2]
+D858 CD14 histogram 0-5000:
+0-200: 19418 | 200-400: 2252 | 400-600: 5 | 600-800: 0 | 800-1000: 0 | 1000-1200: 0 | 1200-1400: 0 | 1400-1600: 0 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 0 | 2600-2800: 0 | 2800-3000: 0 | 3000-3200: 0 | 3200-3400: 0 | 3400-3600: 0 | 3600-3800: 0 | 3800-4000: 0 | 4000-4200: 1 | 4200-4400: 0 | 4400-4600: 0 | 4600-4800: 0 | 4800-5000: 0 | 
+D858 SSC-A in CD14 < 1500: [15778.9 25041.1 32307.8 39823.8]
+D858 SSC-A in CD14 > 1500: [ 58948.9  89633.  113971.9 138347.4]
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > inspect_subsets.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> raw = get_df('PBMC_D617.fcs')
+[?2004l[?2004h> comp = compensate(raw, mat_g1)
+[?2004l[?2004h> lym = comp[(comp['FSC-A'] > 35000) & ((comp['FSC-A']/comp['FSC-H']) < 1.25) & (comp['V525-A'] < 2000) & (comp['B530-A'] < 1000)]
+[?2004l[?2004h> print('Lymphocyte count:', len(lym))
+[?2004l[?2004h> 
+[?2004l[?2004h> print('CD3 histogram 0-5000:')
+[?2004l[?2004h> counts, bin_edges = np.histogram(lym['V450-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h> for i in range(len(counts)):
+[?2004l[?2004h>     print(f'{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}', end=' | ')
+[?2004l[?2004h> print()
+[?2004l[?2004h> 
+[?2004l[?2004h> t_cells = lym[lym['V450-A'] > 1500]
+[?2004l[?2004h> non_t = lym[lym['V450-A'] < 1500]
+[?2004l[?2004h> print('T cells count:', len(t_cells), 'Non-T:', len(non_t))
+[?2004l[?2004h> 
+[?2004l[?2004h> print('CD4 histogram in T cells 0-5000:')
+[?2004l[?2004h> counts, bin_edges = np.histogram(t_cells['YG586-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h> for i in range(len(counts)):
+[?2004l[?2004h>     print(f'{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}', end=' | ')
+[?2004l[?2004h> print()
+[?2004l[?2004h> 
+[?2004l[?2004h> print('CD8 histogram in T cells 0-5000:')
+[?2004l[?2004h> counts, bin_edges = np.histogram(t_cells['B710-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h> for i in range(len(counts)):
+[?2004l[?2004h>     print(f'{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}', end=' | ')
+[?2004l[?2004h> print()
+[?2004l[?2004h> 
+[?2004l[?2004h> print('CD19 histogram in Non-T 0-5000:')
+[?2004l[?2004h> counts, bin_edges = np.histogram(non_t['R780-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h> for i in range(len(counts)):
+[?2004l[?2004h>     print(f'{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}', end=' | ')
+[?2004l[?2004h> print()
+[?2004l[?2004h> 
+[?2004l[?2004h> print('CD56 histogram in Non-T 0-5000:')
+[?2004l[?2004h> counts, bin_edges = np.histogram(non_t['R670-A'], bins=25, range=(0, 5000))
+[?2004l[?2004h> for i in range(len(counts)):
+[?2004l[?2004h>     print(f'{int(bin_edges[i])}-{int(bin_edges[i+1])}: {counts[i]}', end=' | ')
+[?2004l[?2004h> print()
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 inspect_subsets.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+Lymphocyte count: 24199
+CD3 histogram 0-5000:
+0-200: 5909 | 200-400: 16 | 400-600: 0 | 600-800: 0 | 800-1000: 0 | 1000-1200: 0 | 1200-1400: 0 | 1400-1600: 0 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 1 | 2200-2400: 0 | 2400-2600: 0 | 2600-2800: 0 | 2800-3000: 0 | 3000-3200: 0 | 3200-3400: 0 | 3400-3600: 0 | 3600-3800: 0 | 3800-4000: 0 | 4000-4200: 0 | 4200-4400: 0 | 4400-4600: 0 | 4600-4800: 0 | 4800-5000: 0 | 
+T cells count: 17822 Non-T: 6377
+CD4 histogram in T cells 0-5000:
+0-200: 6067 | 200-400: 111 | 400-600: 0 | 600-800: 0 | 800-1000: 0 | 1000-1200: 0 | 1200-1400: 0 | 1400-1600: 1 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 0 | 2600-2800: 0 | 2800-3000: 0 | 3000-3200: 0 | 3200-3400: 0 | 3400-3600: 0 | 3600-3800: 0 | 3800-4000: 0 | 4000-4200: 0 | 4200-4400: 0 | 4400-4600: 0 | 4600-4800: 0 | 4800-5000: 0 | 
+CD8 histogram in T cells 0-5000:
+0-200: 3757 | 200-400: 2013 | 400-600: 893 | 600-800: 273 | 800-1000: 47 | 1000-1200: 11 | 1200-1400: 1 | 1400-1600: 0 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 1 | 2600-2800: 1 | 2800-3000: 4 | 3000-3200: 2 | 3200-3400: 8 | 3400-3600: 8 | 3600-3800: 13 | 3800-4000: 24 | 4000-4200: 40 | 4200-4400: 44 | 4400-4600: 56 | 4600-4800: 75 | 4800-5000: 104 | 
+CD19 histogram in Non-T 0-5000:
+0-200: 1184 | 200-400: 509 | 400-600: 270 | 600-800: 103 | 800-1000: 30 | 1000-1200: 16 | 1200-1400: 4 | 1400-1600: 1 | 1600-1800: 0 | 1800-2000: 4 | 2000-2200: 5 | 2200-2400: 8 | 2400-2600: 21 | 2600-2800: 39 | 2800-3000: 51 | 3000-3200: 68 | 3200-3400: 90 | 3400-3600: 117 | 3600-3800: 136 | 3800-4000: 146 | 4000-4200: 139 | 4200-4400: 176 | 4400-4600: 162 | 4600-4800: 147 | 4800-5000: 152 | 
+CD56 histogram in Non-T 0-5000:
+0-200: 2384 | 200-400: 90 | 400-600: 1 | 600-800: 0 | 800-1000: 0 | 1000-1200: 0 | 1200-1400: 0 | 1400-1600: 0 | 1600-1800: 0 | 1800-2000: 0 | 2000-2200: 0 | 2200-2400: 0 | 2400-2600: 0 | 2600-2800: 0 | 2800-3000: 0 | 3000-3200: 0 | 3200-3400: 0 | 3400-3600: 0 | 3600-3800: 0 | 3800-4000: 0 | 4000-4200: 0 | 4200-4400: 0 | 4400-4600: 0 | 4600-4800: 0 | 4800-5000: 0 | 
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_fmo_thresholds.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> def gate_populations(df, smat, is_d858=False):
+[?2004l[?2004h>     comp = compensate(df, smat)
+[?2004l[?2004h>     fsc_thresh = 10000 if is_d858 else 35000
+[?2004l[?2004h>     ev_all = comp
+[?2004l[?2004h>     ev_cells = ev_all[ev_all['FSC-A'] > fsc_thresh]
+[?2004l[?2004h>     ev_singlets = ev_cells[(ev_cells['FSC-A'] / ev_cells['FSC-H']) < 1.25]
+[?2004l[?2004h>     ev_live = ev_singlets[ev_singlets['V525-A'] < 2000]
+[?2004l[?2004h>     ev_monocytes = ev_live[ev_live['B530-A'] > 1000]
+[?2004l[?2004h>     ev_lymphocytes = ev_live[ev_live['B530-A'] < 1000]
+[?2004l[?2004h>     ev_t_cells = ev_lymphocytes[ev_lymphocytes['V450-A'] > 1000]
+[?2004l[?2004h>     ev_non_t = ev_lymphocytes[ev_lymphocytes['V450-A'] < 1000]
+[?2004l[?2004h>     ev_cd4_t = ev_t_cells[(ev_t_cells['YG586-A'] > 1000) & (ev_t_cells['B710-A'] < 2000)]
+[?2004l[?2004h>     ev_cd8_t = ev_t_cells[(ev_t_cells['YG586-A'] < 1000) & (ev_t_cells['B710-A'] > 2000)]
+[?2004l[?2004h>     ev_dp_t = ev_t_cells[(ev_t_cells['YG586-A'] > 1000) & (ev_t_cells['B710-A'] > 2000)]
+[?2004l[?2004h>     ev_dn_t = ev_t_cells[(ev_t_cells['YG586-A'] < 1000) & (ev_t_cells['B710-A'] < 2000)]
+[?2004l[?2004h>     ev_b_cells = ev_non_t[ev_non_t['R780-A'] > 1600]
+[?2004l[?2004h>     ev_nk_cells = ev_non_t[(ev_non_t['R780-A'] < 1600) & (ev_non_t['R670-A'] > 1000)]
+[?2004l[?2004h>     return {
+[?2004l[?2004h>         'all_events': ev_all,
+[?2004l[?2004h>         'cells': ev_cells,
+[?2004l[?2004h>         'singlets': ev_singlets,
+[?2004l[?2004h>         'live': ev_live,
+[?2004l[?2004h>         'monocytes': ev_monocytes,
+[?2004l[?2004h>         'lymphocytes': ev_lymphocytes,
+[?2004l[?2004h>         'T_cells': ev_t_cells,
+[?2004l[?2004h>         'CD4_T': ev_cd4_t,
+[?2004l[?2004h>         'CD8_T': ev_cd8_t,
+[?2004l[?2004h>         'DP_T': ev_dp_t,
+[?2004l[?2004h>         'DN_T': ev_dn_t,
+[?2004l[?2004h>         'B_cells': ev_b_cells,
+[?2004l[?2004h>         'NK_cells': ev_nk_cells
+[?2004l[?2004h>     }
+[?2004l[?2004h> 
+[?2004l[?2004h> fmo1_pops = gate_populations(get_df('fmo_HLADR.fcs'), mat_g1)
+[?2004l[?2004h> thresh_g1_cd4 = np.percentile(fmo1_pops['CD4_T']['YG780-A'], 99)
+[?2004l[?2004h> thresh_g1_cd8 = np.percentile(fmo1_pops['CD8_T']['YG780-A'], 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> fmo2_pops = gate_populations(get_df('fmo_HLADR_rerun.fcs'), mat_g2_scaled)
+[?2004l[?2004h> thresh_g2_cd4 = np.percentile(fmo2_pops['CD4_T']['YG780-A'], 99)
+[?2004l[?2004h> thresh_g2_cd8 = np.percentile(fmo2_pops['CD8_T']['YG780-A'], 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> print(f"FMO G1: CD4 threshold = {thresh_g1_cd4:.2f}, CD8 threshold = {thresh_g1_cd8:.2f}")
+[?2004l[?2004h> print(f"FMO G2: CD4 threshold = {thresh_g2_cd4:.2f}, CD8 threshold = {thresh_g2_cd8:.2f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_fmo_thresholds.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+FMO G1: CD4 threshold = 302.04, CD8 threshold = 426.48
+FMO G2: CD4 threshold = 603.11, CD8 threshold = 794.10
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_full_gating.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = ['V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> mat_g2_unscaled = mat_g1.copy()
+[?2004l[?2004h> mat_g2_unscaled.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> g_ratio = 56985.66 / 30132.78
+[?2004l[?2004h> mat_g2_scaled = mat_g2_unscaled.copy()
+[?2004l[?2004h> for f in mat_g2_scaled.index:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2_scaled.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> def gate_all(fcs_file, smat, thresh_cd4, thresh_cd8, is_d858=False):
+[?2004l[?2004h>     df = get_df(fcs_file)
+[?2004l[?2004h>     comp = compensate(df, smat)
+[?2004l[?2004h>     fsc_thresh = 10000 if is_d858 else 35000
+[?2004l[?2004h>     
+[?2004l[?2004h>     n_tot = len(df)
+[?2004l[?2004h>     c_mask = comp['FSC-A'] > fsc_thresh
+[?2004l[?2004h>     s_mask = c_mask & ((comp['FSC-A'] / comp['FSC-H']) < 1.25)
+[?2004l[?2004h>     l_mask = s_mask & (comp['V525-A'] < 2000)
+[?2004l[?2004h>     mono_mask = l_mask & (comp['B530-A'] > 1000)
+[?2004l[?2004h>     lym_mask = l_mask & (comp['B530-A'] < 1000)
+[?2004l[?2004h>     t_mask = lym_mask & (comp['V450-A'] > 1000)
+[?2004l[?2004h>     cd4_mask = t_mask & (comp['YG586-A'] > 1000) & (comp['B710-A'] < 2000)
+[?2004l[?2004h>     cd8_mask = t_mask & (comp['YG586-A'] < 1000) & (comp['B710-A'] > 2000)
+[?2004l[?2004h>     dp_mask = t_mask & (comp['YG586-A'] > 1000) & (comp['B710-A'] > 2000)
+[?2004l[?2004h>     dn_mask = t_mask & (comp['YG586-A'] < 1000) & (comp['B710-A'] < 2000)
+[?2004l[?2004h>     b_mask = lym_mask & (comp['V450-A'] < 1000) & (comp['R780-A'] > 1600)
+[?2004l[?2004h>     nk_mask = lym_mask & (comp['V450-A'] < 1000) & (comp['R780-A'] < 1600) & (comp['R670-A'] > 1000)
+[?2004l[?2004h>     act_cd4_mask = cd4_mask & (comp['YG780-A'] > thresh_cd4)
+[?2004l[?2004h>     act_cd8_mask = cd8_mask & (comp['YG780-A'] > thresh_cd8)
+[?2004l[?2004h>     
+[?2004l[?2004h>     counts = {
+[?2004l[?2004h>         'all_events': n_tot,
+[?2004l[?2004h>         'cells': int(c_mask.sum()),
+[?2004l[?2004h>         'singlets': int(s_mask.sum()),
+[?2004l[?2004h>         'live': int(l_mask.sum()),
+[?2004l[?2004h>         'lymphocytes': int(lym_mask.sum()),
+[?2004l[?2004h>         'monocytes': int(mono_mask.sum()),
+[?2004l[?2004h>         'T_cells': int(t_mask.sum()),
+[?2004l[?2004h>         'CD4_T': int(cd4_mask.sum()),
+[?2004l[?2004h>         'CD8_T': int(cd8_mask.sum()),
+[?2004l[?2004h>         'DP_T': int(dp_mask.sum()),
+[?2004l[?2004h>         'DN_T': int(dn_mask.sum()),
+[?2004l[?2004h>         'B_cells': int(b_mask.sum()),
+[?2004l[?2004h>         'NK_cells': int(nk_mask.sum()),
+[?2004l[?2004h>         'activated_CD4_T': int(act_cd4_mask.sum()),
+[?2004l[?2004h>         'activated_CD8_T': int(act_cd8_mask.sum())
+[?2004l[?2004h>     }
+[?2004l[?2004h>     return counts
+[?2004l[?2004h> 
+[?2004l[?2004h> comp_fmo1 = compensate(get_df('fmo_HLADR.fcs'), mat_g1)
+[?2004l[?2004h> c_mask = comp_fmo1['FSC-A'] > 35000
+[?2004l[?2004h> s_mask = c_mask & ((comp_fmo1['FSC-A'] / comp_fmo1['FSC-H']) < 1.25)
+[?2004l[?2004h> l_mask = s_mask & (comp_fmo1['V525-A'] < 2000)
+[?2004l[?2004h> lym_mask = l_mask & (comp_fmo1['B530-A'] < 1000)
+[?2004l[?2004h> t_mask = lym_mask & (comp_fmo1['V450-A'] > 1000)
+[?2004l[?2004h> cd4_fmo1 = comp_fmo1[t_mask & (comp_fmo1['YG586-A'] > 1000) & (comp_fmo1['B710-A'] < 2000)]['YG780-A']
+[?2004l[?2004h> cd8_fmo1 = comp_fmo1[t_mask & (comp_fmo1['YG586-A'] < 1000) & (comp_fmo1['B710-A'] > 2000)]['YG780-A']
+[?2004l[?2004h> thresh_g1_cd4 = np.percentile(cd4_fmo1, 99)
+[?2004l[?2004h> thresh_g1_cd8 = np.percentile(cd8_fmo1, 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> comp_fmo2 = compensate(get_df('fmo_HLADR_rerun.fcs'), mat_g2_scaled)
+[?2004l[?2004h> c_mask = comp_fmo2['FSC-A'] > 35000
+[?2004l[?2004h> s_mask = c_mask & ((comp_fmo2['FSC-A'] / comp_fmo2['FSC-H']) < 1.25)
+[?2004l[?2004h> l_mask = s_mask & (comp_fmo2['V525-A'] < 2000)
+[?2004l[?2004h> lym_mask = l_mask & (comp_fmo2['B530-A'] < 1000)
+[?2004l[?2004h> t_mask = lym_mask & (comp_fmo2['V450-A'] > 1000)
+[?2004l[?2004h> cd4_fmo2 = comp_fmo2[t_mask & (comp_fmo2['YG586-A'] > 1000) & (comp_fmo2['B710-A'] < 2000)]['YG780-A']
+[?2004l[?2004h> cd8_fmo2 = comp_fmo2[t_mask & (comp_fmo2['YG586-A'] < 1000) & (comp_fmo2['B710-A'] > 2000)]['YG780-A']
+[?2004l[?2004h> thresh_g2_cd4 = np.percentile(cd4_fmo2, 99)
+[?2004l[?2004h> thresh_g2_cd8 = np.percentile(cd8_fmo2, 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> samples = pd.read_csv('/task/input/samples.tsv', sep='\t')
+[?2004l[?2004h> for idx, row in samples.iterrows():
+[?2004l[?2004h>     sid = row['sample_id']
+[?2004l[?2004h>     fcs = row['fcs_file']
+[?2004l[?2004h>     is_g2 = sid in ['PBMC_D858', 'PBMC_D960']
+[?2004l[?2004h>     smat = mat_g2_scaled if is_g2 else mat_g1
+[?2004l[?2004h>     t_cd4 = thresh_g2_cd4 if is_g2 else thresh_g1_cd4
+[?2004l[?2004h>     t_cd8 = thresh_g2_cd8 if is_g2 else thresh_g1_cd8
+[?2004l[?2004h>     counts = gate_all(fcs, smat, t_cd4, t_cd8, is_d858=(sid=='PBMC_D858'))
+[?2004l[?2004h>     print(f'*** {sid} ***')
+[?2004l[?2004h>     print(counts)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_full_gating.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+*** PBMC_D617 ***
+{'all_events': 43312, 'cells': 40679, 'singlets': 37711, 'live': 31320, 'lymphocytes': 24199, 'monocytes': 7121, 'T_cells': 17822, 'CD4_T': 10845, 'CD8_T': 5664, 'DP_T': 282, 'DN_T': 1031, 'B_cells': 2500, 'NK_cells': 3060, 'activated_CD4_T': 935, 'activated_CD8_T': 1262}
+*** PBMC_D685 ***
+{'all_events': 41471, 'cells': 36153, 'singlets': 32104, 'live': 27307, 'lymphocytes': 20736, 'monocytes': 6571, 'T_cells': 15981, 'CD4_T': 10608, 'CD8_T': 4366, 'DP_T': 351, 'DN_T': 656, 'B_cells': 2253, 'NK_cells': 1812, 'activated_CD4_T': 863, 'activated_CD8_T': 695}
+*** PBMC_D735 ***
+{'all_events': 38220, 'cells': 35387, 'singlets': 31588, 'live': 28583, 'lymphocytes': 23398, 'monocytes': 5185, 'T_cells': 17872, 'CD4_T': 11644, 'CD8_T': 4522, 'DP_T': 483, 'DN_T': 1223, 'B_cells': 2993, 'NK_cells': 1820, 'activated_CD4_T': 797, 'activated_CD8_T': 949}
+*** PBMC_D829 ***
+{'all_events': 40460, 'cells': 37134, 'singlets': 33510, 'live': 29169, 'lymphocytes': 22485, 'monocytes': 6684, 'T_cells': 15781, 'CD4_T': 8495, 'CD8_T': 6364, 'DP_T': 320, 'DN_T': 602, 'B_cells': 3643, 'NK_cells': 2469, 'activated_CD4_T': 710, 'activated_CD8_T': 809}
+*** PBMC_D858 ***
+{'all_events': 41443, 'cells': 36922, 'singlets': 33082, 'live': 28739, 'lymphocytes': 22492, 'monocytes': 6247, 'T_cells': 16452, 'CD4_T': 9538, 'CD8_T': 5700, 'DP_T': 314, 'DN_T': 900, 'B_cells': 1986, 'NK_cells': 3579, 'activated_CD4_T': 882, 'activated_CD8_T': 1333}
+*** PBMC_D960 ***
+{'all_events': 36413, 'cells': 33472, 'singlets': 31457, 'live': 27373, 'lymphocytes': 21641, 'monocytes': 5732, 'T_cells': 17018, 'CD4_T': 11328, 'CD8_T': 4730, 'DP_T': 371, 'DN_T': 589, 'B_cells': 2462, 'NK_cells': 1616, 'activated_CD4_T': 767, 'activated_CD8_T': 875}
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > check_debris_2d.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> for sname, fcs in [('D617', 'PBMC_D617.fcs'), ('D858', 'PBMC_D858.fcs')]:
+[?2004l[?2004h>     df = get_df(fcs)
+[?2004l[?2004h>     fsc_th = 10000 if sname == 'D858' else 35000
+[?2004l[?2004h>     deb = df[df['FSC-A'] <= fsc_th]
+[?2004l[?2004h>     cells = df[df['FSC-A'] > fsc_th]
+[?2004l[?2004h>     print(f"{sname}: debris SSC-A 99th: {np.percentile(deb['SSC-A'], 99):.1f}, cells SSC-A 1st: {np.percentile(cells['SSC-A'], 1):.1f}")
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 check_debris_2d.py
+[?2004lD617: debris SSC-A 99th: 32272.3, cells SSC-A 1st: 16110.4
+D858: debris SSC-A 99th: 32770.5, cells SSC-A 1st: 16326.8
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > test_clamp.py
+[?2004l[?2004h> import numpy as np, pandas as pd
+[?2004l[?2004h> from build_spillover import mat_g1, calc_row
+[?2004l[?2004h> from test_full_gating import gate_all, thresh_g1_cd4, thresh_g1_cd8, thresh_g2_cd4, thresh_g2_cd8
+[?2004l[?2004h> 
+[?2004l[?2004h> mat_g1_clamped = mat_g1.clip(lower=0)
+[?2004l[?2004h> 
+[?2004l[?2004h> for sid, fcs in [('PBMC_D617', 'PBMC_D617.fcs')]:
+[?2004l[?2004h>     c1 = gate_all(fcs, mat_g1, thresh_g1_cd4, thresh_g1_cd8)
+[?2004l[?2004h>     c2 = gate_all(fcs, mat_g1_clamped, thresh_g1_cd4, thresh_g1_cd8)
+[?2004l[?2004h>     print('All equal:', c1 == c2)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 test_clamp.py
+[?2004lGroup 1 matrix:
+              V450-A   V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+BV421        1.00000  0.26729  0.00495  0.00218  0.00230  0.00071  0.00121  0.00041
+Zombie Aqua  0.07253  1.00000  0.08119  0.00285  0.01194  0.00117  0.00281  0.00277
+FITC         0.00025  0.03672  1.00000  0.04412  0.06026  0.00162  0.00051  0.00226
+PerCP-Cy5.5  0.00167 -0.00019  0.00189  1.00000  0.00200  0.25310  0.05638  0.04275
+PE           0.00209  0.00238  0.00597  0.23320  1.00000  0.02945  0.00274  0.00155
+PE-Cy7       0.00041  0.00091  0.00046  0.02166  0.01952  1.00000  0.00277  0.08694
+APC          0.00094  0.00093  0.00012  0.05648  0.00000  0.00542  1.00000  0.33302
+APC-Cy7      0.00126  0.00184  0.00063  0.00091  0.00235  0.09740  0.07574  1.00000
+*** PBMC_D617 ***
+{'all_events': 43312, 'cells': 40679, 'singlets': 37711, 'live': 31320, 'lymphocytes': 24199, 'monocytes': 7121, 'T_cells': 17822, 'CD4_T': 10845, 'CD8_T': 5664, 'DP_T': 282, 'DN_T': 1031, 'B_cells': 2500, 'NK_cells': 3060, 'activated_CD4_T': 935, 'activated_CD8_T': 1262}
+*** PBMC_D685 ***
+{'all_events': 41471, 'cells': 36153, 'singlets': 32104, 'live': 27307, 'lymphocytes': 20736, 'monocytes': 6571, 'T_cells': 15981, 'CD4_T': 10608, 'CD8_T': 4366, 'DP_T': 351, 'DN_T': 656, 'B_cells': 2253, 'NK_cells': 1812, 'activated_CD4_T': 863, 'activated_CD8_T': 695}
+*** PBMC_D735 ***
+{'all_events': 38220, 'cells': 35387, 'singlets': 31588, 'live': 28583, 'lymphocytes': 23398, 'monocytes': 5185, 'T_cells': 17872, 'CD4_T': 11644, 'CD8_T': 4522, 'DP_T': 483, 'DN_T': 1223, 'B_cells': 2993, 'NK_cells': 1820, 'activated_CD4_T': 797, 'activated_CD8_T': 949}
+*** PBMC_D829 ***
+{'all_events': 40460, 'cells': 37134, 'singlets': 33510, 'live': 29169, 'lymphocytes': 22485, 'monocytes': 6684, 'T_cells': 15781, 'CD4_T': 8495, 'CD8_T': 6364, 'DP_T': 320, 'DN_T': 602, 'B_cells': 3643, 'NK_cells': 2469, 'activated_CD4_T': 710, 'activated_CD8_T': 809}
+*** PBMC_D858 ***
+{'all_events': 41443, 'cells': 36922, 'singlets': 33082, 'live': 28739, 'lymphocytes': 22492, 'monocytes': 6247, 'T_cells': 16452, 'CD4_T': 9538, 'CD8_T': 5700, 'DP_T': 314, 'DN_T': 900, 'B_cells': 1986, 'NK_cells': 3579, 'activated_CD4_T': 882, 'activated_CD8_T': 1333}
+*** PBMC_D960 ***
+{'all_events': 36413, 'cells': 33472, 'singlets': 31457, 'live': 27373, 'lymphocytes': 21641, 'monocytes': 5732, 'T_cells': 17018, 'CD4_T': 11328, 'CD8_T': 4730, 'DP_T': 371, 'DN_T': 589, 'B_cells': 2462, 'NK_cells': 1616, 'activated_CD4_T': 767, 'activated_CD8_T': 875}
+All equal: True
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > generate_outputs.py
+[?2004l[?2004h> import flowio, numpy as np, pandas as pd
+[?2004l[?2004h> import os
+[?2004l[?2004h> 
+[?2004l[?2004h> panel = pd.read_csv('/task/input/panel.tsv', sep='\t')
+[?2004l[?2004h> samples = pd.read_csv('/task/input/samples.tsv', sep='\t')
+[?2004l[?2004h> controls = pd.read_csv('/task/input/controls.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> detectors = list(panel['detector'])
+[?2004l[?2004h> fluorochromes = list(panel['fluorochrome'])
+[?2004l[?2004h> 
+[?2004l[?2004h> def get_df(fname):
+[?2004l[?2004h>     fo = flowio.FlowData('/task/input/fcs/' + fname)
+[?2004l[?2004h>     events = np.reshape(fo.events, (-1, fo.channel_count))
+[?2004l[?2004h>     ch_names = [fo.channels[i]['pnn'] for i in range(1, fo.channel_count + 1)]
+[?2004l[?2004h>     return pd.DataFrame(events, columns=ch_names)
+[?2004l[?2004h> 
+[?2004l[?2004h> def calc_row(fname, det, is_cell=False):
+[?2004l[?2004h>     df = get_df(fname)
+[?2004l[?2004h>     if not is_cell:
+[?2004l[?2004h>         mask = (df['FSC-A'] > 50000) & (df['FSC-A'] < 100000) & (df['SSC-A'] > 30000) & (df['SSC-A'] < 90000)
+[?2004l[?2004h>         df = df[mask]
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     elif 'Zombie' in fname:
+[?2004l[?2004h>         pos = df[df[det] > 5000]
+[?2004l[?2004h>         neg = df[df[det] < 1000]
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         pos = df[df[det] > 3000]
+[?2004l[?2004h>         neg = df[df[det] < 500]
+[?2004l[?2004h>     diff = pos[detectors].median() - neg[detectors].median()
+[?2004l[?2004h>     return diff / diff[det]
+[?2004l[?2004h> 
+[?2004l[?2004h> row_BV = calc_row('ctrl_BV421.fcs', 'V450-A')
+[?2004l[?2004h> row_ZA = calc_row('ctrl_ZombieAqua.fcs', 'V525-A', is_cell=True)
+[?2004l[?2004h> row_FITC = calc_row('ctrl_FITC.fcs', 'B530-A')
+[?2004l[?2004h> row_PerCP = calc_row('ctrl_PerCPCy55_cells.fcs', 'B710-A', is_cell=True)
+[?2004l[?2004h> row_PE = calc_row('ctrl_PE.fcs', 'YG586-A')
+[?2004l[?2004h> row_PECy7_g1 = calc_row('ctrl_PECy7.fcs', 'YG780-A')
+[?2004l[?2004h> row_APC = calc_row('ctrl_APC.fcs', 'R670-A')
+[?2004l[?2004h> row_APCCy7 = calc_row('ctrl_APCCy7.fcs', 'R780-A')
+[?2004l[?2004h> 
+[?2004l[?2004h> mat_g1 = pd.DataFrame([row_BV, row_ZA, row_FITC, row_PerCP, row_PE, row_PECy7_g1, row_APC, row_APCCy7], index=fluorochromes, columns=detectors)
+[?2004l[?2004h> for d in detectors:
+[?2004l[?2004h>     f = panel[panel['detector'] == d]['fluorochrome'].values[0]
+[?2004l[?2004h>     mat_g1.loc[f, d] = 1.0
+[?2004l[?2004h> 
+[?2004l[?2004h> row_PECy7_g2 = calc_row('ctrl_PECy7_rerun.fcs', 'YG780-A')
+[?2004l[?2004h> df_pe7_1 = get_df('ctrl_PECy7.fcs')
+[?2004l[?2004h> df_pe7_2 = get_df('ctrl_PECy7_rerun.fcs')
+[?2004l[?2004h> diff1 = df_pe7_1[df_pe7_1['YG780-A'] > 5000]['YG780-A'].median() - df_pe7_1[df_pe7_1['YG780-A'] < 1000]['YG780-A'].median()
+[?2004l[?2004h> diff2 = df_pe7_2[df_pe7_2['YG780-A'] > 5000]['YG780-A'].median() - df_pe7_2[df_pe7_2['YG780-A'] < 1000]['YG780-A'].median()
+[?2004l[?2004h> g_ratio = diff2 / diff1
+[?2004l[?2004h> 
+[?2004l[?2004h> mat_g2 = mat_g1.copy()
+[?2004l[?2004h> mat_g2.loc['PE-Cy7'] = row_PECy7_g2
+[?2004l[?2004h> for f in fluorochromes:
+[?2004l[?2004h>     if f != 'PE-Cy7':
+[?2004l[?2004h>         mat_g2.loc[f, 'YG780-A'] = mat_g1.loc[f, 'YG780-A'] * g_ratio
+[?2004l[?2004h> for d in detectors:
+[?2004l[?2004h>     f = panel[panel['detector'] == d]['fluorochrome'].values[0]
+[?2004l[?2004h>     mat_g2.loc[f, d] = 1.0
+[?2004l[?2004h> 
+[?2004l[?2004h> spillover_rows = []
+[?2004l[?2004h> for idx, row in samples.iterrows():
+[?2004l[?2004h>     sid = row['sample_id']
+[?2004l[?2004h>     mat = mat_g2 if sid in ['PBMC_D858', 'PBMC_D960'] else mat_g1
+[?2004l[?2004h>     for f in fluorochromes:
+[?2004l[?2004h>         r_dict = {'sample': sid, 'fluorochrome': f}
+[?2004l[?2004h>         for d in detectors:
+[?2004l[?2004h>             r_dict[d] = mat.loc[f, d]
+[?2004l[?2004h>         spillover_rows.append(r_dict)
+[?2004l[?2004h> 
+[?2004l[?2004h> spillover_df = pd.DataFrame(spillover_rows)
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l[?2004h> spillover_df.to_csv('/task/output/spillover.csv', index=False)
+[?2004l[?2004h> print('Wrote /task/output/spillover.csv, shape:', spillover_df.shape)
+[?2004l[?2004h> 
+[?2004l[?2004h> def compensate(data, smat):
+[?2004l[?2004h>     comp_mat = np.linalg.inv(smat.values)
+[?2004l[?2004h>     cdata = np.dot(data[detectors].values, comp_mat)
+[?2004l[?2004h>     res = data.copy()
+[?2004l[?2004h>     res[detectors] = cdata
+[?2004l[?2004h>     return res
+[?2004l[?2004h> 
+[?2004l[?2004h> comp_fmo1 = compensate(get_df('fmo_HLADR.fcs'), mat_g1)
+[?2004l[?2004h> c_mask = comp_fmo1['FSC-A'] > 35000
+[?2004l[?2004h> s_mask = c_mask & ((comp_fmo1['FSC-A'] / comp_fmo1['FSC-H']) < 1.25)
+[?2004l[?2004h> l_mask = s_mask & (comp_fmo1['V525-A'] < 2000)
+[?2004l[?2004h> lym_mask = l_mask & (comp_fmo1['B530-A'] < 1000)
+[?2004l[?2004h> t_mask = lym_mask & (comp_fmo1['V450-A'] > 1000)
+[?2004l[?2004h> cd4_fmo1 = comp_fmo1[t_mask & (comp_fmo1['YG586-A'] > 1000) & (comp_fmo1['B710-A'] < 2000)]['YG780-A']
+[?2004l[?2004h> cd8_fmo1 = comp_fmo1[t_mask & (comp_fmo1['YG586-A'] < 1000) & (comp_fmo1['B710-A'] > 2000)]['YG780-A']
+[?2004l[?2004h> thresh_g1_cd4 = np.percentile(cd4_fmo1, 99)
+[?2004l[?2004h> thresh_g1_cd8 = np.percentile(cd8_fmo1, 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> comp_fmo2 = compensate(get_df('fmo_HLADR_rerun.fcs'), mat_g2)
+[?2004l[?2004h> c_mask = comp_fmo2['FSC-A'] > 35000
+[?2004l[?2004h> s_mask = c_mask & ((comp_fmo2['FSC-A'] / comp_fmo2['FSC-H']) < 1.25)
+[?2004l[?2004h> l_mask = s_mask & (comp_fmo2['V525-A'] < 2000)
+[?2004l[?2004h> lym_mask = l_mask & (comp_fmo2['B530-A'] < 1000)
+[?2004l[?2004h> t_mask = lym_mask & (comp_fmo2['V450-A'] > 1000)
+[?2004l[?2004h> cd4_fmo2 = comp_fmo2[t_mask & (comp_fmo2['YG586-A'] > 1000) & (comp_fmo2['B710-A'] < 2000)]['YG780-A']
+[?2004l[?2004h> cd8_fmo2 = comp_fmo2[t_mask & (comp_fmo2['YG586-A'] < 1000) & (comp_fmo2['B710-A'] > 2000)]['YG780-A']
+[?2004l[?2004h> thresh_g2_cd4 = np.percentile(cd4_fmo2, 99)
+[?2004l[?2004h> thresh_g2_cd8 = np.percentile(cd8_fmo2, 99)
+[?2004l[?2004h> 
+[?2004l[?2004h> sop_hierarchy = [
+[?2004l[?2004h>     ('cells', 'all_events'),
+[?2004l[?2004h>     ('singlets', 'cells'),
+[?2004l[?2004h>     ('live', 'singlets'),
+[?2004l[?2004h>     ('lymphocytes', 'live'),
+[?2004l[?2004h>     ('monocytes', 'live'),
+[?2004l[?2004h>     ('T_cells', 'lymphocytes'),
+[?2004l[?2004h>     ('CD4_T', 'T_cells'),
+[?2004l[?2004h>     ('CD8_T', 'T_cells'),
+[?2004l[?2004h>     ('DP_T', 'T_cells'),
+[?2004l[?2004h>     ('DN_T', 'T_cells'),
+[?2004l[?2004h>     ('B_cells', 'lymphocytes'),
+[?2004l[?2004h>     ('NK_cells', 'lymphocytes'),
+[?2004l[?2004h>     ('activated_CD4_T', 'CD4_T'),
+[?2004l[?2004h>     ('activated_CD8_T', 'CD8_T')
+[?2004l[?2004h> ]
+[?2004l[?2004h> 
+[?2004l[?2004h> def gate_sample(fcs_file, smat, thresh_cd4, thresh_cd8, is_d858=False):
+[?2004l[?2004h>     df = get_df(fcs_file)
+[?2004l[?2004h>     comp = compensate(df, smat)
+[?2004l[?2004h>     fsc_thresh = 10000 if is_d858 else 35000
+[?2004l[?2004h>     
+[?2004l[?2004h>     n_tot = len(df)
+[?2004l[?2004h>     c_mask = comp['FSC-A'] > fsc_thresh
+[?2004l[?2004h>     s_mask = c_mask & ((comp['FSC-A'] / comp['FSC-H']) < 1.25)
+[?2004l[?2004h>     l_mask = s_mask & (comp['V525-A'] < 2000)
+[?2004l[?2004h>     mono_mask = l_mask & (comp['B530-A'] > 1000)
+[?2004l[?2004h>     lym_mask = l_mask & (comp['B530-A'] < 1000)
+[?2004l[?2004h>     t_mask = lym_mask & (comp['V450-A'] > 1000)
+[?2004l[?2004h>     cd4_mask = t_mask & (comp['YG586-A'] > 1000) & (comp['B710-A'] < 2000)
+[?2004l[?2004h>     cd8_mask = t_mask & (comp['YG586-A'] < 1000) & (comp['B710-A'] > 2000)
+[?2004l[?2004h>     dp_mask = t_mask & (comp['YG586-A'] > 1000) & (comp['B710-A'] > 2000)
+[?2004l[?2004h>     dn_mask = t_mask & (comp['YG586-A'] < 1000) & (comp['B710-A'] < 2000)
+[?2004l[?2004h>     b_mask = lym_mask & (comp['V450-A'] < 1000) & (comp['R780-A'] > 1600)
+[?2004l[?2004h>     nk_mask = lym_mask & (comp['V450-A'] < 1000) & (comp['R780-A'] < 1600) & (comp['R670-A'] > 1000)
+[?2004l[?2004h>     act_cd4_mask = cd4_mask & (comp['YG780-A'] > thresh_cd4)
+[?2004l[?2004h>     act_cd8_mask = cd8_mask & (comp['YG780-A'] > thresh_cd8)
+[?2004l[?2004h>     
+[?2004l[?2004h>     counts = {
+[?2004l[?2004h>         'all_events': n_tot,
+[?2004l[?2004h>         'cells': int(c_mask.sum()),
+[?2004l[?2004h>         'singlets': int(s_mask.sum()),
+[?2004l[?2004h>         'live': int(l_mask.sum()),
+[?2004l[?2004h>         'lymphocytes': int(lym_mask.sum()),
+[?2004l[?2004h>         'monocytes': int(mono_mask.sum()),
+[?2004l[?2004h>         'T_cells': int(t_mask.sum()),
+[?2004l[?2004h>         'CD4_T': int(cd4_mask.sum()),
+[?2004l[?2004h>         'CD8_T': int(cd8_mask.sum()),
+[?2004l[?2004h>         'DP_T': int(dp_mask.sum()),
+[?2004l[?2004h>         'DN_T': int(dn_mask.sum()),
+[?2004l[?2004h>         'B_cells': int(b_mask.sum()),
+[?2004l[?2004h>         'NK_cells': int(nk_mask.sum()),
+[?2004l[?2004h>         'activated_CD4_T': int(act_cd4_mask.sum()),
+[?2004l[?2004h>         'activated_CD8_T': int(act_cd8_mask.sum())
+[?2004l[?2004h>     }
+[?2004l[?2004h>     return counts
+[?2004l[?2004h> 
+[?2004l[?2004h> freq_rows = []
+[?2004l[?2004h> for idx, row in samples.iterrows():
+[?2004l[?2004h>     sid = row['sample_id']
+[?2004l[?2004h>     fcs = row['fcs_file']
+[?2004l[?2004h>     is_g2 = sid in ['PBMC_D858', 'PBMC_D960']
+[?2004l[?2004h>     smat = mat_g2 if is_g2 else mat_g1
+[?2004l[?2004h>     t_cd4 = thresh_g2_cd4 if is_g2 else thresh_g1_cd4
+[?2004l[?2004h>     t_cd8 = thresh_g2_cd8 if is_g2 else thresh_g1_cd8
+[?2004l[?2004h>     counts = gate_sample(fcs, smat, t_cd4, t_cd8, is_d858=(sid=='PBMC_D858'))
+[?2004l[?2004h>     
+[?2004l[?2004h>     for pop, parent in sop_hierarchy:
+[?2004l[?2004h>         cnt = counts[pop]
+[?2004l[?2004h>         parent_cnt = counts[parent]
+[?2004l[?2004h>         pct = (100.0 * cnt) / parent_cnt if parent_cnt > 0 else 0.0
+[?2004l[?2004h>         freq_rows.append({
+[?2004l[?2004h>             'sample': sid,
+[?2004l[?2004h>             'population': pop,
+[?2004l[?2004h>             'parent': parent,
+[?2004l[?2004h>             'count': cnt,
+[?2004l[?2004h>             'percent_of_parent': pct
+[?2004l[?2004h>         })
+[?2004l[?2004h> 
+[?2004l[?2004h> freq_df = pd.DataFrame(freq_rows)
+[?2004l[?2004h> freq_df.to_csv('/task/output/frequencies.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Wrote /task/output/frequencies.tsv, shape:', freq_df.shape)
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 generate_outputs.py
+[?2004lWrote /task/output/spillover.csv, shape: (48, 10)
+Wrote /task/output/frequencies.tsv, shape: (84, 5)
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > check_deliverables.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> sp = pd.read_csv('/task/output/spillover.csv')
+[?2004l[?2004h> print('spillover columns:', list(sp.columns))
+[?2004l[?2004h> print('spillover shape:', sp.shape)
+[?2004l[?2004h> print('samples in spillover:', list(sp['sample'].unique()))
+[?2004l[?2004h> print('fluorochromes in spillover:', list(sp['fluorochrome'].unique()))
+[?2004l[?2004h> 
+[?2004l[?2004h> fr = pd.read_csv('/task/output/frequencies.tsv', sep='\t')
+[?2004l[?2004h> print('frequencies columns:', list(fr.columns))
+[?2004l[?2004h> print('frequencies shape:', fr.shape)
+[?2004l[?2004h> print('samples in frequencies:', list(fr['sample'].unique()))
+[?2004l[?2004h> print('populations in frequencies:', list(fr['population'].unique()))
+[?2004l[?2004h> print('Sample of frequencies.tsv:')
+[?2004l[?2004h> print(fr.head(15))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 check_deliverables.py
+[?2004lspillover columns: ['sample', 'fluorochrome', 'V450-A', 'V525-A', 'B530-A', 'B710-A', 'YG586-A', 'YG780-A', 'R670-A', 'R780-A']
+spillover shape: (48, 10)
+samples in spillover: ['PBMC_D617', 'PBMC_D685', 'PBMC_D735', 'PBMC_D829', 'PBMC_D858', 'PBMC_D960']
+fluorochromes in spillover: ['BV421', 'Zombie Aqua', 'FITC', 'PerCP-Cy5.5', 'PE', 'PE-Cy7', 'APC', 'APC-Cy7']
+frequencies columns: ['sample', 'population', 'parent', 'count', 'percent_of_parent']
+frequencies shape: (84, 5)
+samples in frequencies: ['PBMC_D617', 'PBMC_D685', 'PBMC_D735', 'PBMC_D829', 'PBMC_D858', 'PBMC_D960']
+populations in frequencies: ['cells', 'singlets', 'live', 'lymphocytes', 'monocytes', 'T_cells', 'CD4_T', 'CD8_T', 'DP_T', 'DN_T', 'B_cells', 'NK_cells', 'activated_CD4_T', 'activated_CD8_T']
+Sample of frequencies.tsv:
+       sample       population       parent  count  percent_of_parent
+0   PBMC_D617            cells   all_events  40679          93.920853
+1   PBMC_D617         singlets        cells  37711          92.703852
+2   PBMC_D617             live     singlets  31320          83.052690
+3   PBMC_D617      lymphocytes         live  24199          77.263729
+4   PBMC_D617        monocytes         live   7121          22.736271
+5   PBMC_D617          T_cells  lymphocytes  17822          73.647671
+6   PBMC_D617            CD4_T      T_cells  10845          60.851756
+7   PBMC_D617            CD8_T      T_cells   5664          31.780945
+8   PBMC_D617             DP_T      T_cells    282           1.582314
+9   PBMC_D617             DN_T      T_cells   1031           5.784985
+10  PBMC_D617          B_cells  lymphocytes   2500          10.331005
+11  PBMC_D617         NK_cells  lymphocytes   3060          12.645151
+12  PBMC_D617  activated_CD4_T        CD4_T    935           8.621485
+13  PBMC_D617  activated_CD8_T        CD8_T   1262          22.281073
+14  PBMC_D685            cells   all_events  36153          87.176581
+[?2004hroot@967688696ad6:/task# cat << 'EOF' > print_spill_check.py
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> sp = pd.read_csv('/task/output/spillover.csv')
+[?2004l[?2004h> print('=== PBMC_D617 Spillover ===')
+[?2004l[?2004h> print(sp[sp['sample'] == 'PBMC_D617'].drop(columns=['sample']).to_string(index=False))
+[?2004l[?2004h> print('=== PBMC_D858 Spillover ===')
+[?2004l[?2004h> print(sp[sp['sample'] == 'PBMC_D858'].drop(columns=['sample']).to_string(index=False))
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@967688696ad6:/task# python3 print_spill_check.py
+[?2004l=== PBMC_D617 Spillover ===
+fluorochrome   V450-A    V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+       BV421 1.000000  0.267286 0.004951 0.002179 0.002301 0.000709 0.001210 0.000408
+ Zombie Aqua 0.072534  1.000000 0.081190 0.002852 0.011943 0.001168 0.002809 0.002771
+        FITC 0.000246  0.036724 1.000000 0.044117 0.060260 0.001620 0.000510 0.002259
+ PerCP-Cy5.5 0.001675 -0.000186 0.001888 1.000000 0.001995 0.253103 0.056375 0.042755
+          PE 0.002091  0.002381 0.005968 0.233198 1.000000 0.029449 0.002737 0.001547
+      PE-Cy7 0.000407  0.000908 0.000457 0.021660 0.019515 1.000000 0.002771 0.086944
+         APC 0.000940  0.000926 0.000124 0.056478 0.000003 0.005419 1.000000 0.333023
+     APC-Cy7 0.001255  0.001836 0.000632 0.000908 0.002355 0.097399 0.075742 1.000000
+=== PBMC_D858 Spillover ===
+fluorochrome   V450-A    V525-A   B530-A   B710-A  YG586-A  YG780-A   R670-A   R780-A
+       BV421 1.000000  0.267286 0.004951 0.002179 0.002301 0.001340 0.001210 0.000408
+ Zombie Aqua 0.072534  1.000000 0.081190 0.002852 0.011943 0.002209 0.002809 0.002771
+        FITC 0.000246  0.036724 1.000000 0.044117 0.060260 0.003065 0.000510 0.002259
+ PerCP-Cy5.5 0.001675 -0.000186 0.001888 1.000000 0.001995 0.478656 0.056375 0.042755
+          PE 0.002091  0.002381 0.005968 0.233198 1.000000 0.055693 0.002737 0.001547
+      PE-Cy7 0.000212  0.000516 0.000246 0.011316 0.010240 1.000000 0.001465 0.045917
+         APC 0.000940  0.000926 0.000124 0.056478 0.000003 0.010248 1.000000 0.333023
+     APC-Cy7 0.001255  0.001836 0.000632 0.000908 0.002355 0.184197 0.075742 1.000000
+[?2004hroot@967688696ad6:/task# 
+[?2004l[?2004hroot@967688696ad6:/task# rm -f /task/*.py
+[?2004l[?2004hroot@967688696ad6:/task# ls -la /task /task/output
+[?2004l/task:
+total 28
+drwxr-xr-x 1 root root 4096 Nov 12 17:10 .
+drwxr-xr-x 1 root root 4096 Nov 12 16:54 ..
+drwxrwxrwx 2 root root 4096 Nov 12 17:09 __pycache__
+dr-xr-xr-x 1 root root 4096 Nov 12 14:35 input
+drwxr-xr-x 1 root root 4096 Nov 12 17:10 output
+drwxr-xr-x 1 root root 4096 Nov 12 14:35 software
+
+/task/output:
+total 28
+drwxr-xr-x 1 root root 4096 Nov 12 17:10 .
+drwxr-xr-x 1 root root 4096 Nov 12 17:10 ..
+-rw-rw-rw- 1 root root 4270 Nov 12 17:10 frequencies.tsv
+-rw-rw-rw- 1 root root 5280 Nov 12 17:10 spillover.csv
+[?2004hroot@967688696ad6:/task# rm -rf /task/__pycache__
+[?2004l[?2004hroot@967688696ad6:/task# 
