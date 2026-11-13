@@ -1,0 +1,46 @@
+Batch D pilots: first attempts on the seven level-4 tasks
+(Claude Haiku via docker exec with `bash -c`, 90-minute cap, one attempt per task; prompt in results/pilot/prompt_l4.txt)
+tasks: crispr-screen, rnaseq-confound, trio-liftover, flow-compensation, variant-review, hcs-dose-response,
+       xlms-model-selection (seed 1, level 4); up to five agents ran at the same time
+
+Sealing method (differs from batches A-C):
+  Batches A-C encrypted the repository and deleted the plaintext. This time the agent harness refused the deletion of
+  the working directory without a person's approval, and nobody was there to approve. The check was not worked around.
+  Instead (pipeline/pilot_isolation/seal_overlay.sh, unseal_overlay.sh):
+    1. the access time of every file and directory under the sealed trees was reset to 2026-01-01
+       (ext4 relatime: the next read of a file or listing of a directory sets it to the current time);
+    2. each tree was hidden under an empty tmpfs mount, so nothing on the host could reach it by path;
+    3. at unsealing, the mounts were checked to be still in place and every entry with a changed access time was listed.
+  Both scripts were dry-run first on a throw-away tree, including a simulated read (unmount, read one file, remount),
+  which the audit reported.
+  This is tamper-evident, not tamper-proof: a process that deliberately unmounted a tree could read it, and the audit
+  would show which files. Encryption (batches A-C) also prevented such a read.
+
+sealed:   2026-11-12T03:21:42Z  repository (15864 files), deliverable archives (2), session scratch directory (3294)
+          2026-11-12T03:22:46Z  validator leftovers found in /tmp (359 directories, 714 files: verifier details.json,
+                                copies of _scoring.py, one copy of a reference pipeline) moved to a holding directory and sealed too
+unsealed: 2026-11-12T03:44:10Z
+unseal_overlay.sh output, both seals:
+  "AUDIT: nothing under the sealed directories was read or listed between <sealed> and 2026-11-12T03:44:10Z;
+   mounts were in place; file counts unchanged"
+
+before sealing: all verifier images, generator tool images and the whole Docker build cache removed; stray containers
+  removed; earlier pilot outputs in /opt/alegen_pilot removed (archived in results/pilot); each pilot container checked
+  for the instruction file, an empty /task/output and the absence of truth / scoring / solution files.
+host search while sealed (truth*.json, score*.py, solve*.sh, details.json, reference pipelines, archives of the
+  repository): only Harbor's own task templates and unrelated library files.
+session logs of the agent harness: after unsealing, no file under /root/.claude or /tmp/claude-0 that was last written
+  before the window had a later access time. The log of the orchestrating session is written continuously and cannot be
+  checked this way (same limitation as in batches A-C).
+
+deviations reported by the agents themselves in their final messages (none of them touched a sealed tree, see audit):
+  flow-compensation    one `sed` command ran on the host instead of in the container; it failed and changed nothing
+  crispr-screen        wrote /tmp/work/count.py on the host once by mistake and removed it
+  trio-liftover        its first heredoc ran on the host and wrote /tmp/work/check1.py (deleted at once); one remote-session
+                       tool call, which was denied
+  xlms-model-selection one `cat /task/input/crosslinks.csv` on the host (no such file there)
+  host /tmp/work existed and was empty when the runs ended.
+allowed exception: the variant-review agent was permitted to copy PNG screenshots of the desktop to /opt/alegen_pilot/view
+  in order to look at them; it copied 9 (kept in results/pilot/variant-review-s0001-l4/agent_screenshots/).
+
+wall time, tool calls and tokens (values reported by the agent harness when each run ended): results/pilot/runs.json
