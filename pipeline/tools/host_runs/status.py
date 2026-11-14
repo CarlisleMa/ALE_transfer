@@ -11,7 +11,7 @@ from pathlib import Path
 S = Path(__file__).resolve().parent
 LOGS = S / "logs"
 JOBS = Path("/home/user/ale-lifesci-gym/results/jobs")
-PORTS = {8770: "kimi-k3 (OpenRouter)", 8776: "kimi-k3 (level 5/6)", 8778: "gemini-3.8-flash (OpenRouter)", 8771: "deepseek-v4.1-flash", 8772: "qwen3.8-flash", 8773: "glm-5.3-flash", 8774: "minimax-m3.1-flash"}
+PORTS = {8779: "claude-opus-5.5", 8770: "kimi-k3 (OpenRouter)", 8776: "kimi-k3 (level 5/6)", 8778: "gemini-3.8-flash (OpenRouter)", 8771: "deepseek-v4.1-flash", 8772: "qwen3.8-flash", 8773: "glm-5.3-flash", 8774: "minimax-m3.1-flash"}
 
 
 def sh(*cmd):

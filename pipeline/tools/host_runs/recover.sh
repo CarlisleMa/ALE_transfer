@@ -21,6 +21,7 @@ shim 8773 $OR '{"provider":{"only":["z-ai"],"allow_fallbacks":false}}'
 shim 8774 $OR '{"provider":{"only":["minimax"],"allow_fallbacks":false}}'
 shim 8778 $OR '{"provider":{"only":["google-ai-studio"],"allow_fallbacks":false}}'   # Gemini via OpenRouter (direct key out of credit)
 shim 8776 $OR '{"provider":{"only":["moonshotai"],"allow_fallbacks":false}}'
+shim 8779 $OR '{"provider":{"only":["anthropic"],"allow_fallbacks":false}}'   # ceiling model
 pgrep -f "[f]lash_queue.py" >/dev/null || { (cd $S && setsid nohup python3 flash_queue.py >> $L/flash_queue.log 2>&1 < /dev/null &); echo "queue restarted"; }
 sleep 3
 echo "uptime: $(uptime | sed 's/,.*//') | shims: $(pgrep -f '[s]tream_shim.py' | wc -l) | queue: $(pgrep -f '[f]lash_queue.py' | wc -l) | disk free: $(df -h /home/user | awk 'NR==2{print $4}')"

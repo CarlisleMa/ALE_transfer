@@ -48,12 +48,16 @@ MODELS.update({
     "kimi-k3": (8776, "moonshotai/kimi-k3",             # OpenRouter, provider pinned to Moonshot AI; own shim and log
                 {"max_input_tokens": 1048576, "max_output_tokens": 1048576, "input_cost_per_token": 3e-06,
                  "output_cost_per_token": 1.5e-05, "cache_read_input_token_cost": 3e-07}),
+    # ceiling measurement (2026-11-14): a non-flash model on the pack, OpenRouter, provider pinned to Anthropic
+    "claude-opus-5.5": (8779, "anthropic/claude-opus-5.5",
+                        {"max_input_tokens": 1000000, "max_output_tokens": 64000, "input_cost_per_token": 4e-06,
+                         "output_cost_per_token": 2e-05, "cache_read_input_token_cost": 2e-07}),
 })
 TASKS = ["crispr-screen-s0001-l4", "flow-compensation-s0001-l4", "trio-liftover-s0001-l4", "xlms-model-selection-s0001-l4",
          "variant-review-s0001-l4", "rnaseq-confound-s0001-l4", "amplicon-16s-s0001-l3", "somatic-tn-s0001-l3",
          "hcs-dose-response-s0001-l4", "md-system-repair-s0001-l3"]
-MODEL_BUDGET = {"gemini-3.8-flash": 45.0, "kimi-k3": 30.0}   # kimi: the pack runs the user asked for (2026-11-13)   # USD billed through OpenRouter (default: BUDGET)
-MODEL_CAP = {"gemini-3.8-flash": 4}     # trials of one model at a time (provider rate limits on tokens per minute)
+MODEL_BUDGET = {"gemini-3.8-flash": 70.0, "kimi-k3": 40.0, "claude-opus-5.5": 60.0}   # kimi: the pack runs the user asked for (2026-11-13)   # USD billed through OpenRouter (default: BUDGET)
+MODEL_CAP = {"gemini-3.8-flash": 4, "claude-opus-5.5": 2}     # trials of one model at a time (provider rate limits on tokens per minute)
 HEAVY = ("hcs-", "md-")
 MEDIUM = ("xlms-", "rnaseq-", "amplicon-", "somatic-")
 CAPS = {"kimi": {"total": 6, "busy": 1, "heavy": 1}, "after": {"total": 7, "busy": 4, "heavy": 2}}
