@@ -20,9 +20,13 @@ with it). This module then
     nuclei and fragments is symmetric under that turn) nor the optics (illumination falls off radially) has
     a direction, so the level-4 rendering of the well is a draw from the same distribution; flat-field and
     dark frames belong to the optical path and are the level-4 files;
-  * keeps the level-4 choice of annotated well names (the lab picks fields by the layout it believes in) and
-    writes into each annotation file the cells of the image that now carries the name. A name whose image is
-    out of focus cannot be counted by hand and is replaced by the next field of the same kind;
+  * keeps the level-4 choice of annotated fields: the lab counted the same eight physical fields (the plate
+    wells chosen for coverage: dense and sparse untreated fields, fragment-rich fields, fields with enlarged
+    nuclei). The acquisition software names images by stage position, so each annotation file carries the
+    name of the image that shows its field, i.e. the opposite of the level-4 name. The files themselves are
+    the level-4 files, byte for byte: same clicks, same manual counts (maintainer decision of 2026-11-14;
+    the first version kept the level-4 names and annotated whatever image lay under them, which changed the
+    coverage of the manual counts and with it the difficulty of the counting part);
   * stores the per-image truth (cell number, focus state, annotated or not) under the image name;
   * leaves `dose_response` truth alone: it is per compound.
 
@@ -48,18 +52,6 @@ from . import level4, sim, sim4
 ASSETS = Path(__file__).parent / "assets"
 OFF = 1.3                 # a vehicle well "looks different" beyond this factor (the reference solution's limit)
 RHO = 0.7                 # a series "falls" / "rises" with concentration from this rank correlation
-
-# The one ceiling that is not pass - 0.15 at level 7. Measured 2026-11-12 (docs/families/hcs_dose_response.md).
-NO_FOCUS_QC_NOTE = (
-    ". Ceiling 0.85 instead of 0.75 at level 7. What this submission scores depends on which outline threshold the "
-    "reference solution selects on the annotated fields, and those are other images than at level 4. With 0.15 "
-    "(seeds 1 and 10) it finds no nucleus in an out-of-focus field: the well has no marker value, drops out of "
-    "the marker fit by itself and enters the count fit with zero cells; the missing QC then costs the QC flags and "
-    "the GI50 of one compound: 0.825, which is 0.075 under the pass line. With 0.12 (seed 2) it finds objects "
-    "with a wrong marker value and both potencies of the affected compounds are pulled down: 0.544. The level-4 "
-    "task has the same property: on the level-4 inputs of seed 1 both thresholds are equally good on the "
-    "annotated fields, the reference solution takes the first (0.12, 0.544), and with 0.15 the same submission "
-    "scores 0.825")
 
 L7_JUDGE = """
 
@@ -96,7 +88,7 @@ inactive, and a GI50 of 0.0019 uM for a compound that is inactive on cell number
 below the lowest tested concentration (0.0137 uM). The curves behind these tables are not smooth inhibition
 curves: a series holds the wells of the opposite row in reverse order, with that row's vehicle and reference
 wells in between, so responses rise with the nominal concentration (seed 2, one series: 0.04, 0.08, 0.23,
-0.54, 0.81, 0.95, 1.02, 0.90) or jump (seed 1, one series: 0.09, 1.48, 0.76, 0.08, 1.59, 1.53, 1.44, 0.93);
+0.54, 0.81, 0.95, 1.02, 0.90) or jump (seed 1, one series: 0.09, 1.47, 0.75, 0.08, 1.59, 1.53, 1.44, 0.94);
 the SOP model, whose upper asymptote is fixed at the vehicle level, turns a rising series into `inactive`
 or into a potency at the lower end of its search range. The table alone does not show any of this.
 `layout_by_name_everything_else_right` (planted cell numbers, marker levels and focus flags; reference plate
@@ -112,22 +104,34 @@ without using the controls; both then apply the layout turned and report the per
 `per_well_tables_by_plate_well` and `well_table_by_plate_well_validation_by_image` are the planted truth
 filed the other way.
 
-**One ceiling of the level-4 battery is raised.** `naive_no_focus_qc` (reference solution with the focus QC
-switched off) has a ceiling of 0.85 instead of 0.75; its entry in the attack list gives the measurements. It
-stays under the pass line (0.825 at most), but not by the usual margin. The cause is in the level-4 weights
-(QC flags 0.05, count potency 0.20, one wrong compound of eight costs 0.125) and not in the level-7 decision
-point: when the counting step finds nothing in an out-of-focus field, the marker curve is not affected.
+**The annotated fields are those of level 4.** The lab counted the same eight physical fields (the plate
+wells chosen at level 4 to cover dense and sparse untreated fields, fragment-rich fields and fields with
+enlarged nuclei). The annotation files are the level-4 files, byte for byte, under the names of the images
+that show those fields; `validation.tsv` lists exactly these eight fields (by image name or by plate well,
+see above). The counting part of the task is therefore that of levels 4 and 6. Measured on seeds 1, 2, 3 and
+10: the reference solution selects the outline threshold it selects on the level-4 inputs (0.12; seed 1 was
+compared directly, same worst annotated field at 0.76 of the SOP limit), and `naive_no_focus_qc` scores
+0.544 / 0.544 / 0.669 / 0.581, under its level-4 ceiling of 0.75. (In the first version of this level the
+annotation files kept their level-4 names and held whatever image lay under them; the tuning then chose
+another threshold on some seeds, that attack reached 0.825 and its ceiling had been raised to 0.85. Both
+are gone.)
 
-**What is weaker than at level 4.** (1) The annotated fields were chosen at level 4 to cover dense and sparse
-untreated fields, fragment-rich fields and fields with enlarged nuclei. The file names are the same, the
-images under them are not, so which phenotypes the eight manual counts cover depends on the seed (listed in
-the decision point above). On seeds 1 and 2 both solutions met the SOP criterion on every annotated field
-and the count tolerance on the other wells; this is measured for two seeds, not guaranteed by construction.
-(2) A seed whose control wells sit symmetrically under the turn would show well-behaved controls in both
-orientations. The generator refuses such seeds (about one in ten of 400 surveyed): it requires, on the
-planted values, that with the layout by name fewer than half of the wells called reference are inhibited
-and at least four wells called vehicle are off by more than a factor 1.3, and that the balance of falling
-over rising dose series separates the two orientations by at least five series.
+**A side effect that is evidence, not text.** The annotation files now carry names under which the layout
+lists something else than what was counted: the entry of the decision point above gives, for the eight
+files of this seed, the manual count, what the layout calls the name and which plate well the field is.
+Seed 1 / seed 2: 3 / 3 of the 8 files hold fewer than half the cells of an untreated field of their plate
+area (about 120 cells in inner wells, 66 in the outer ring), 2 / 1 of them under a name that the layout
+calls vehicle or reference (seed 1: `H01` 10 cells, layout vehicle; `E03` 31 cells, layout reference; seed
+2: `H01` 8 cells, layout vehicle). An analyst who compares the manual counts with the layout sees it; the
+assay notes say how the fields were chosen (untreated wells, highest and intermediate concentrations) and
+are the level-4 notes.
+
+**Seeds without a level 7.** A seed whose control wells sit symmetrically under the turn would show
+well-behaved controls in both orientations. The generator refuses such seeds (41 of 400 surveyed): it
+requires, on the planted values, that with the layout by name fewer than half of the wells called reference
+are inhibited and at least four wells called vehicle are off by more than a factor 1.3, and that the
+balance of falling over rising dose series separates the two orientations by at least five series. The
+check does not use the annotated fields.
 """
 
 
@@ -247,35 +251,8 @@ def survey(seed: int) -> dict:
     shapes = sim4.reshape_compounds(rng, cs)
     wells, _ = sim.layout(rng, cs)
     sim4.plant_wells4(rng, wells, cs, shapes)
-    blurred = sim.plant_defocus(rng, wells, cs, 3)
-    annotated = sim4.choose_annotated(rng, wells, cs)
-    ev = evidence(wells)
-    ev["annotated_names_with_out_of_focus_image"] = sorted(set(annotated) & {turned(w) for w in blurred})
-    return ev
-
-
-def _annotated_names(annotated4: list, wells: list, in_focus: dict, rng: np.random.Generator):
-    """The level-4 choice of names; a name whose image is out of focus is replaced by the next field of the
-    same kind (another vehicle well of the same plate area; the neighbouring concentration of the series)."""
-    by_name = {w.well: w for w in wells}
-    names, subs = list(annotated4), []
-    for old in annotated4:
-        if in_focus[old]:
-            continue
-        w = by_name[old]
-        if w.role == "vehicle":
-            pool = [x.well for x in wells if x.role == "vehicle" and in_focus[x.well] and x.well not in names
-                    and sim.is_edge(x.row, x.col) == sim.is_edge(w.row, w.col)]
-            new = pool[int(rng.integers(0, len(pool)))]
-        else:
-            series = sorted((x for x in wells if x.compound == w.compound), key=lambda x: x.dose)
-            k = series.index(w)
-            near = sorted((x for x in series if x is not w), key=lambda x: (abs(series.index(x) - k), -x.dose))
-            new = next(x.well for x in near if in_focus[x.well] and x.well not in names)
-        names[names.index(old)] = new
-        subs.append({"level4_name": old, "annotated_instead": new,
-                     "reason": "the image filed under the level-4 name is out of focus"})
-    return sorted(names), subs
+    sim.plant_defocus(rng, wells, cs, 3)
+    return evidence(wells)
 
 
 def _rows(tsv: str) -> tuple[list, list]:
@@ -311,22 +288,22 @@ def generate_l7(seed: int, level: int, workdir: Path, notes_fn):
                 raise RuntimeError("level 7: unexpected image source of the level-4 build")
             b.input_files[f"images/{n}_ch{ch}.tif"] = src
 
-    # ---- annotations: the level-4 names, the cells of the images that now carry them --------------------
-    drng = np.random.default_rng(887000 + seed)            # own stream: the level-4 plate of the seed is unchanged
+    # ---- annotations: the fields the lab counted at level 4, under the names of the images that show them --
     in_focus = {n: by_plate[shows[n]].defocus == 0 for n in names}
-    annotated, substituted = _annotated_names(sorted(pl["annotated"]), wells, in_focus, drng)
-    for k in [k for k in b.input_files if k.startswith("annotations/")]:
-        del b.input_files[k]
-    adir = workdir / "annotations_l7"
-    adir.mkdir(parents=True, exist_ok=True)
-    for f in adir.glob("*.tsv"):
-        f.unlink()
-    for n in annotated:
-        p = adir / f"{n}.tsv"
-        p.write_text(sim4.annotation_tsv(drng, pl["points"][shows[n]]))
-        b.input_files[f"annotations/{n}.tsv"] = p
+    annotated4 = sorted(pl["annotated"])                   # plate wells, chosen for coverage (sim4.choose_annotated)
+    level4_ann = {k: b.input_files.pop(k) for k in [k for k in b.input_files if k.startswith("annotations/")]}
+    if sorted(level4_ann) != [f"annotations/{p}.tsv" for p in annotated4]:
+        raise RuntimeError("level 7: unexpected annotation files of the level-4 build")
+    if any(by_plate[p].defocus > 0 for p in annotated4):   # level 4 never annotates an out-of-focus field
+        raise RuntimeError("level 7: the level-4 build annotated an out-of-focus field")
+    annotated = sorted(turned(p) for p in annotated4)      # image names
+    for n in annotated:                                    # the level-4 file: same clicks, same manual count
+        b.input_files[f"annotations/{n}.tsv"] = level4_ann[f"annotations/{shows[n]}.tsv"]
     if len(annotated) != 8 or len(set(annotated)) != 8 or not all(in_focus[n] for n in annotated):
         raise RuntimeError("level 7: eight in-focus annotated fields expected")
+    for n in annotated:
+        if len(pl["points"][shows[n]]) != by_plate[shows[n]].n_cells:
+            raise RuntimeError("level 7: manual count and planted count of an annotated field differ")
 
     # ---- planted truth: per image under the image name, per compound unchanged --------------------------
     truth = json.loads(b.tests_files["reference/truth.json"])
@@ -343,9 +320,20 @@ def generate_l7(seed: int, level: int, workdir: Path, notes_fn):
     truth["plate"]["out_of_focus_plate_wells"] = truth["plate"]["out_of_focus"]
     truth["plate"]["out_of_focus"] = sorted(turned(w) for w in truth["plate"]["out_of_focus"])     # image names
     truth["plate"]["annotated_fields"] = annotated
+    # what the layout says about the names the annotation files now carry, next to what they hold
+    untreated = {area: float(np.median([w.n_cells for w in wells if w.role == "vehicle" and w.defocus == 0
+                                        and sim.is_edge(w.row, w.col) == area])) for area in (True, False)}
+    named = []
+    for n in annotated:
+        lay, w = by_plate[n], by_plate[shows[n]]           # layout entry of the name / the field that was counted
+        named.append({"file": n, "layout_role": lay.role, "layout_compound": lay.compound, "layout_dose_uM": lay.dose,
+                      "manual_count": w.n_cells, "shows_plate_well": w.well, "field_role": w.role,
+                      "field_compound": w.compound, "field_dose_uM": w.dose,
+                      "untreated_cells_of_plate_area": untreated[sim.is_edge(w.row, w.col)],
+                      "count_over_untreated": round(w.n_cells / untreated[sim.is_edge(w.row, w.col)], 3)})
     truth["plants"] = {"plate_orientation": {
-        "turned_by_degrees": 180, "image_shows_plate_well": shows, "annotated_names_level4": sorted(pl["annotated"]),
-        "annotated_names_replaced": substituted, "evidence_on_planted_values": ev}}
+        "turned_by_degrees": 180, "image_shows_plate_well": shows, "annotated_plate_wells": annotated4,
+        "annotated_fields_as_the_layout_names_them": named, "evidence_on_planted_values": ev}}
     b.tests_files["reference/truth.json"] = json.dumps(truth, indent=1)
     # the level-4 verifier, unchanged, as a module; score.py runs it under each naming of the per-well rows
     b.tests_files["score_l4.py"] = b.tests_files["score.py"]
@@ -422,11 +410,8 @@ def generate_l7(seed: int, level: int, workdir: Path, notes_fn):
         if a.script is None:                                # truth-derived files follow the images
             attacks.append(Attack(a.name, a.description, a.max_score, files=refiled(a.files)))
         elif a.script.startswith(run4):                     # "ignores exactly one element": the level-7 step is done
-            note, cap = " (plate controls checked, layout applied turned)", a.max_score
-            if a.name == "naive_no_focus_qc":               # measured exception, see NO_FOCUS_QC_NOTE
-                note, cap = note + NO_FOCUS_QC_NOTE, max(cap, b.pass_threshold - 0.05)
-            attacks.append(Attack(a.name, a.description + note, cap, script=run7 + a.script[len(run4):],
-                                  script_files=l7_py))
+            attacks.append(Attack(a.name, a.description + " (plate controls checked, layout applied turned)",
+                                  a.max_score, script=run7 + a.script[len(run4):], script_files=l7_py))
         else:                                               # lower-level methods run as they were written
             attacks.append(Attack(a.name, a.description + " (level-7 inputs, layout joined by well name)",
                                   a.max_score, script=a.script, script_files=a.script_files))
@@ -450,11 +435,14 @@ def generate_l7(seed: int, level: int, workdir: Path, notes_fn):
                 f"{r['series_falling']['count']} / {r['series_rising']['count']}, marker per cell "
                 f"{r['series_falling']['marker']} / {r['series_rising']['marker']}")
 
-    kinds = []
-    for a in annotated:
-        w = by_plate[shows[a]]
-        what = w.role if w.role in ("vehicle", "reference") else f"{w.compound} at {w.dose:.3g} uM"
-        kinds.append(f"{a} shows {what} ({w.n_cells} cells)")
+    def entry(role, compound, dose):
+        return role if role in ("vehicle", "reference") else f"{compound} at {dose:.3g} uM"
+
+    kinds = [f"{x['file']}.tsv, {x['manual_count']} cells (the layout calls {x['file']} "
+             f"{entry(x['layout_role'], x['layout_compound'], x['layout_dose_uM'])}; the field is plate well "
+             f"{x['shows_plate_well']}, {entry(x['field_role'], x['field_compound'], x['field_dose_uM'])})" for x in named]
+    low = [x for x in named if x["count_over_untreated"] < 0.5]
+    low_ctrl = [x for x in low if x["layout_role"] in ("vehicle", "reference")]
     b.traps = list(b.traps) + [Trap(
         "T_plate_orientation",
         "The plate lay on the microscope stage turned by 180 degrees. The acquisition software names the images by "
@@ -464,18 +452,23 @@ def generate_l7(seed: int, level: int, workdir: Path, notes_fn):
         "analysis that joins images and layout by well name uses compound wells as vehicle wells and mid-series "
         "wells as reference wells, reads every dose series backwards and credits it to the compound of the "
         "opposite row. Nothing fails: counting, its validation against the manual counts and the focus QC are per "
-        "image and are right (the annotation files carry the level-4 names and hold the cells of the images that "
-        "now carry those names: " + "; ".join(kinds) + (
-            "; replaced because the image under the level-4 name is out of focus: " + ", ".join(
-                f"{s['level4_name']} -> {s['annotated_instead']}" for s in substituted) if substituted else "")
-        + "), curves are fitted and potencies or `inactive` are reported.",
+        "image and are right, curves are fitted and potencies or `inactive` are reported. The lab counted the same "
+        "eight physical fields as at level 4; each annotation file is the level-4 file under the name of the image "
+        "that shows its field: " + "; ".join(kinds) + ".",
         "looking at the plate controls before they are used: a plate map of both readouts with the roles of the "
         "layout, or the control statistics (reference against vehicle wells, spread of the vehicle wells). A plate "
         "fits into a stage holder in exactly two orientations, and the same statistics with the layout turned by "
         "180 degrees settle it. Measured on the planted values (cell number and mean marker level of every image; "
         "out-of-focus images left out). Layout joined by well name: " + controls(n) + ". Layout turned by 180 "
         "degrees: " + controls(t) + ". The reference wells are the plainest sign: the reference inhibitor is "
-        "described in the assay notes as an inhibitor of the marker pathway at 10 uM.",
+        "described in the assay notes as an inhibitor of the marker pathway at 10 uM. A second sign, also in the "
+        "data and in no text: the manual counts. The annotation files carry names that mean something else in the "
+        f"layout than the fields they hold; {len(low)} of the 8 files hold fewer than half the cells of an "
+        f"untreated field of their plate area ({untreated[False]:.0f} cells inner wells, {untreated[True]:.0f} outer "
+        "ring), " + (f"{len(low_ctrl)} of them under a name the layout calls vehicle or reference"
+                     if low_ctrl else "none of them under a name the layout calls vehicle or reference")
+        + " (" + "; ".join(f"{x['file']}: {x['manual_count']} cells, layout "
+                           f"{entry(x['layout_role'], x['layout_compound'], x['layout_dose_uM'])}" for x in low) + ").",
         "Verification / skipped QC step")]
     b.judge_explanation_md = b.judge_explanation_md.rstrip() + L7_JUDGE
     b.capabilities = list(b.capabilities) + ["checking the plate controls against the layout before using them"]

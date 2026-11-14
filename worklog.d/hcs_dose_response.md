@@ -322,3 +322,85 @@ Spec `docs/specs/l7/hcs_dose_response.md`: the level-4 plate of the seed, imaged
 - No agent pilot.
 - The second solution was run by hand on seed 1 only; on seed 2 it ran inside the gate.
 - Seeds other than 1, 2, 3 and 10 were not rendered.
+
+# Level 7, revision of the annotated fields (2026-11-14, from 04:33 UTC)
+
+Maintainer decision after the yardstick runs on the first version (reported to me, records not read by
+me): the lab annotated the same physical fields as at level 4; each annotation file carries the name of
+the image that shows its field. Level 7 then differs from level 6 only by the re-filing.
+
+## L7-5 What changed
+- `l7.py` only. The annotation files are the level-4 files (same Path objects) under the turned names.
+  The replacement rule for out-of-focus annotated names is removed; level 4 never annotates an
+  out-of-focus field (`choose_annotated` draws from in-focus wells, `generate_l4` asserts it) and `l7.py`
+  raises if the level-4 build ever did. Own jitter stream and `annotations_l7/` work directory are gone.
+- The orientation guard and the `discoverable_by` control statistics never used the annotated fields:
+  unchanged. `survey` lost its bookkeeping of out-of-focus annotated names.
+- `truth.json`: `annotated` flags by image name; `plants.plate_orientation.annotated_plate_wells` and
+  `annotated_fields_as_the_layout_names_them` (per file: manual count, what the layout calls the name, which
+  field it is, count relative to an untreated field of the plate area) replace the two keys of the first
+  version.
+- Task card: the decision point lists the eight files that way; `discoverable_by` names the manual counts
+  as a second sign with the measured numbers; the judge text describes the rule and no longer has the
+  paragraph on the raised ceiling or the weakness "annotated fields lost their design".
+- Scorer, solutions, pipelines: not touched. `validation.tsv` is checked against the eight annotated
+  images as before; the four namings are still accepted.
+
+## L7-6 Measurements before gating (dev runs, containers of the level-4 agent image)
+- Reference tuning, seeds 1 / 2 / 3 / 10: outline threshold 0.12 on all four (worst annotated field 0.76 /
+  0.33 / 0.54 / 0.79 of the SOP limit); seed 1 is exactly the level-4 result. Oracle 1.0 on all four.
+- `naive_no_focus_qc`: 0.544 / 0.544 / 0.669 / 0.581. Ceiling back at 0.75, exception removed from the
+  task card.
+- `l6_reference`: 0.35 on all four; its `dose_response.tsv` is the same file as on 2026-11-12 for each seed.
+- Scratch builds of both seeds against the previous level-7 builds in `tasks/` (sha256 manifests taken
+  before anything was changed): 210 of 220 files identical, among them all 192 images; `README.md` and
+  `tests/reference/truth.json` differ; the eight annotation files have other names. Each level-7
+  annotation file is byte-identical to the level-6 file of the turned name (seed 1 against
+  `tasks/hcs-dose-response-s0001-l6`; seed 2 against a level-6 build regenerated into scratch, because
+  `tasks/hcs-dose-response-s0002-l6` did not exist at that moment and is the maintainer's to write).
+- Levels 4 and 6 of seed 1 regenerated into scratch: `diff -r` against `tasks/`, no difference.
+
+## L7-7 Disk
+- 04:38 free disk 1.8 GB, 04:41 1.7 GB: build cache of gates that were not mine (rnaseq_confound seeds 4
+  and 5). I pruned the build cache once (2.09 GB released) and did not start my gates; asked the
+  maintainer. Answer: disk freed to 5.3 GB, go ahead, a dip to about 1.5 GB for a minute is acceptable,
+  stop below 1 GB.
+- Gates run through `<scratch>/hcs_l7_check/gate.sh`: it watches free disk every 5 s, prunes the build
+  cache as soon as the images of a gate are built and again at the end, and stops below 1 GB.
+
+## L7-8 Gate runs of the revision
+- First start 04:44:53. While it ran I re-measured the by-name variants that the task card quotes
+  (dev runs, one thread each, next to the gate for about a minute): `controls_swapped_only` 0.35 on both
+  seeds with the same counts of right entries as on 2026-11-12 (seed 1: four potency values moved a
+  little); the example series of seed 1 in the judge text was 0.01 off in three values because the
+  voting parameters are now those of level 4. Stopped my gate after 4 min (killed the `make` process,
+  removed its one container, which ran my `...-s0001-l7-agent` image), corrected the series in `l7.py`
+  and the design notes, started again. Logs of the stopped run: `<scratch>/hcs_l7_check/*_stopped_by_me.log`.
+- Second start 04:50:10. Seed 1: all 37 checks ok incl. Harbor oracle 1.0 / nop 0.0, 12.36 min. Seed 2
+  (now with Harbor as well): all 37 checks ok, 12.99 min. Free disk: 6.7 GB at the start of each gate,
+  4.6 GB when its images were built (40-45 s after the start), 6.7 GB again after the prune that the
+  runner issued at that moment; lowest value seen in either gate 4.5 GB.
+- Scores that changed against the first version: `naive_no_focus_qc` 0.544 / 0.544 (was 0.825 / 0.544),
+  `naive_fragments_counted` 0.481 / 0.481 (was 0.510 / 0.510), the six level-3-route attacks 0.05-0.10
+  (were 0.05-0.16). `l6_reference`, `layout_by_name_everything_else_right`, `controls_swapped_only` 0.35 as
+  before; all probes 1.0.
+- After the gates: levels 4 and 6 of seed 1 and level 7 of both seeds regenerated into scratch, `diff -r`
+  against `tasks/`: no difference. Revised level-7 tasks in `tasks/` against the manifests of the first
+  version: all 192 images identical, `README.md` and `truth.json` differ, annotation files renamed; every
+  level-7 annotation file is byte-identical to the level-6 file of the turned name, for seed 2 now against
+  the maintainer's `tasks/hcs-dose-response-s0002-l6` (read only).
+- Second solution by hand on the gated tasks (the gate keeps no logs): `nuclei` 12 / flow off on both
+  seeds (worst annotated field 0.63 / 0.67 of the limit), series balance -2 against 8 and -4 against 9,
+  score 1.0 / 1.0, 96.4% / 100% of the wells without annotation inside the tolerance; 6.5 and 5.8 min.
+- Reference solution with the outline threshold forced to 0.15 on the revised seed-1 task: worst annotated
+  field 0.76 of the limit as with 0.12, full solution 1.0, without focus QC 0.825. The tie-break finding of
+  2026-11-12 holds for the revised task; it is listed as a limitation, the battery has 0.544.
+- `naive_fragments_counted` on seed 1 is 0.481 where level 4 has 0.3125: level-7 code on the level-4
+  inputs gives 0.481 too, so it is the nuclear-signal level over all fields, not the data.
+- A cleanup command of mine (copy of two `tests/` directories into scratch, removed again in the same
+  command) was refused by the environment's safety check; I did not rephrase it and scored in place with
+  bytecode writing switched off instead. No `__pycache__` under `tasks/` (checked).
+
+## Not done in the revision
+- No model run on the revised tasks.
+- Seeds 3 and 10: reference solution, its variant without focus QC and `l6_reference` only.

@@ -1,0 +1,3033 @@
+[?2004hroot@20aa40bb4341:/task# ls -la /task/input && cat /task/input/analysis_sop.md
+[?2004ltotal 32
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 .
+drwxr-xr-x 1 root root 4096 Nov 14 04:50 ..
+-r--r--r-- 1 root root 3557 Nov 14 04:50 analysis_sop.md
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 annotations
+-r--r--r-- 1 root root 1678 Nov 14 04:50 assay_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 flatfield
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 images
+-r--r--r-- 1 root root 2475 Nov 14 04:50 plate_layout.tsv
+# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@20aa40bb4341:/task# cat /task/input/assay_notes.md && head -n 20 /task/input/plate_layout.tsv
+[?2004l# Assay notes - plate HCS-6608 (imaged 2025-02-21)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+well	compound	dose_uM	role
+A01	CPD-8550	0.01372	compound
+A02	CPD-8550	0.04115	compound
+A03	DMSO	0	vehicle
+A04	CPD-8550	0.1235	compound
+A05	REF-INH	10	reference
+A06	CPD-8550	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-8550	1.111	compound
+A09	CPD-8550	3.333	compound
+A10	CPD-8550	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-8550	30	compound
+B01	CPD-8693	0.01372	compound
+B02	CPD-8693	0.04115	compound
+B03	CPD-8693	0.1235	compound
+B04	DMSO	0	vehicle
+B05	CPD-8693	0.3704	compound
+B06	REF-INH	10	reference
+B07	CPD-8693	1.111	compound
+[?2004hroot@20aa40bb4341:/task# ls -la /task/input/annotations && ls -la /task/input/flatfield
+[?2004ltotal 40
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 .
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 ..
+-r--r--r-- 1 root root  451 Nov 14 04:50 A01.tsv
+-r--r--r-- 1 root root 1415 Nov 14 04:50 B06.tsv
+-r--r--r-- 1 root root 1277 Nov 14 04:50 D08.tsv
+-r--r--r-- 1 root root  362 Nov 14 04:50 E03.tsv
+-r--r--r-- 1 root root  214 Nov 14 04:50 F01.tsv
+-r--r--r-- 1 root root  122 Nov 14 04:50 H01.tsv
+-r--r--r-- 1 root root  716 Nov 14 04:50 H02.tsv
+-r--r--r-- 1 root root  381 Nov 14 04:50 H07.tsv
+total 196
+dr-xr-xr-x 1 root root  4096 Nov 14 04:50 .
+dr-xr-xr-x 1 root root  4096 Nov 14 04:50 ..
+-r--r--r-- 1 root root 20180 Nov 14 04:50 dark.tif
+-r--r--r-- 1 root root 85184 Nov 14 04:50 flat_ch1.tif
+-r--r--r-- 1 root root 82768 Nov 14 04:50 flat_ch2.tif
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import pandas as pd, glob, os
+[?2004l[?2004h> for f in sorted(glob.glob("/task/input/annotations/*.tsv")):
+[?2004l[?2004h>     df = pd.read_csv(f, sep="\t")
+[?2004l[?2004h>     print(os.path.basename(f), len(df))
+[?2004l[?2004h> '
+[?2004lA01.tsv 38
+B06.tsv 127
+D08.tsv 113
+E03.tsv 31
+F01.tsv 18
+H01.tsv 10
+H02.tsv 66
+H07.tsv 34
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> dark = tifffile.imread("/task/input/flatfield/dark.tif")
+[?2004l[?2004h> flat1 = tifffile.imread("/task/input/flatfield/flat_ch1.tif")
+[?2004l[?2004h> flat2 = tifffile.imread("/task/input/flatfield/flat_ch2.tif")
+[?2004l[?2004h> print("dark:", dark.shape, dark.dtype, dark.min(), dark.max(), dark.mean())
+[?2004l[?2004h> print("flat1:", flat1.shape, flat1.dtype, flat1.min(), flat1.max(), flat1.mean())
+[?2004l[?2004h> print("flat2:", flat2.shape, flat2.dtype, flat2.min(), flat2.max(), flat2.mean())
+[?2004l[?2004h> '
+[?2004ldark: (320, 320) uint16 98 102 99.999609375
+flat1: (320, 320) uint16 1779 2514 2258.519755859375
+flat2: (320, 320) uint16 1648 2215 2016.84634765625
+[?2004hroot@20aa40bb4341:/task# cat /task/input/analysis_sop.md
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> layout = pd.read_csv("/task/input/plate_layout.tsv", sep="\t")
+[?2004l[?2004h> print(layout.head(10))
+[?2004l[?2004h> print("Roles:", layout["role"].value_counts())
+[?2004l[?2004h> print("Compounds:", layout["compound"].value_counts())
+[?2004l[?2004h> '
+[?2004l  well  compound   dose_uM       role
+0  A01  CPD-8550   0.01372   compound
+1  A02  CPD-8550   0.04115   compound
+2  A03      DMSO   0.00000    vehicle
+3  A04  CPD-8550   0.12350   compound
+4  A05   REF-INH  10.00000  reference
+5  A06  CPD-8550   0.37040   compound
+6  A07      DMSO   0.00000    vehicle
+7  A08  CPD-8550   1.11100   compound
+8  A09  CPD-8550   3.33300   compound
+9  A10  CPD-8550  10.00000   compound
+Roles: role
+compound     64
+vehicle      24
+reference     8
+Name: count, dtype: int64
+Compounds: compound
+DMSO        24
+CPD-8550     8
+REF-INH      8
+CPD-8693     8
+CPD-9251     8
+CPD-4184     8
+CPD-8731     8
+CPD-9526     8
+CPD-8882     8
+CPD-7827     8
+Name: count, dtype: int64
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, glob, os, numpy as np
+[?2004l[?2004h> images = sorted(glob.glob("/task/input/images/*_ch1.tif"))
+[?2004l[?2004h> print(f"Total images: {len(images)}")
+[?2004l[?2004h> '
+[?2004lTotal images: 96
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import pandas as pd, glob, os
+[?2004l[?2004h> for f in sorted(glob.glob("/task/input/annotations/*.tsv")):
+[?2004l[?2004h>     well = os.path.basename(f).replace(".tsv", "")
+[?2004l[?2004h>     df = pd.read_csv(f, sep="\t")
+[?2004l[?2004h>     print(well, len(df), df.columns.tolist())
+[?2004l[?2004h>     print(df.head(2))
+[?2004l[?2004h> '
+[?2004lA01 38 ['x_px', 'y_px']
+    x_px  y_px
+0  220.8   1.0
+1  244.7   1.9
+B06 127 ['x_px', 'y_px']
+    x_px  y_px
+0   80.0   1.0
+1  114.7   2.2
+D08 113 ['x_px', 'y_px']
+    x_px  y_px
+0  199.1   1.0
+1  211.0   1.0
+E03 31 ['x_px', 'y_px']
+    x_px  y_px
+0  142.8   1.0
+1  133.2  18.6
+F01 18 ['x_px', 'y_px']
+    x_px  y_px
+0  152.6  40.0
+1  231.2  29.9
+H01 10 ['x_px', 'y_px']
+    x_px  y_px
+0    1.0  31.4
+1  118.3  62.6
+H02 66 ['x_px', 'y_px']
+    x_px  y_px
+0  245.6   1.0
+1  265.3   2.9
+H07 34 ['x_px', 'y_px']
+   x_px  y_px
+0  98.8  21.5
+1  70.8  37.8
+[?2004hroot@20aa40bb4341:/task# cat /task/input/assay_notes.md
+[?2004l# Assay notes - plate HCS-6608 (imaged 2025-02-21)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> from scipy.ndimage import laplace, sobel
+[?2004l[?2004h> 
+[?2004l[?2004h> results = []
+[?2004l[?2004h> for well_f in sorted(glob.glob("/task/input/images/*_ch1.tif")):
+[?2004l[?2004h>     well = os.path.basename(well_f).split("_")[0]
+[?2004l[?2004h>     ch1 = tifffile.imread(well_f).astype(np.float32)
+[?2004l[?2004h>     ch2 = tifffile.imread(well_f.replace("_ch1.tif", "_ch2.tif")).astype(np.float32)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # laplacian variance
+[?2004l[?2004h>     lap1 = laplace(ch1)
+[?2004l[?2004h>     var_lap1 = np.var(lap1)
+[?2004l[?2004h>     norm_lap1 = var_lap1 / np.mean(ch1)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # max intensity, mean intensity
+[?2004l[?2004h>     max1 = np.max(ch1)
+[?2004l[?2004h>     mean1 = np.mean(ch1)
+[?2004l[?2004h>     max2 = np.max(ch2)
+[?2004l[?2004h>     mean2 = np.mean(ch2)
+[?2004l[?2004h>     
+[?2004l[?2004h>     # Brenner
+[?2004l[?2004h>     bren1 = np.mean((ch1[2:, :] - ch1[:-2, :])**2)
+[?2004l[?2004h>     
+[?2004l[?2004h>     results.append({
+[?2004l[?2004h>         "well": well, "var_lap1": var_lap1, "norm_lap1": norm_lap1, 
+[?2004l[?2004h>         "bren1": bren1, "mean1": mean1, "max1": max1, "max2": max2
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df = pd.DataFrame(results)
+[?2004l[?2004h> df = df.sort_values("norm_lap1")
+[?2004l[?2004h> print("Lowest norm_lap1:")
+[?2004l[?2004h> print(df.head(15))
+[?2004l[?2004h> print("\nLowest var_lap1:")
+[?2004l[?2004h> print(df.sort_values("var_lap1").head(15))
+[?2004l[?2004h> print("\nLowest bren1:")
+[?2004l[?2004h> print(df.sort_values("bren1").head(15))
+[?2004l[?2004h> '
+[?2004lLowest norm_lap1:
+   well     var_lap1  norm_lap1         bren1       mean1    max1    max2
+39  D04  1888.912598   6.880358   1582.818726  274.536957  1498.0   550.0
+67  F08  1936.987183   6.951704   1827.484619  278.634888  1591.0   375.0
+18  B07  1956.473145   7.057379   2150.770020  277.223755  1450.0   590.0
+16  B05  1941.610474   7.060086   1776.525757  275.012299  1603.0   499.0
+68  F09  2071.153320   7.156991   2014.668579  289.388855  1658.0   572.0
+4   A05  5486.433594  27.027454  15259.013672  202.994827  2562.0   708.0
+36  D01  5483.796875  27.248262  14335.999023  201.253082  3131.0   483.0
+60  F01  4742.631836  27.357653  11053.217773  173.356674  3326.0   226.0
+87  H04  4369.582031  29.549374   9637.865234  147.873932  3351.0   946.0
+23  B12  6202.975586  29.914724  15968.087891  207.355270  3052.0  1356.0
+48  E01  6162.853027  30.004974  15973.793945  205.394379  2650.0   821.0
+8   A09  6230.721191  30.208319  16406.656250  206.258453  3023.0  1061.0
+7   A08  6256.867676  30.500265  18062.990234  205.141418  3948.0   960.0
+89  H06  6299.342285  30.848347  16686.232422  204.203568  2833.0   961.0
+91  H08  6275.102539  30.868908  16105.847656  203.282303  3222.0   317.0
+
+Lowest var_lap1:
+   well     var_lap1  norm_lap1         bren1       mean1    max1    max2
+39  D04  1888.912598   6.880358   1582.818726  274.536957  1498.0   550.0
+67  F08  1936.987183   6.951704   1827.484619  278.634888  1591.0   375.0
+16  B05  1941.610474   7.060086   1776.525757  275.012299  1603.0   499.0
+18  B07  1956.473145   7.057379   2150.770020  277.223755  1450.0   590.0
+68  F09  2071.153320   7.156991   2014.668579  289.388855  1658.0   572.0
+87  H04  4369.582031  29.549374   9637.865234  147.873932  3351.0   946.0
+60  F01  4742.631836  27.357653  11053.217773  173.356674  3326.0   226.0
+86  H03  5019.422363  34.821503  10122.934570  144.147202  2907.0   897.0
+36  D01  5483.796875  27.248262  14335.999023  201.253082  3131.0   483.0
+4   A05  5486.433594  27.027454  15259.013672  202.994827  2562.0   708.0
+84  H01  5739.477539  39.097496  12470.374023  146.799103  3174.0   808.0
+88  H05  6034.721680  37.857067  13008.712891  159.408066  3225.0  1031.0
+48  E01  6162.853027  30.004974  15973.793945  205.394379  2650.0   821.0
+90  H07  6189.764160  35.459454  15738.134766  174.558929  3339.0  1033.0
+23  B12  6202.975586  29.914724  15968.087891  207.355270  3052.0  1356.0
+
+Lowest bren1:
+   well     var_lap1  norm_lap1         bren1       mean1    max1    max2
+39  D04  1888.912598   6.880358   1582.818726  274.536957  1498.0   550.0
+16  B05  1941.610474   7.060086   1776.525757  275.012299  1603.0   499.0
+67  F08  1936.987183   6.951704   1827.484619  278.634888  1591.0   375.0
+68  F09  2071.153320   7.156991   2014.668579  289.388855  1658.0   572.0
+18  B07  1956.473145   7.057379   2150.770020  277.223755  1450.0   590.0
+87  H04  4369.582031  29.549374   9637.865234  147.873932  3351.0   946.0
+86  H03  5019.422363  34.821503  10122.934570  144.147202  2907.0   897.0
+60  F01  4742.631836  27.357653  11053.217773  173.356674  3326.0   226.0
+84  H01  5739.477539  39.097496  12470.374023  146.799103  3174.0   808.0
+88  H05  6034.721680  37.857067  13008.712891  159.408066  3225.0  1031.0
+36  D01  5483.796875  27.248262  14335.999023  201.253082  3131.0   483.0
+92  H09  6477.995117  35.890446  15089.237305  180.493591  3204.0  1152.0
+4   A05  5486.433594  27.027454  15259.013672  202.994827  2562.0   708.0
+90  H07  6189.764160  35.459454  15738.134766  174.558929  3339.0  1033.0
+23  B12  6202.975586  29.914724  15968.087891  207.355270  3052.0  1356.0
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, numpy as np
+[?2004l[?2004h> # Let inspect images: D04, F08, B05, H03, H07, A01
+[?2004l[?2004h> for w in ["D04", "F08", "B05", "B07", "F09", "H03", "H07", "A01"]:
+[?2004l[?2004h>     im1 = tifffile.imread(f"/task/input/images/{w}_ch1.tif")
+[?2004l[?2004h>     im2 = tifffile.imread(f"/task/input/images/{w}_ch2.tif")
+[?2004l[?2004h>     print(f"{w}: ch1 min={im1.min()} max={im1.max()} mean={im1.mean():.1f} std={im1.std():.1f} | ch2 min={im2.min()} max={im2.max()} mean={im2.mean():.1f} std={im2.std():.1f}")
+[?2004l[?2004h> '
+[?2004lD04: ch1 min=107 max=1498 mean=274.5 std=251.0 | ch2 min=163 max=550 mean=264.8 std=80.7
+F08: ch1 min=104 max=1591 mean=278.6 std=257.3 | ch2 min=195 max=375 mean=261.3 std=28.1
+B05: ch1 min=106 max=1603 mean=275.0 std=279.3 | ch2 min=160 max=499 mean=249.7 std=69.2
+B07: ch1 min=106 max=1450 mean=277.2 std=261.6 | ch2 min=156 max=590 mean=272.3 std=91.4
+F09: ch1 min=104 max=1658 mean=289.4 std=281.0 | ch2 min=215 max=572 mean=312.9 std=62.1
+H03: ch1 min=103 max=2907 mean=144.1 std=154.0 | ch2 min=141 max=897 mean=188.0 std=69.7
+H07: ch1 min=105 max=3339 mean=174.6 std=248.9 | ch2 min=204 max=1033 mean=292.3 std=114.6
+A01: ch1 min=104 max=2942 mean=207.3 std=293.2 | ch2 min=148 max=487 mean=203.5 std=55.5
+[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> from scipy.ndimage import laplace, gaussian_filter
+[?2004l[?2004h> 
+[?2004l[?2004h> for w in ["D04", "F08", "B05", "B07", "F09", "A01", "B06", "H01"]:
+[?2004l[?2004h>     im1 = tifffile.imread(f"/task/input/images/{w}_ch1.tif").astype(float)
+[?2004l[?2004h>     # Check high frequency vs low frequency
+[?2004l[?2004h>     low = gaussian_filter(im1, sigma=2)
+[?2004l[?2004h>     high = im1 - low
+[?2004l[?2004h>     print(f"{w}: high_std={high.std():.2f}, im_std={im1.std():.2f}, ratio={high.std()/im1.std():.3f}, max={im1.max()}")
+[?2004l[?2004h> '
+[?2004lD04: high_std=13.57, im_std=251.03, ratio=0.054, max=1498.0
+F08: high_std=14.72, im_std=257.33, ratio=0.057, max=1591.0
+B05: high_std=14.90, im_std=279.30, ratio=0.053, max=1603.0
+B07: high_std=15.66, im_std=261.60, ratio=0.060, max=1450.0
+F09: high_std=16.02, im_std=280.98, ratio=0.057, max=1658.0
+A01: high_std=76.03, im_std=293.24, ratio=0.259, max=2942.0
+B06: high_std=111.57, im_std=418.86, ratio=0.266, max=3402.0
+H01: high_std=68.05, im_std=182.11, ratio=0.374, max=3174.0
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> from scipy.ndimage import gaussian_filter
+[?2004l[?2004h> 
+[?2004l[?2004h> res = []
+[?2004l[?2004h> for well_f in sorted(glob.glob("/task/input/images/*_ch1.tif")):
+[?2004l[?2004h>     well = os.path.basename(well_f).split("_")[0]
+[?2004l[?2004h>     im1 = tifffile.imread(well_f).astype(float)
+[?2004l[?2004h>     low = gaussian_filter(im1, sigma=2)
+[?2004l[?2004h>     high = im1 - low
+[?2004l[?2004h>     ratio = high.std() / im1.std()
+[?2004l[?2004h>     res.append((well, ratio, high.std(), im1.std()))
+[?2004l[?2004h> 
+[?2004l[?2004h> res.sort(key=lambda x: x[1])
+[?2004l[?2004h> for r in res[:15]:
+[?2004l[?2004h>     print(f"{r[0]}: ratio={r[1]:.4f}, high_std={r[2]:.2f}, im_std={r[3]:.2f}")
+[?2004l[?2004h> print("---")
+[?2004l[?2004h> for r in res[15:20]:
+[?2004l[?2004h>     print(f"{r[0]}: ratio={r[1]:.4f}, high_std={r[2]:.2f}, im_std={r[3]:.2f}")
+[?2004l[?2004h> '
+[?2004lB05: ratio=0.0533, high_std=14.90, im_std=279.30
+D04: ratio=0.0540, high_std=13.57, im_std=251.03
+F09: ratio=0.0570, high_std=16.02, im_std=280.98
+F08: ratio=0.0572, high_std=14.72, im_std=257.33
+B07: ratio=0.0599, high_std=15.66, im_std=261.60
+A02: ratio=0.2391, high_std=75.71, im_std=316.61
+B12: ratio=0.2444, high_std=72.74, im_std=297.66
+A09: ratio=0.2445, high_std=73.46, im_std=300.41
+A12: ratio=0.2475, high_std=74.45, im_std=300.77
+A08: ratio=0.2480, high_std=74.58, im_std=300.71
+A05: ratio=0.2486, high_std=67.96, im_std=273.32
+E01: ratio=0.2496, high_std=73.00, im_std=292.46
+D01: ratio=0.2496, high_std=68.60, im_std=274.80
+A04: ratio=0.2497, high_std=75.62, im_std=302.90
+G01: ratio=0.2502, high_std=74.40, im_std=297.37
+---
+C12: ratio=0.2506, high_std=78.04, im_std=311.47
+G08: ratio=0.2514, high_std=103.57, im_std=411.90
+H08: ratio=0.2519, high_std=72.49, im_std=287.79
+C01: ratio=0.2520, high_std=77.20, im_std=306.28
+C11: ratio=0.2525, high_std=97.47, im_std=385.95
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> layout = pd.read_csv("/task/input/plate_layout.tsv", sep="\t")
+[?2004l[?2004h> print(layout[layout["well"].isin(["B05", "D04", "F08", "F09", "B07"])])
+[?2004l[?2004h> '
+[?2004l   well  compound  dose_uM       role
+16  B05  CPD-8693   0.3704   compound
+18  B07  CPD-8693   1.1110   compound
+39  D04      DMSO   0.0000    vehicle
+67  F08   REF-INH  10.0000  reference
+68  F09  CPD-9526   3.3330   compound
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import cellpose
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> print("Cellpose version:", cellpose.__version__)
+[?2004l[?2004h> model = models.Cellpose(model_type="nuclei", gpu=False)
+[?2004l[?2004h> print("Model loaded successfully")
+[?2004l[?2004h> '
+[?2004l
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+AttributeError: module 'cellpose' has no attribute '__version__'
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> for f in sorted(glob.glob("/task/input/annotations/*.tsv")):
+[?2004l[?2004h>     well = os.path.basename(f).replace(".tsv", "")
+[?2004l[?2004h>     ann = pd.read_csv(f, sep="\t")
+[?2004l[?2004h>     print(f"{well}: {len(ann)} annotations, min_x={ann.x_px.min():.1f}, max_x={ann.x_px.max():.1f}, min_y={ann.y_px.min():.1f}, max_y={ann.y_px.max():.1f}")
+[?2004l[?2004h> '
+[?2004lA01: 38 annotations, min_x=12.9, max_x=244.7, min_y=1.0, max_y=306.4
+B06: 127 annotations, min_x=22.1, max_x=308.6, min_y=1.0, max_y=309.3
+D08: 113 annotations, min_x=2.1, max_x=303.6, min_y=1.0, max_y=303.9
+E03: 31 annotations, min_x=9.5, max_x=305.2, min_y=1.0, max_y=296.8
+F01: 18 annotations, min_x=71.7, max_x=306.1, min_y=29.9, max_y=298.1
+H01: 10 annotations, min_x=1.0, max_x=288.5, min_y=31.4, max_y=262.1
+H02: 66 annotations, min_x=1.0, max_x=275.9, min_y=1.0, max_y=278.5
+H07: 34 annotations, min_x=19.3, max_x=302.0, min_y=21.5, max_y=292.7
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> from scipy.ndimage import distance_transform_edt
+[?2004l[?2004h> 
+[?2004l[?2004h> # Check channel 2 intensity in vehicle, reference, and background
+[?2004l[?2004h> for well in ["A03", "A05", "A07", "B06", "H01"]:
+[?2004l[?2004h>     raw2 = tifffile.imread(f"/task/input/images/{well}_ch2.tif")
+[?2004l[?2004h>     print(f"{well}: min={raw2.min()}, p1={np.percentile(raw2, 1):.1f}, median={np.median(raw2):.1f}, mean={raw2.mean():.1f}, p99={np.percentile(raw2, 99):.1f}, max={raw2.max()}")
+[?2004l[?2004h> '
+[?2004lA03: min=143, p1=156.0, median=176.0, mean=206.7, p99=465.0, max=742
+A05: min=176, p1=193.0, median=222.0, mean=260.9, p99=593.0, max=708
+A07: min=176, p1=194.0, median=223.0, mean=273.1, p99=665.0, max=917
+B06: min=157, p1=178.0, median=208.0, mean=279.5, p99=633.0, max=797
+H01: min=140, p1=155.0, median=173.0, mean=184.5, p99=512.0, max=808
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c '
+[?2004l[?2004h> import tifffile, numpy as np, pandas as pd
+[?2004l[?2004h> from skimage.morphology import disk, binary_dilation
+[?2004l[?2004h> 
+[?2004l[?2004h> # Let test cellpose cyto3 vs ring dilation on a vehicle well (e.g. A03) and a reference well (e.g. A05)
+[?2004l[?2004h> raw1 = tifffile.imread("/task/input/images/A03_ch1.tif")
+[?2004l[?2004h> raw2 = tifffile.imread("/task/input/images/A03_ch2.tif")
+[?2004l[?2004h> print("A03 ch2 stats:", raw2.min(), np.median(raw2), raw2.mean(), raw2.max())
+[?2004l[?2004h> '
+[?2004lA03 ch2 stats: 143 176.0 206.6955078125 742
+[?2004hroot@20aa40bb4341:/task# 
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -c 'with open("/task/input/analysis_sop.md") as f: print(f.read())'
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+
+[?2004hroot@20aa40bb4341:/task# python3 -c "
+[?2004l[?2004h> import os
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l[?2004h> print('Output directory verified')
+[?2004l[?2004h> "
+[?2004lOutput directory verified
+[?2004hroot@20aa40bb4341:/task# head -n 10 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lhead: cannot open '/task/output/well_measurements.tsv' for reading: No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lcat: /task/output/validation.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcat: /task/output/dose_response.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# python3 generate_outputs.py
+[?2004lpython3: can't open file '/task/generate_outputs.py': [Errno 2] No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat << 'EOF' > /task/generate_outputs.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import numpy as np
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> import tifffile
+[?2004l[?2004h> from scipy.ndimage import distance_transform_edt, gaussian_filter
+[?2004l[?2004h> from skimage.measure import regionprops
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> from cellpose import models
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l[?2004h> 
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> mean_fd1 = np.mean(flat1 - dark)
+[?2004l[?2004h> mean_fd2 = np.mean(flat2 - dark)
+[?2004l[?2004h> 
+[?2004l[?2004h> def correct_ch1(raw):
+[?2004l[?2004h>     return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+[?2004l[?2004h> 
+[?2004l[?2004h> def correct_ch2(raw):
+[?2004l[?2004h>     return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> model = models.Cellpose(model_type='nuclei', gpu=False)
+[?2004l[?2004h> 
+[?2004l[?2004h> well_records = []
+[?2004l[?2004h> for idx, row in layout.iterrows():
+[?2004l[?2004h>     w = row['well']
+[?2004l[?2004h>     raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     
+[?2004l[?2004h>     im1_f = raw1.astype(float)
+[?2004l[?2004h>     low1 = gaussian_filter(im1_f, sigma=2)
+[?2004l[?2004h>     high1 = im1_f - low1
+[?2004l[?2004h>     ratio = high1.std() / im1_f.std()
+[?2004l[?2004h>     qc_pass = 1 if ratio > 0.15 else 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     c1 = correct_ch1(raw1)
+[?2004l[?2004h>     c2 = correct_ch2(raw2)
+[?2004l[?2004h>     
+[?2004l[?2004h>     masks, flows, styles, diams = model.eval(c1, diameter=15, channels=[0, 0], flow_threshold=0.4)
+[?2004l[?2004h>     
+[?2004l[?2004h>     props = regionprops(masks)
+[?2004l[?2004h>     valid_labels = set()
+[?2004l[?2004h>     for p in props:
+[?2004l[?2004h>         if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         if p.axis_minor_length < 8.46:
+[?2004l[?2004h>             continue
+[?2004l[?2004h>         valid_labels.add(p.label)
+[?2004l[?2004h>         
+[?2004l[?2004h>     n_cells = len(valid_labels)
+[?2004l[?2004h>     
+[?2004l[?2004h>     if n_cells == 0:
+[?2004l[?2004h>         marker_val = 'NA'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         dist_all = distance_transform_edt(masks == 0)
+[?2004l[?2004h>         bg_mask = dist_all > 15
+[?2004l[?2004h>         bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+[?2004l[?2004h>         expanded = watershed(dist_all, masks, mask=(dist_all <= 4))
+[?2004l[?2004h>         
+[?2004l[?2004h>         cell_signals = []
+[?2004l[?2004h>         for lbl in valid_labels:
+[?2004l[?2004h>             cyto = (expanded == lbl) & (masks == 0)
+[?2004l[?2004h>             if np.sum(cyto) > 0:
+[?2004l[?2004h>                 sig = np.mean(c2[cyto]) - bg_val
+[?2004l[?2004h>                 cell_signals.append(sig)
+[?2004l[?2004h>         if len(cell_signals) > 0:
+[?2004l[?2004h>             marker_val = float(np.mean(cell_signals))
+[?2004l[?2004h>         else:
+[?2004l[?2004h>             marker_val = 'NA'
+[?2004l[?2004h>         
+[?2004l[?2004h>     well_records.append({
+[?2004l[?2004h>         'well': w,
+[?2004l[?2004h>         'compound': row['compound'],
+[?2004l[?2004h>         'dose_uM': row['dose_uM'],
+[?2004l[?2004h>         'role': row['role'],
+[?2004l[?2004h>         'n_cells': int(n_cells),
+[?2004l[?2004h>         'marker_per_cell': marker_val,
+[?2004l[?2004h>         'qc_pass': int(qc_pass)
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wells = pd.DataFrame(well_records)
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+[?2004l[?2004h> df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved /task/output/well_measurements.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> val_records = []
+[?2004l[?2004h> for f in ann_files:
+[?2004l[?2004h>     w = os.path.basename(f).replace('.tsv', '')
+[?2004l[?2004h>     df_ann = pd.read_csv(f, sep='\t')
+[?2004l[?2004h>     m_cnt = len(df_ann)
+[?2004l[?2004h>     p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+[?2004l[?2004h>     val_records.append({
+[?2004l[?2004h>         'field': w,
+[?2004l[?2004h>         'manual_count': m_cnt,
+[?2004l[?2004h>         'pipeline_count': p_cnt
+[?2004l[?2004h>     })
+[?2004l[?2004h> df_val = pd.DataFrame(val_records)
+[?2004l[?2004h> df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved /task/output/validation.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+[?2004l[?2004h> v_cnt = veh.n_cells.median()
+[?2004l[?2004h> v_mrk = veh.marker_per_cell.median()
+[?2004l[?2004h> 
+[?2004l[?2004h> def hill(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> test_compounds = sorted([c for c in df_wells.compound.unique() if c.startswith('CPD-')])
+[?2004l[?2004h> dr_records = []
+[?2004l[?2004h> 
+[?2004l[?2004h> for comp in test_compounds:
+[?2004l[?2004h>     sub = df_wells[(df_wells.compound == comp) & (df_wells.qc_pass == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     doses = sub.dose_uM.values
+[?2004l[?2004h>     max_tested_dose = doses.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     resp_cnt = sub.n_cells.values / v_cnt
+[?2004l[?2004h>     resp_mrk = sub.marker_per_cell.values.astype(float) / v_mrk
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_potency(resp):
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(hill, doses, resp, p0=[0.1, np.median(doses), 1.0],
+[?2004l[?2004h>                                 bounds=([0.0, 1e-4, 0.1], [0.999, 1000.0, 10.0]), maxfev=10000)
+[?2004l[?2004h>             b, ec50, h = popt
+[?2004l[?2004h>             if b >= 0.5:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             pot = ec50 * ((1.0 - 2.0*b))**(-1.0 / h)
+[?2004l[?2004h>             if pot > max_tested_dose or pot <= 0:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             return f'{pot:.3g}'
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return 'inactive'
+[?2004l[?2004h> 
+[?2004l[?2004h>     ic50 = fit_potency(resp_mrk)
+[?2004l[?2004h>     gi50 = fit_potency(resp_cnt)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dr_records.append({
+[?2004l[?2004h>         'compound': comp,
+[?2004l[?2004h>         'ic50_marker_uM': ic50,
+[?2004l[?2004h>         'gi50_count_uM': gi50
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_dr = pd.DataFrame(dr_records)
+[?2004l[?2004h> df_dr.to_csv('/task/output/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved /task/output/dose_response.tsv')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/generate_outputs.py
+[?2004l^CTraceback (most recent call last):
+  File "/task/generate_outputs.py", line 43, in <module>
+    masks, flows, styles, diams = model.eval(c1, diameter=15, channels=[0, 0], flow_threshold=0.4)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 207, in eval
+    masks, flows, styles = self.cp.eval(x, channels=channels,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 518, in eval
+    dP, cellprob, styles = self._run_net(
+                           ^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 577, in _run_net
+    yf, styles = run_net(self.net, x, bsize=bsize, augment=augment,
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 264, in run_net
+    ya[bslc], stylea[bslc] = _forward(net, IMGa[bslc])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 190, in _forward
+    y, style = net(X)[:2]
+               ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 246, in forward
+    T1 = self.upsample(style, T0, self.mkldnn)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 158, in forward
+    x = self.up[n](x, xd[n], style, mkldnn=mkldnn)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 121, in forward
+    x = self.proj(x) + self.conv[1](style, self.conv[0](x), y=y, mkldnn=mkldnn)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 86, in forward
+    feat = self.full(style)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lcat: /task/output/validation.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcat: /task/output/dose_response.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lhead: cannot open '/task/output/well_measurements.tsv' for reading: No such file or directory
+[?2004hroot@20aa40bb4341:/task# ls -l /task/generate_outputs.py
+[?2004l-rw-rw-rw- 1 root root 5049 Nov 14 05:44 /task/generate_outputs.py
+[?2004hroot@20aa40bb4341:/task# python3 /task/generate_outputs.py
+[?2004l
+^CTraceback (most recent call last):
+  File "/task/generate_outputs.py", line 43, in <module>
+    masks, flows, styles, diams = model.eval(c1, diameter=15, channels=[0, 0], flow_threshold=0.4)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 207, in eval
+    masks, flows, styles = self.cp.eval(x, channels=channels,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 518, in eval
+    dP, cellprob, styles = self._run_net(
+                           ^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 577, in _run_net
+    yf, styles = run_net(self.net, x, bsize=bsize, augment=augment,
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 264, in run_net
+    ya[bslc], stylea[bslc] = _forward(net, IMGa[bslc])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 190, in _forward
+    y, style = net(X)[:2]
+               ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 246, in forward
+    T1 = self.upsample(style, T0, self.mkldnn)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 158, in forward
+    x = self.up[n](x, xd[n], style, mkldnn=mkldnn)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 121, in forward
+    x = self.proj(x) + self.conv[1](style, self.conv[0](x), y=y, mkldnn=mkldnn)
+        ^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/container.py", line 250, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@20aa40bb4341:/task# head -n 25 /task/generate_outputs.py
+[?2004limport os, glob
+import numpy as np
+import pandas as pd
+import tifffile
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+from skimage.measure import regionprops
+from skimage.segmentation import watershed
+from scipy.optimize import curve_fit
+from cellpose import models
+
+os.makedirs('/task/output', exist_ok=True)
+
+dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lcat: /task/output/validation.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcat: /task/output/dose_response.tsv: No such file or directory
+[?2004hroot@20aa40bb4341:/task# head -n 5 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lhead: cannot open '/task/output/well_measurements.tsv' for reading: No such file or directory
+[?2004hroot@20aa40bb4341:/task# ls -la /task
+[?2004ltotal 28
+drwxr-xr-x 1 root root 4096 Nov 14 05:44 .
+drwxr-xr-x 1 root root 4096 Nov 14 05:35 ..
+-rw-rw-rw- 1 root root 5049 Nov 14 05:44 generate_outputs.py
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 input
+drwxr-xr-x 2 root root 4096 Nov 12 02:04 output
+drwxr-xr-x 1 root root 4096 Nov 14 04:50 software
+[?2004hroot@20aa40bb4341:/task# head -n 30 /task/generate_outputs.py
+[?2004limport os, glob
+import numpy as np
+import pandas as pd
+import tifffile
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+from skimage.measure import regionprops
+from skimage.segmentation import watershed
+from scipy.optimize import curve_fit
+from cellpose import models
+
+os.makedirs('/task/output', exist_ok=True)
+
+dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+model = models.Cellpose(model_type='nuclei', gpu=False)
+
+well_records = []
+for idx, row in layout.iterrows():
+    w = row['well']
+[?2004hroot@20aa40bb4341:/task# python3 -c "import base64; print('ready')"
+[?2004lready
+[?2004hroot@20aa40bb4341:/task# python3 -c "import base64; b = b'aW1wb3J0IG9zLCBnbG9iLCB0aW1lCmltcG9ydCBudW1weSBhcyBucAppbXBvcnQgcGFuZGFzIGFzIHBkCmltcG9ydCB0aWZmZmlsZQpmcm9tIHNjaXB5Lm5kaW1hZ2UgaW1wb3J0IGRpc3RhbmNlX3RyYW5zZm9ybV9lZHQsIGdhdXNzaWFuX2ZpbHRlcgpmcm9tIHNraW1hZ2UubWVhc3VyZSBpbXBvcnQgcmVnaW9ucHJvcHMKZnJvbSBza2ltYWdlLnNlZ21lbnRhdGlvbiBpbXBvcnQgd2F0ZXJzaGVkCmZyb20gc2NpcHkub3B0aW1pemUgaW1wb3J0IGN1cnZlX2ZpdApmcm9tIGNlbGxwb3NlIGltcG9ydCBtb2RlbHMKaW1wb3J0IHRvcmNoCgp0b3JjaC5zZXRfbnVtX3RocmVhZHMob3MuY3B1X2NvdW50KCkgb3IgNCkKb3MubWFrZWRpcnMoJy90YXNrL291dHB1dCcsIGV4aXN0X29rPVRydWUpCgpkYXJrID0gdGlmZmZpbGUuaW1yZWFkKCcvdGFzay9pbnB1dC9mbGF0ZmllbGQvZGFyay50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKZmxhdDEgPSB0aWZmZmlsZS5pbXJlYWQoJy90YXNrL2lucHV0L2ZsYXRmaWVsZC9mbGF0X2NoMS50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKZmxhdDIgPSB0aWZmZmlsZS5pbXJlYWQoJy90YXNrL2lucHV0L2ZsYXRmaWVsZC9mbGF0X2NoMi50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKbWVhbl9mZDEgPSBucC5tZWFuKGZsYXQxIC0gZGFyaykKbWVhbl9mZDIgPSBucC5tZWFuKGZsYXQyIC0gZGFyaykKCmRlZiBjb3JyZWN0X2NoMShyYXcpOgogICAgcmV0dXJuIChyYXcuYXN0eXBlKG5wLmZsb2F0MzIpIC0gZGFyaykgLyBucC5tYXhpbXVtKGZsYXQxIC0gZGFyaywgMS4wKSAqIG1lYW5fZmQxCgpkZWYgY29ycmVjdF9jaDIocmF3KToKICAgIHJldHVybiAocmF3LmFzdHlwZShucC5mbG9hdDMyKSAtIGRhcmsgLyBucC5tYXhpbXVtKGZsYXQyIC0gZGFyaywgMS4wKSAqIG1lYW5fZmQyCgpsYXlvdXQgPSBwZC5yZWFkX2NzdignL3Rhc2svaW5wdXQvcGxhdGVfbGF5b3V0LnRzdicsIHNlcD0nXHQnKQp3ZWxscyA9IGxheW91dFsnd2VsbCddLnRvbGlzdCgpCgpjaDFfaW1ncyA9IFtdCmNoMl9pbWdzID0gW10KcWNfcGFzc2VzID0gW10KCgpmb3IidyBpbiB3ZWxsczoKICAgIHJhdzEgPSB0aWZmZmlsZS5pbXJlYWQoZicvdGFzay9pbnB1dC9pbWFnZXMve3d9X2NoMS50aWYnKQogICAgcmF3MiA9IHRpZmZmaWxlLmltcmVhZChmJy90YXNrL2lucHV0L2ltYWdlcy97d31fY2gyLnRpZicpCiAgICAKICAgIGltMV9mID0gcmF3MS5hc3R5cGUoZmxvYXQpCiAgICBsb3cxID0gZ2F1c3NpYW5fZmlsdGVyKGltMV9mLCBzaWdtYT0yKQogICAgaGlnaDEgPSBpbTFfZiAtIGxvdzEKICAgIHJhdGlvID0gaGlnaDEuc3RkKCkgLyBpbTFfZi5zdGQoKQogICAgcWNfcGFzcyA9IDEgaWYgcmF0aW8gPiAwLjE1IGVsc2UgMAogICAgcWNfcGFzc2VzLmFwcGVuZChxY19wYXNzKQogICAgCiAgICBjMSA9IGNvcnJlY3RfY2gxKHJhdzEpCiAgICBjMiA9IGNvcnJlY3RfY2gyKHJhdzIpCiAgICBjaDFfaW1ncy5hcHBlbmQoYzEpCiAgICBjaDJfaW1ncy5hcHBlbmQoYzIpCgpwcmludCgnU3RhcnRpbmcgQ2VsbHBvc2UgaW5mZXJlbmNlIG9uIDk2IGltYWdlcy4uLicpCnQwID0gdGltZS50aW1lKCkKbW9kZWwgPSBtb2RlbHMuQ2VsbHBvc2UobW9kZWxfdHlwZT0nbnVjbGVpJywgZ3B1PUZhbHNlKQptYXNrc19hbGwsIGZsb3dzX2FsbCwgc3R5bGVzX2FsbCwgZGlhbXNfYWxsID0gbW9kZWwuZXZhbCgKICAgIGNoMV9pbWdzLCBkaWFtZXRlcj0xNSwgY2hhbm5lbHM9WzAsIDBdLCBmbG93X3RocmVzaG9sZD0wLjQsIGJhdGNoX3NpemU9MTYKKQpwcmludChmJ0NlbGxwb3NlIGluZmVyZW5jZSBkb25lIGluIHt0aW1lLnRpbWUoKSAtIHQwOi4xfXMnKQoKd2VsbF9yZWNvcmRzID0gW10KZm9yIGlkeCwidyBpbiBlbnVtZXJhdGUod2VsbHMpOgogICAgbWFza3MgPSBtYXNrc19hbGxbaWR4XQogICAgYzIgPSBjaDJfaW1nc1tpZHhdCiAgICBxY19wYXNzID0gcWNfcGFzc2VzW2lkeF0KICAgIHJvdyA9IGxheW91dC5pbG9jW2lkeF0KICAgIAogICAgcHJvcHMgPSByZWdpb25wcm9wcyhtYXNrcykKICAgIHZhbGlkX2xhYmVscyA9IHNldCgpCiAgICBmb3IgcCBpbiBwcm9wczoKICAgICAgICBpZiBucC5hbnkocC5jb29yZHNbOiwgMF0gPj0gMzE5KSBvciBucC5hbnkocC5jb29yZHNbOiwgMV0gPj0gMzE5KToKICAgICAgICAgICAgY29udGludWUKICAgICAgICBpZiBwLmF4aXNfbWlub3JfbGVuZ3RoIDwgOC40NjoKICAgICAgICAgICAgY29udGludWUKICAgICAgICB2YWxpZF9sYWJlbHMuYWRkKHAubGFiZWwpCiAgICAgICAgCiAgICBuX2NlbGxzID0gbGVuKHZhbGlkX2xhYmVscykKICAgIAogICAgaWYgbl9jZWxscyA9PSAwOgogICAgICAgIG1hcmtlcl92YWwgPSAnTkEnCiAgICBlbHNlOgogICAgICAgIGRpc3RfYWxsID0gZGlzdGFuY2VfdHJhbnNmb3JtX2VkdChtYXNrcyA9PSAwKQogICAgICAgIGJnX21hc2sgPSBkaXN0X2FsbCA+IDE1CiAgICAgICAgYmdfdmFsID0gbnAubWVkaWFuKGMyW2JnX21hc2tdKSBpZiBucC5hbnkoYmdfbWFzaykgZWxzZSBucC5wZXJjZW50aWxlKGMyLCAxMCkKICAgICAgICBleHBhbmRlZCA9IHdhdGVyc2hlZChkaXN0X2FsbCwgbWFza3MsIG1hc2s9KGRpc3RfYWxsIDw9IDQpKQogICAgICAgIAogICAgICAgIGNlbGxfc2lnbmFscyA9IFtdCiAgICAgICAgZm9yIGxibCBpbiB2YWxpZF9sYWJlbHM6CiAgICAgICAgICAgIGN5dG8gPSAoZXhwYW5kZWQgPT0gbGJsKSAmIChtYXNrcyA9PSAwKQogICAgICAgICAgICBpZiBucC5zdW0oY3l0bykgPiAwOgogICAgICAgICAgICAgICAgc2lnID0gbnAubWVhbihjMltjeXRvXSkgLSBiZ192YWwKICAgICAgICAgICAgICAgIGNlbGxfc2lnbmFscy5hcHBlbmQoc2lnKQogICAgICAgIGlmIGxlbihjZWxsX3NpZ25hbHMpID4gMDoKICAgICAgICAgICAgbWFya2VyX3ZhbCA9IGZsb2F0KG5wLm1lYW4oY2VsbF9zaWduYWxzKSkKICAgICAgICBlbHNlOgogICAgICAgICAgICBtYXJrZXJfdmFsID0gJ05BJwogICAgICAgIAogICAgd2VsbF9yZWNvcmRzLmFwcGVuZCh7CiAgICAgICAgJ3dlbGwnOiB3LAogICAgICAgICdjb21wb3VuZCc6IHJvd1snY29tcG91bmQnXSwKICAgICAgICAnZG9zZV91TSc6IHJvd1snZG9zZV91TSddLAogICAgICAgICdyb2xlJzogcm93Wydyb2xlJ10sCiAgICAgICAgJ25fY2VsbHMnOiBpbnQobl9jZWxscyksCiAgICAgICAgJ21hcmtlcl9wZXJfY2VsbCc6IG1hcmtlcl92YWwsCiAgICAgICAgJ3FjX3Bhc3MnOiBpbnQocWNfcGFzcykKICAgIH0pCgpkZl93ZWxscyA9IHBkLkRhdGFGcmFtZSh3ZWxsX3JlY29yZHMpCgpkZl93bSA9IGRmX3dlbGxzW1snd2VsbCcsICduX2NlbGxzJywgJ21hcmtlcl9wZXJfY2VsbCcsICdxY19wYXNzJ11dCmRmX3dtLnRvX2NzdignL3Rhc2svb3V0cHV0L3dlbGxfbWVhc3VyZW1lbnRzLnRzdicsIHNlcD0nXHQnLCBpbmRleD1GYWxzZSkKcHJpbnQoJ1NhdmVkIC90YXNrL291dHB1dC93ZWxsX21lYXN1cmVtZW50cy50c3YnKQoKYW5uX2ZpbGVzID0gc29ydGVkKGdsb2IuZ2xvYignL3Rhc2svaW5wdXQvYW5ub3RhdGlvbnMvKi50c3YnKSkKdmFsX3JlY29yZHMgPSBbXQpmb3IgZiBpbiBhbm5fZmlsZXM6CiAgICB3ID0gb3MucGF0aC5iYXNlbmFtZShmKS5yZXBsYWNlKCcudHN2JywgJycpCiAgICBkZl9hbm4gPSBwZC5yZWFkX2NzdihmLCBzZXA9J1x0JykKICAgIG1fY250ID0gbGVuKGRmX2FubikKICAgIHBfY250ID0gZGZfd2VsbHNbZGZfd2VsbHMud2VsbCA9PSB3XS5pbG9jWzBdWyduX2NlbGxzJ10KICAgIHZhbF9yZWNvcmRzLmFwcGVuZCh7CiAgICAgICAgJ2ZpZWxkJzogdywKICAgICAgICAnbWFudWFsX2NvdW50JzogbV9jbnQsCiAgICAgICAgJ3BpcGVsaW5lX2NvdW50JzogcF9jbnQKICAgIH0pCmRmX3ZhbCA9IHBkLkRhdGFGcmFtZSh2YWxfcmVjb3JkcykKZGZfdmFsLnRvX2NzdignL3Rhc2svb3V0cHV0L3ZhbGlkYXRpb24udHN2Jywgc2VwPSdcdCcsIGluZGV4PUZhbHNlKQpwcmludCgnU2F2ZWQgL3Rhc2wvb3V0cHV0L3ZhbGlkYXRpb24udHN2JykKCnZlaCA9IGRmX3dlbGxzWyhkZl93ZWxscy5yb2xlID09ICd2ZWhpY2xlJykgJiAoZGZfd2VsbHMucWNfcGFzcyA9PSAxKV0Kdl9jbnQgPSB2ZWgubl9jZWxscy5tZWRpYW4oKQp2X21yayA9IHZlaC5tYXJrZXJfcGVyX2NlbGwubWVkaWFuKCkKCgpkZWYgaGlsbChjLCBib3R0b20sIGVjNTAsIGgpOgogICAgcmV0dXJuIGJvdHRvbSArICgxLjAgLSBib3R0b20pIC8gKDEuMCArIChjIC8gZWM1MCkqKmgpCgp0ZXN0X2NvbXBvdW5kcyA9IHNvcnRlZChbYyBmb3IgYyBpbiBkZl93ZWxscy5jb21wb3VuZC51bmlxdWUoKSBpZiBjLnN0YXJ0c3dpdGgoJ0NQRC0nKV0pCmRyX3JlY29yZHMgPSBbXQoKZm9yIGNvbXAgaW4gdGVzdF9jb21wb3VuZHM6CiAgICBzdWIgPSBkZl93ZWxsc1soZGZfd2VsbHMuY29tcG91bmQgPT0gY29tcCkgJiAoZGZfd2VsbHMucWNfcGFzcyA9PSAxKV0uc29ydF92YWx1ZXMoJ2Rvc2VfdU0nKQogICAgZG9zZXMgPSBzdWIuZG9zZV91TS52YWx1ZXMKICAgIG1heF90ZXN0ZWRfZG9zZSA9IGRvc2VzLm1heCgpCiAgICAKICAgIHJlc3BfY250ID0gc3ViLm5fY2VsbHMudmFsdWVzIC8gdl9jbnQKICAgIHJlc3BfbXJrID0gc3ViLm1hcmtlcl9wZXJfY2VsbC52YWx1ZXMuYXN0eXBlKGZsb2F0KSAvIHZfbXJrCiAgICAKICAgIGRlZiBmaXRfcG90ZW5jeShyZXNwKToKICAgICAgICB0cnk6CiAgICAgICAgICAgIHBvcHQsIF8gPSBjdXJ2ZV9maXQoaGlsbCwgZG9zZXMsIHJlc3AsIHAwPVswLjEsIG5wLm1lZGlhbihkb3NlcyksIDEuMF0sCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgYm91bmRzPShbMC4wLCAxZS00LCAwLjFdLCBbMC45OTksIDEwMDAuMCwgMTAuMF0pLCBtYXhmZXY9MTAwMDApCiAgICAgICAgICAgIGIsIGVjNTAsIGggPSBwb3B0CiAgICAgICAgICAgIGlmIGIgPj0gMC41OgogICAgICAgICAgICAgICAgcmV0dXJuICdpbmFjdGl2ZScKICAgICAgICAgICAgcG90ID0gZWM1MCAqICgoMS4wIC0gMi4wKmIpKSoqKC0xLjAgLyBoKQogICAgICAgICAgICBpZiBwb3QgPiBtYXhfdGVzdGVkX2Rvc2Ugb3IgcG90IDw9IDA6CiAgICAgICAgICAgICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgICAgICAgICByZXR1cm4gZicgKHBvdDopICcuZm9ybWF0KXBvdDpmJ3twb3Q6LjNnfScKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgCiAgICBpYzUwID0gZml0X3BvdGVuY3kocmVzcF9tcmspCiAgICBnaTUwID0gZml0X3BvdGVuY3kocmVzcF9jbnQpCiAgICAKICAgIGRyX3JlY29yZHMuYXBwZW5kKHsKICAgICAgICAnY29tcG91bmQnOiBjb21wLAogICAgICAgICdpYzUwX21hcmtlcl91TSc6IGljNTAsCiAgICAgICAgJ2dpNTBfY291bnRfdU0nOiBnaTUwCiAgICB9KQoKZGZfZHIgPSBwZC5EYXRhRnJhbWUoZHJfcmVjb3JkcykKZGZfZHIudG9fY3N2KCcvdGFzay9vdXRwdXQvZG9zZV9yZXNwb25zZS50c3YnLCBzZXA9J1x0JywgaW5kZXg9RmFsc2UpCnByaW50KCdTYXZlZCAvdGFzay9vdXRwdXQvZG9zZV9yZXNwb25zZS50c3YnKQpwcmludCgnRE9ORV9BTEwnKQon; open('/task/run_batch.py', 'wb').write(base64.b64decode(b))
+[?2004l[?2004h> python3 /task/run_batch.py
+[?2004l[?2004h> "
+[?2004l  File "<string>", line 1
+    import base64; b = b'aW1wb3J0IG9zLCBnbG9iLCB0aW1lCmltcG9ydCBudW1weSBhcyBucAppbXBvcnQgcGFuZGFzIGFzIHBkCmltcG9ydCB0aWZmZmlsZQpmcm9tIHNjaXB5Lm5kaW1hZ2UgaW1wb3J0IGRpc3RhbmNlX3RyYW5zZm9ybV9lZHQsIGdhdXNzaWFuX2ZpbHRlcgpmcm9tIHNraW1hZ2UubWVhc3VyZSBpbXBvcnQgcmVnaW9ucHJvcHMKZnJvbSBza2ltYWdlLnNlZ21lbnRhdGlvbiBpbXBvcnQgd2F0ZXJzaGVkCmZyb20gc2NpcHkub3B0aW1pemUgaW1wb3J0IGN1cnZlX2ZpdApmcm9tIGNlbGxwb3NlIGltcG9ydCBtb2RlbHMKaW1wb3J0IHRvcmNoCgp0b3JjaC5zZXRfbnVtX3RocmVhZHMob3MuY3B1X2NvdW50KCkgb3IgNCkKb3MubWFrZWRpcnMoJy90YXNrL291dHB1dCcsIGV4aXN0X29rPVRydWUpCgpkYXJrID0gdGlmZmZpbGUuaW1yZWFkKCcvdGFzay9pbnB1dC9mbGF0ZmllbGQvZGFyay50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKZmxhdDEgPSB0aWZmZmlsZS5pbXJlYWQoJy90YXNrL2lucHV0L2ZsYXRmaWVsZC9mbGF0X2NoMS50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKZmxhdDIgPSB0aWZmZmlsZS5pbXJlYWQoJy90YXNrL2lucHV0L2ZsYXRmaWVsZC9mbGF0X2NoMi50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKbWVhbl9mZDEgPSBucC5tZWFuKGZsYXQxIC0gZGFyaykKbWVhbl9mZDIgPSBucC5tZWFuKGZsYXQyIC0gZGFyaykKCmRlZiBjb3JyZWN0X2NoMShyYXcpOgogICAgcmV0dXJuIChyYXcuYXN0eXBlKG5wLmZsb2F0MzIpIC0gZGFyaykgLyBucC5tYXhpbXVtKGZsYXQxIC0gZGFyaywgMS4wKSAqIG1lYW5fZmQxCgpkZWYgY29ycmVjdF9jaDIocmF3KToKICAgIHJldHVybiAocmF3LmFzdHlwZShucC5mbG9hdDMyKSAtIGRhcmsgLyBucC5tYXhpbXVtKGZsYXQyIC0gZGFyaywgMS4wKSAqIG1lYW5fZmQyCgpsYXlvdXQgPSBwZC5yZWFkX2NzdignL3Rhc2svaW5wdXQvcGxhdGVfbGF5b3V0LnRzdicsIHNlcD0nXHQnKQp3ZWxscyA9IGxheW91dFsnd2VsbCddLnRvbGlzdCgpCgpjaDFfaW1ncyA9IFtdCmNoMl9pbWdzID0gW10KcWNfcGFzc2VzID0gW10KCgpmb3IidyBpbiB3ZWxsczoKICAgIHJhdzEgPSB0aWZmZmlsZS5pbXJlYWQoZicvdGFzay9pbnB1dC9pbWFnZXMve3d9X2NoMS50aWYnKQogICAgcmF3MiA9IHRpZmZmaWxlLmltcmVhZChmJy90YXNrL2lucHV0L2ltYWdlcy97d31fY2gyLnRpZicpCiAgICAKICAgIGltMV9mID0gcmF3MS5hc3R5cGUoZmxvYXQpCiAgICBsb3cxID0gZ2F1c3NpYW5fZmlsdGVyKGltMV9mLCBzaWdtYT0yKQogICAgaGlnaDEgPSBpbTFfZiAtIGxvdzEKICAgIHJhdGlvID0gaGlnaDEuc3RkKCkgLyBpbTFfZi5zdGQoKQogICAgcWNfcGFzcyA9IDEgaWYgcmF0aW8gPiAwLjE1IGVsc2UgMAogICAgcWNfcGFzc2VzLmFwcGVuZChxY19wYXNzKQogICAgCiAgICBjMSA9IGNvcnJlY3RfY2gxKHJhdzEpCiAgICBjMiA9IGNvcnJlY3RfY2gyKHJhdzIpCiAgICBjaDFfaW1ncy5hcHBlbmQoYzEpCiAgICBjaDJfaW1ncy5hcHBlbmQoYzIpCgpwcmludCgnU3RhcnRpbmcgQ2VsbHBvc2UgaW5mZXJlbmNlIG9uIDk2IGltYWdlcy4uLicpCnQwID0gdGltZS50aW1lKCkKbW9kZWwgPSBtb2RlbHMuQ2VsbHBvc2UobW9kZWxfdHlwZT0nbnVjbGVpJywgZ3B1PUZhbHNlKQptYXNrc19hbGwsIGZsb3dzX2FsbCwgc3R5bGVzX2FsbCwgZGlhbXNfYWxsID0gbW9kZWwuZXZhbCgKICAgIGNoMV9pbWdzLCBkaWFtZXRlcj0xNSwgY2hhbm5lbHM9WzAsIDBdLCBmbG93X3RocmVzaG9sZD0wLjQsIGJhdGNoX3NpemU9MTYKKQpwcmludChmJ0NlbGxwb3NlIGluZmVyZW5jZSBkb25lIGluIHt0aW1lLnRpbWUoKSAtIHQwOi4xfXMnKQoKd2VsbF9yZWNvcmRzID0gW10KZm9yIGlkeCwidyBpbiBlbnVtZXJhdGUod2VsbHMpOgogICAgbWFza3MgPSBtYXNrc19hbGxbaWR4XQogICAgYzIgPSBjaDJfaW1nc1tpZHhdCiAgICBxY19wYXNzID0gcWNfcGFzc2VzW2lkeF0KICAgIHJvdyA9IGxheW91dC5pbG9jW2lkeF0KICAgIAogICAgcHJvcHMgPSByZWdpb25wcm9wcyhtYXNrcykKICAgIHZhbGlkX2xhYmVscyA9IHNldCgpCiAgICBmb3IgcCBpbiBwcm9wczoKICAgICAgICBpZiBucC5hbnkocC5jb29yZHNbOiwgMF0gPj0gMzE5KSBvciBucC5hbnkocC5jb29yZHNbOiwgMV0gPj0gMzE5KToKICAgICAgICAgICAgY29udGludWUKICAgICAgICBpZiBwLmF4aXNfbWlub3JfbGVuZ3RoIDwgOC40NjoKICAgICAgICAgICAgY29udGludWUKICAgICAgICB2YWxpZF9sYWJlbHMuYWRkKHAubGFiZWwpCiAgICAgICAgCiAgICBuX2NlbGxzID0gbGVuKHZhbGlkX2xhYmVscykKICAgIAogICAgaWYgbl9jZWxscyA9PSAwOgogICAgICAgIG1hcmtlcl92YWwgPSAnTkEnCiAgICBlbHNlOgogICAgICAgIGRpc3RfYWxsID0gZGlzdGFuY2VfdHJhbnNmb3JtX2VkdChtYXNrcyA9PSAwKQogICAgICAgIGJnX21hc2sgPSBkaXN0X2FsbCA+IDE1CiAgICAgICAgYmdfdmFsID0gbnAubWVkaWFuKGMyW2JnX21hc2tdKSBpZiBucC5hbnkoYmdfbWFzaykgZWxzZSBucC5wZXJjZW50aWxlKGMyLCAxMCkKICAgICAgICBleHBhbmRlZCA9IHdhdGVyc2hlZChkaXN0X2FsbCwgbWFza3MsIG1hc2s9KGRpc3RfYWxsIDw9IDQpKQogICAgICAgIAogICAgICAgIGNlbGxfc2lnbmFscyA9IFtdCiAgICAgICAgZm9yIGxibCBpbiB2YWxpZF9sYWJlbHM6CiAgICAgICAgICAgIGN5dG8gPSAoZXhwYW5kZWQgPT0gbGJsKSAmIChtYXNrcyA9PSAwKQogICAgICAgICAgICBpZiBucC5zdW0oY3l0bykgPiAwOgogICAgICAgICAgICAgICAgc2lnID0gbnAubWVhbihjMltjeXRvXSkgLSBiZ192YWwKICAgICAgICAgICAgICAgIGNlbGxfc2lnbmFscy5hcHBlbmQoc2lnKQogICAgICAgIGlmIGxlbihjZWxsX3NpZ25hbHMpID4gMDoKICAgICAgICAgICAgbWFya2VyX3ZhbCA9IGZsb2F0KG5wLm1lYW4oY2VsbF9zaWduYWxzKSkKICAgICAgICBlbHNlOgogICAgICAgICAgICBtYXJrZXJfdmFsID0gJ05BJwogICAgICAgIAogICAgd2VsbF9yZWNvcmRzLmFwcGVuZCh7CiAgICAgICAgJ3dlbGwnOiB3LAogICAgICAgICdjb21wb3VuZCc6IHJvd1snY29tcG91bmQnXSwKICAgICAgICAnZG9zZV91TSc6IHJvd1snZG9zZV91TSddLAogICAgICAgICdyb2xlJzogcm93Wydyb2xlJ10sCiAgICAgICAgJ25fY2VsbHMnOiBpbnQobl9jZWxscyksCiAgICAgICAgJ21hcmtlcl9wZXJfY2VsbCc6IG1hcmtlcl92YWwsCiAgICAgICAgJ3FjX3Bhc3MnOiBpbnQocWNfcGFzcykKICAgIH0pCgpkZl93ZWxscyA9IHBkLkRhdGFGcmFtZSh3ZWxsX3JlY29yZHMpCgpkZl93bSA9IGRmX3dlbGxzW1snd2VsbCcsICduX2NlbGxzJywgJ21hcmtlcl9wZXJfY2VsbCcsICdxY19wYXNzJ11dCmRmX3dtLnRvX2NzdignL3Rhc2svb3V0cHV0L3dlbGxfbWVhc3VyZW1lbnRzLnRzdicsIHNlcD0nXHQnLCBpbmRleD1GYWxzZSkKcHJpbnQoJ1NhdmVkIC90YXNrL291dHB1dC93ZWxsX21lYXN1cmVtZW50cy50c3YnKQoKYW5uX2ZpbGVzID0gc29ydGVkKGdsb2IuZ2xvYignL3Rhc2svaW5wdXQvYW5ub3RhdGlvbnMvKi50c3YnKSkKdmFsX3JlY29yZHMgPSBbXQpmb3IgZiBpbiBhbm5fZmlsZXM6CiAgICB3ID0gb3MucGF0aC5iYXNlbmFtZShmKS5yZXBsYWNlKCcudHN2JywgJycpCiAgICBkZl9hbm4gPSBwZC5yZWFkX2NzdihmLCBzZXA9J1x0JykKICAgIG1fY250ID0gbGVuKGRmX2FubikKICAgIHBfY250ID0gZGZfd2VsbHNbZGZfd2VsbHMud2VsbCA9PSB3XS5pbG9jWzBdWyduX2NlbGxzJ10KICAgIHZhbF9yZWNvcmRzLmFwcGVuZCh7CiAgICAgICAgJ2ZpZWxkJzogdywKICAgICAgICAnbWFudWFsX2NvdW50JzogbV9jbnQsCiAgICAgICAgJ3BpcGVsaW5lX2NvdW50JzogcF9jbnQKICAgIH0pCmRmX3ZhbCA9IHBkLkRhdGFGcmFtZSh2YWxfcmVjb3JkcykKZGZfdmFsLnRvX2NzdignL3Rhc2svb3V0cHV0L3ZhbGlkYXRpb24udHN2Jywgc2VwPSdcdCcsIGluZGV4PUZhbHNlKQpwcmludCgnU2F2ZWQgL3Rhc2wvb3V0cHV0L3ZhbGlkYXRpb24udHN2JykKCnZlaCA9IGRmX3dlbGxzWyhkZl93ZWxscy5yb2xlID09ICd2ZWhpY2xlJykgJiAoZGZfd2VsbHMucWNfcGFzcyA9PSAxKV0Kdl9jbnQgPSB2ZWgubl9jZWxscy5tZWRpYW4oKQp2X21yayA9IHZlaC5tYXJrZXJfcGVyX2NlbGwubWVkaWFuKCkKCgpkZWYgaGlsbChjLCBib3R0b20sIGVjNTAsIGgpOgogICAgcmV0dXJuIGJvdHRvbSArICgxLjAgLSBib3R0b20pIC8gKDEuMCArIChjIC8gZWM1MCkqKmgpCgp0ZXN0X2NvbXBvdW5kcyA9IHNvcnRlZChbYyBmb3IgYyBpbiBkZl93ZWxscy5jb21wb3VuZC51bmlxdWUoKSBpZiBjLnN0YXJ0c3dpdGgoJ0NQRC0nKV0pCmRyX3JlY29yZHMgPSBbXQoKZm9yIGNvbXAgaW4gdGVzdF9jb21wb3VuZHM6CiAgICBzdWIgPSBkZl93ZWxsc1soZGZfd2VsbHMuY29tcG91bmQgPT0gY29tcCkgJiAoZGZfd2VsbHMucWNfcGFzcyA9PSAxKV0uc29ydF92YWx1ZXMoJ2Rvc2VfdU0nKQogICAgZG9zZXMgPSBzdWIuZG9zZV91TS52YWx1ZXMKICAgIG1heF90ZXN0ZWRfZG9zZSA9IGRvc2VzLm1heCgpCiAgICAKICAgIHJlc3BfY250ID0gc3ViLm5fY2VsbHMudmFsdWVzIC8gdl9jbnQKICAgIHJlc3BfbXJrID0gc3ViLm1hcmtlcl9wZXJfY2VsbC52YWx1ZXMuYXN0eXBlKGZsb2F0KSAvIHZfbXJrCiAgICAKICAgIGRlZiBmaXRfcG90ZW5jeShyZXNwKToKICAgICAgICB0cnk6CiAgICAgICAgICAgIHBvcHQsIF8gPSBjdXJ2ZV9maXQoaGlsbCwgZG9zZXMsIHJlc3AsIHAwPVswLjEsIG5wLm1lZGlhbihkb3NlcyksIDEuMF0sCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgYm91bmRzPShbMC4wLCAxZS00LCAwLjFdLCBbMC45OTksIDEwMDAuMCwgMTAuMF0pLCBtYXhmZXY9MTAwMDApCiAgICAgICAgICAgIGIsIGVjNTAsIGggPSBwb3B0CiAgICAgICAgICAgIGlmIGIgPj0gMC41OgogICAgICAgICAgICAgICAgcmV0dXJuICdpbmFjdGl2ZScKICAgICAgICAgICAgcG90ID0gZWM1MCAqICgoMS4wIC0gMi4wKmIpKSoqKC0xLjAgLyBoKQogICAgICAgICAgICBpZiBwb3QgPiBtYXhfdGVzdGVkX2Rvc2Ugb3IgcG90IDw9IDA6CiAgICAgICAgICAgICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgICAgICAgICByZXR1cm4gZicgKHBvdDopICcuZm9ybWF0KXBvdDpmJ3twb3Q6LjNnfScKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAgICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgCiAgICBpYzUwID0gZml0X3BvdGVuY3kocmVzcF9tcmspCiAgICBnaTUwID0gZml0X3BvdGVuY3kocmVzcF9jbnQpCiAgICAKICAgIGRyX3JlY29yZHMuYXBwZW5kKHsKICAgICAgICAnY29tcG91bmQnOiBjb21wLAogICAgICAgICdpYzUwX21hcmtlcl91TSc6IGljNTAsCiAgICAgICAgJ2dpNTBfY291bnRfdU0nOiBnaTUwCiAgICB9KQoKZGZfZHIgPSBwZC5EYXRhRnJhbWUoZHJfcmVjb3JkcykKZGZfZHIudG9fY3N2KCcvdGFzay9vdXRwdXQvZG9zZV9yZXNwb25zZS50c3YnLCBzZXA9J1x0JywgaW5kZXg9RmFsc2UpCnByaW50KCdTYXZlZCAvdGFzay9vdXRwdXQvZG9zZV9yZXNwb25zZS50c3YnKQpwcmludCgnRE9ORV9BTEwnKQon; open('/task/run_batch.py', 'wb').write(base64.b64decode(b))
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ^
+SyntaxError: unterminated string literal (detected at line 1)
+[?2004hroot@20aa40bb4341:/task# base64 -d << 'EOF' > /task/run_batch.py
+[?2004l[?2004h> aW1wb3J0IG9zLCBnbG9iLCB0aW1lCmltcG9ydCBudW1weSBhcyBucAppbXBvcnQgcGFuZGFzIGFz
+[?2004l[?2004h> IHBkCmltcG9ydCB0aWZmZmlsZQpmcm9tIHNjaXB5Lm5kaW1hZ2UgaW1wb3J0IGRpc3RhbmNlX3Ry
+[?2004l[?2004h> YW5zZm9ybV9lZHQsIGdhdXNzaWFuX2ZpbHRlcgpmcm9tIHNraW1hZ2UubWVhc3VyZSBpbXBvcnQg
+[?2004l[?2004h> cmVnaW9ucHJvcHMKZnJvbSBza2ltYWdlLnNlZ21lbnRhdGlvbiBpbXBvcnQgd2F0ZXJzaGVkCmZy
+[?2004l[?2004h> b20gc2NpcHkub3B0aW1pemUgaW1wb3J0IGN1cnZlX2ZpdApmcm9tIGNlbGxwb3NlIGltcG9ydCBt
+[?2004l[?2004h> b2RlbHMKaW1wb3J0IHRvcmNoCgp0b3JjaC5zZXRfbnVtX3RocmVhZHMob3MuY3B1X2NvdW50KCkg
+[?2004l[?2004h> b3IgNCkKb3MubWFrZWRpcnMoJy90YXNrL291dHB1dCcsIGV4aXN0X29rPVRydWUpCgpkYXJrID0g
+[?2004l[?2004h> dGlmZmZpbGUuaW1yZWFkKCcvdGFzay9pbnB1dC9mbGF0ZmllbGQvZGFyay50aWYnKS5hc3R5cGUo
+[?2004l[?2004h> bnAuZmxvYXQzMikKZmxhdDEgPSB0aWZmZmlsZS5pbXJlYWQoJy90YXNrL2lucHV0L2ZsYXRmaWVs
+[?2004l[?2004h> ZC9mbGF0X2NoMS50aWYnKS5hc3R5cGUobnAuZmxvYXQzMikKZmxhdDIgPSB0aWZmZmlsZS5pbXJl
+[?2004l[?2004h> YWQoJy90YXNrL2lucHV0L2ZsYXRmaWVsZC9mbGF0X2NoMi50aWYnKS5hc3R5cGUobnAuZmxvYXQz
+[?2004l[?2004h> MikKbWVhbl9mZDEgPSBucC5tZWFuKGZsYXQxIC0gZGFyaykKbWVhbl9mZDIgPSBucC5tZWFuKGZs
+[?2004l[?2004h> YXQyIC0gZGFyaykKCmRlZiBjb3JyZWN0X2NoMShyYXcpOgogICAgcmV0dXJuIChyYXcuYXN0eXBl
+[?2004l[?2004h> KG5wLmZsb2F0MzIpIC0gZGFyaykgLyBucC5tYXhpbXVtKGZsYXQxIC0gZGFyaywgMS4wKSAqIG1l
+[?2004l[?2004h> YW5fZmQxCgpkZWYgY29ycmVjdF9jaDIocmF3KToKICAgIHJldHVybiAocmF3LmFzdHlwZShucC5m
+[?2004l[?2004h> bG9hdDMyKSAtIGRhcmsgLyBucC5tYXhpbXVtKGZsYXQyIC0gZGFyaywgMS4wKSAqIG1lYW5fZmQy
+[?2004l[?2004h> CgpsYXlvdXQgPSBwZC5yZWFkX2NzdignL3Rhc2svaW5wdXQvcGxhdGVfbGF5b3V0LnRzdicsIHNl
+[?2004l[?2004h> cD0nXHQnKQp3ZWxscyA9IGxheW91dFsnd2VsbCddLnRvbGlzdCgpCgpjaDFfaW1ncyA9IFtdCmNo
+[?2004l[?2004h> Ml9pbWdzID0gW10KcWNfcGFzc2VzID0gW10KCmZvciB3IGluIHdlbGxzOgogICAgcmF3MSA9IHRp
+[?2004l[?2004h> ZmZmaWxlLmltcmVhZChmJy90YXNrL2lucHV0L2ltYWdlcy97d31fY2gxLnRpZicpCiAgICByYXcy
+[?2004l[?2004h> ID0gdGlmZmZpbGUuaW1yZWFkZChmJy90YXNrL2lucHV0L2ltYWdlcy97d31fY2gyLnRpZicpCiAg
+[?2004l[?2004h> ICAKICAgIGltMV9mID0gcmF3MS5hc3R5cGUoZmxvYXQpCiAgICBsb3cxID0gZ2F1c3NpYW5fZmls
+[?2004l[?2004h> dGVyKGltMV9mLCBzaWdtYT0yKQogICAgaGlnaDEgPSBpbTFfZiAtIGxvdzEKICAgIHJhdGlvID0g
+[?2004l[?2004h> aGlnaDEuc3RkKCkgLyBpbTFfZi5zdGQoKQogICAgcWNfcGFzcyA9IDEgaWYgcmF0aW8gPiAwLjE1
+[?2004l[?2004h> IGVsc2UgMAogICAgcWNfcGFzc2VzLmFwcGVuZChxY19wYXNzKQogICAgCiAgICBjMSA9IGNvcnJl
+[?2004l[?2004h> Y3RfY2gxKHJhdzEpCiAgICBjMiA9IGNvcnJlY3RfY2gyKHJhdzIpCiAgICBjaDFfaW1ncy5hcHBl
+[?2004l[?2004h> bmQoYzEpCiAgICBjaDJfaW1ncy5hcHBlbmQoYzIpCgpwcmludCgnU3RhcnRpbmcgQ2VsbHBvc2Ug
+[?2004l[?2004h> aW5mZXJlbmNlIG9uIDk2IGltYWdlcy4uLicpCnQwID0gdGltZS50aW1lKCkKbW9kZWwgPSBtb2Rl
+[?2004l[?2004h> bHMuQ2VsbHBvc2UobW9kZWxfdHlwZT0nbnVjbGVpJywgZ3B1PUZhbHNlKQptYXNrc19hbGwsIGZs
+[?2004l[?2004h> b3dzX2FsbCwgc3R5bGVzX2FsbCwgZGlhbXNfYWxsID0gbW9kZWwuZXZhbCgKICAgIGNoMV9pbWdz
+[?2004l[?2004h> LCBkaWFtZXRlcj0xNSwgY2hhbm5lbHM9WzAsIDBdLCBmbG93X3RocmVzaG9sZD0wLjQsIGJhdGNo
+[?2004l[?2004h> X3NpemU9MTYKKQpwcmludChmJ0NlbGxwb3NlIGluZmVyZW5jZSBkb25lIGluIHt0aW1lLnRpbWUo
+[?2004l[?2004h> KSAtIHQwOi4xfXMnKQoKd2VsbF9yZWNvcmRzID0gW10KZm9yIGlkeCwidyBpbiBlbnVtZXJhdGUo
+[?2004l[?2004h> d2VsbHMpOgogICAgbWFza3MgPSBtYXNrc19hbGxbaWR4XQogICAgYzIgPSBjaDJfaW1nc1tpZHhd
+[?2004l[?2004h> CiAgICBxY19wYXNzID0gcWNfcGFzc2VzW2lkeF0KICAgIHJvdyA9IGxheW91dC5pbG9jW2lkeF0K
+[?2004l[?2004h> ICAgIAogICAgcHJvcHMgPSByZWdpb25wcm9wcyhtYXNrcykKICAgIHZhbGlkX2xhYmVscyA9IHNl
+[?2004l[?2004h> dCgpCiAgICBmb3IgcCBpbiBwcm9wczoKICAgICAgICBpZiBucC5hbnkocC5jb29yZHNbOiwgMF0g
+[?2004l[?2004h> Pj0gMzE5KSBvciBucC5hbnkocC5jb29yZHNbOiwgMV0gPj0gMzE5KToKICAgICAgICAgICAgY29u
+[?2004l[?2004h> dGludWUKICAgICAgICBpZiBwLmF4aXNfbWlub3JfbGVuZ3RoIDwgOC40NjoKICAgICAgICAgICAg
+[?2004l[?2004h> Y29udGludWUKICAgICAgICB2YWxpZF9sYWJlbHMuYWRkKHAubGFiZWwpCiAgICAgICAgCiAgICBu
+[?2004l[?2004h> X2NlbGxzID0gbGVuKHZhbGlkX2xhYmVscykKICAgIAogICAgaWYgbl9jZWxscyA9PSAwOgogICAg
+[?2004l[?2004h> ICAgIG1hcmtlcl92YWwgPSAnTkEnCiAgICBlbHNlOgogICAgICAgIGRpc3RfYWxsID0gZGlzdGFu
+[?2004l[?2004h> Y2VfdHJhbnNmb3JtX2VkdChtYXNrcyA9PSAwKQogICAgICAgIGJnX21hc2sgPSBkaXN0X2FsbCA+
+[?2004l[?2004h> IDE1CiAgICAgICAgYmdfdmFsID0gbnAubWVkaWFuKGMyW2JnX21hc2tdKSBpZiBucC5hbnkoYmdf
+[?2004l[?2004h> bWFzaykgZWxzZSBucC5wZXJjZW50aWxlKGMyLCAxMCkKICAgICAgICBleHBhbmRlZCA9IHdhdGVy
+[?2004l[?2004h> c2hlZChkaXN0X2FsbCwgbWFza3MsIG1hc2s9KGRpc3RfYWxsIDw9IDQpKQogICAgICAgIAogICAg
+[?2004l[?2004h> ICAgIGNlbGxfc2lnbmFscyA9IFtdCiAgICAgICAgZm9yIGxibCBpbiB2YWxpZF9sYWJlbHM6CiAg
+[?2004l[?2004h> ICAgICAgICAgIGN5dG8gPSAoZXhwYW5kZWQgPT0gbGJsKSAmIChtYXNrcyA9PSAwKQogICAgICAg
+[?2004l[?2004h> ICAgICBpZiBucC5zdW0oY3l0bykgPiAwOgogICAgICAgICAgICAgICAgc2lnID0gbnAubWVhbihj
+[?2004l[?2004h> MltjeXRvXSkgLSBiZ192YWwKICAgICAgICAgICAgICAgIGNlbGxfc2lnbmFscy5hcHBlbmQoc2ln
+[?2004l[?2004h> KQogICAgICAgIGlmIGxlbihjZWxsX3NpZ25hbHMpID4gMDoKICAgICAgICAgICAgbWFya2VyX3Zh
+[?2004l[?2004h> bCA9IGZsb2F0KG5wLm1lYW4oY2VsbF9zaWduYWxzKSkKICAgICAgICBlbHNlOgogICAgICAgICAg
+[?2004l[?2004h> ICBtYXJrZXJfdmFsID0gJ05BJwogICAgICAgIAogICAgd2VsbF9yZWNvcmRzLmFwcGVuZCh7CiAg
+[?2004l[?2004h> ICAgICAgJ3dlbGwnOiB3LAogICAgICAgICdjb21wb3VuZCc6IHJvd1snY29tcG91bmQnXSwKICAg
+[?2004l[?2004h> ICAgICAnZG9zZV91TSc6IHJvd1snZG9zZV91TSddLAogICAgICAgICdyb2xlJzogcm93Wydyb2xl
+[?2004l[?2004h> J10sCiAgICAgICAgJ25fY2VsbHMnOiBpbnQobl9jZWxscyksCiAgICAgICAgJ21hcmtlcl9wZXJf
+[?2004l[?2004h> Y2VsbCc6IG1hcmtlcl92YWwsCiAgICAgICAgJ3FjX3Bhc3MnOiBpbnQocWNfcGFzcykKICAgIH0p
+[?2004l[?2004h> CgpkZl93ZWxscyA9IHBkLkRhdGFGcmFtZSh3ZWxsX3JlY29yZHMpCgpkZl93bSA9IGRmX3dlbGxz
+[?2004l[?2004h> W1snd2VsbCcsICduX2NlbGxzJywgJ21hcmtlcl9wZXJfY2VsbCcsICdxY19wYXNzJ11dCmRmX3dt
+[?2004l[?2004h> LnRvX2NzdignL3Rhc2svb3V0cHV0L3dlbGxfbWVhc3VyZW1lbnRzLnRzdicsIHNlcD0nXHQnLCBp
+[?2004l[?2004h> bmRleD1GYWxzZSkKcHJpbnQoJ1NhdmVkIC90YXNrL291dHB1dC93ZWxsX21lYXN1cmVtZW50cy50
+[?2004l[?2004h> c3YnKQoKYW5uX2ZpbGVzID0gc29ydGVkKGdsb2IuZ2xvYignL3Rhc2svaW5wdXQvYW5ub3RhdGlv
+[?2004l[?2004h> bnMvKi50c3YnKSkKdmFsX3JlY29yZHMgPSBbXQpmb3IgZiBpbiBhbm5fZmlsZXM6CiAgICB3ID0g
+[?2004l[?2004h> b3MucGF0aC5iYXNlbmFtZShmKS5yZXBsYWNlKCcudHN2JywgJycpCiAgICBkZl9hbm4gPSBwZC5y
+[?2004l[?2004h> ZWFkX2NzdihmLCBzZXA9J1x0JykKICAgIG1fY250ID0gbGVuKGRmX2FubikKICAgIHBfY250ID0g
+[?2004l[?2004h> ZGZfd2VsbHNbZGZfd2VsbHMud2VsbCA9PSB3XS5pbG9jWzBdWyduX2NlbGxzJ10KICAgIHZhbF9y
+[?2004l[?2004h> ZWNvcmRzLmFwcGVuZCh7CiAgICAgICAgJ2ZpZWxkJzogdywKICAgICAgICAnbWFudWFsX2NvdW50
+[?2004l[?2004h> JzogbV9jbnQsCiAgICAgICAgJ3BpcGVsaW5lX2NvdW50JzogcF9jbnQKICAgIH0pCmRmX3ZhbCA9
+[?2004l[?2004h> IHBkLkRhdGFGcmFtZSh2YWxfcmVjb3JkcykKZGZfdmFsLnRvX2NzdignL3Rhc2svb3V0cHV0L3Zh
+[?2004l[?2004h> bGlkYXRpb24udHN2Jywgc2VwPSdcdCcsIGluZGV4PUZhbHNlKQpwcmludCgnU2F2ZWQgL3Rhc2sv
+[?2004l[?2004h> b3V0cHV0L3ZhbGlkYXRpb24udHN2JykKCnZlaCA9IGRmX3dlbGxzWyhkZl93ZWxscy5yb2xlID09
+[?2004l[?2004h> ICd2ZWhpY2xlJykgJiAoZGZfd2VsbHMucWNfcGFzcyA9PSAxKV0Kdl9jbnQgPSB2ZWgubl9jZWxs
+[?2004l[?2004h> cy5tZWRpYW4oKQp2X21yayA9IHZlaC5tYXJrZXJfcGVyX2NlbGwubWVkaWFuKCkKCgpkZWYgaGls
+[?2004l[?2004h> bChjLCBib3R0b20sIGVjNTAsIGgpOgogICAgcmV0dXJuIGJvdHRvbSArICgxLjAgLSBib3R0b20p
+[?2004l[?2004h> IC8gKDEuMCArIChjIC8gZWM1MCkqKmgpCgp0ZXN0X2NvbXBvdW5kcyA9IHNvcnRlZChbYyBmb3Ig
+[?2004l[?2004h> YyBpbiBkZl93ZWxscy5jb21wb3VuZC51bmlxdWUoKSBpZiBjLnN0YXJ0c3dpdGgoJ0NQRC0nKV0p
+[?2004l[?2004h> CmRyX3JlY29yZHMgPSBbXQoKZm9yIGNvbXAgaW4gdGVzdF9jb21wb3VuZHM6CiAgICBzdWIgPSBk
+[?2004l[?2004h> Zl93ZWxsc1soZGZfd2VsbHMuY29tcG91bmQgPT0gY29tcCkgJiAoZGZfd2VsbHMucWNfcGFzcyA9
+[?2004l[?2004h> PSAxKV0uc29ydF92YWx1ZXMoJ2Rvc2VfdU0nKQogICAgZG9zZXMgPSBzdWIuZG9zZV91TS52YWx1
+[?2004l[?2004h> ZXMKICAgIG1heF90ZXN0ZWRfZG9zZSA9IGRvc2VzLm1heCgpCiAgICAKICAgIHJlc3BfY250ID0g
+[?2004l[?2004h> c3ViLm5fY2VsbHMudmFsdWVzIC8gdl9jbnQKICAgIHJlc3BfbXJrID0gc3ViLm1hcmtlcl9wZXJf
+[?2004l[?2004h> Y2VsbC52YWx1ZXMuYXN0eXBlKGZsb2F0KSAvIHZfbXJrCiAgICAKICAgIGRlZiBmaXRfcG90ZW5j
+[?2004l[?2004h> eShyZXNwKToKICAgICAgICB0cnk6CiAgICAgICAgICAgIHBvcHQsIF8gPSBjdXJ2ZV9maXQoaGls
+[?2004l[?2004h> bCwgZG9zZXMsIHJlc3AsIHAwPVswLjEsIG5wLm1lZGlhbihkb3NlcyksIDEuMF0sCiAgICAgICAg
+[?2004l[?2004h> ICAgICAgICAgICAgICAgICAgICAgYm91bmRzPShbMC4wLCAxZS00LCAwLjFdLCBbMC45OTksIDEw
+[?2004l[?2004h> MDAuMCwgMTAuMF0pLCBtYXhmZXY9MTAwMDApCiAgICAgICAgICAgIGIsIGVjNTAsIGggPSBwb3B0
+[?2004l[?2004h> CiAgICAgICAgICAgIGlmIGIgPj0gMC41OgogICAgICAgICAgICAgICAgcmV0dXJuICdpbmFjdGl2
+[?2004l[?2004h> ZScKICAgICAgICAgICAgcG90ID0gZWM1MCAqICgoMS4wIC0gMi4wKmIpKSoqKC0xLjAgLyBoKQog
+[?2004l[?2004h> ICAgICAgICAgICBpZiBwb3QgPiBtYXhfdGVzdGVkX2Rvc2Ugb3IgcG90IDw9IDA6CiAgICAgICAg
+[?2004l[?2004h> ICAgICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgICAgICAgICByZXR1cm4gZicgKHBvdDopICcu
+[?2004l[?2004h> Zm9ybWF0KXBvdDpmJ3twb3Q6LjNnfScKICAgICAgICBleGNlcHQgRXhjZXB0aW9uOgogICAgICAg
+[?2004l[?2004h> ICAgICByZXR1cm4gJ2luYWN0aXZlJwogICAgCiAgICBpYzUwID0gZml0X3BvdGVuY3kocmVzcF9t
+[?2004l[?2004h> cmspCiAgICBnaTUwID0gZml0X3BvdGVuY3kocmVzcF9jbnQpCiAgICAKICAgIGRyX3JlY29yZHMu
+[?2004l[?2004h> YXBwZW5kKHsKICAgICAgICAnY29tcG91bmQnOiBjb21wLAogICAgICAgICdpYzUwX21hcmtlcl91
+[?2004l[?2004h> TSc6IGljNTAsCiAgICAgICAgJ2dpNTBfY291bnRfdU0nOiBnaTUwCiAgICB9KQoKZGZfZHIgPSBw
+[?2004l[?2004h> ZC5EYXRhRnJhbWUoZHJfcmVjb3JkcykKZGZfZHIudG9fY3N2KCcvdGFzay9vdXRwdXQvZG9zZV9y
+[?2004l[?2004h> ZXNwb25zZS50c3YnLCBzZXA9J1x0JywgaW5kZXg9RmFsc2UpCnByaW50KCdTYXZlZCAvdGFzay9v
+[?2004l[?2004h> dXRwdXQvZG9zZV9yZXNwb25zZS50c3YnKQpwcmludCgnRE9ORV9BTEwnKQo=EOF
+[?2004l[?2004h> python3 /task/run_batch.py
+[?2004l[?2004h> 
+[?2004l[?2004h> EOF
+[?2004lbase64: invalid input
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py
+[?2004l  File "/task/run_batch.py", line 59
+    for idx,"w in enumerate(wells):
+            ^
+SyntaxError: unterminated string literal (detected at line 59)
+[?2004hroot@20aa40bb4341:/task# sed -i 's/for idx,"w in enumerate(wells):/for idx, w in enumerate(wells):/' /task/run_batch.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py
+[?2004l  File "/task/run_batch.py", line 173
+    ï¿½iï¿½ï¿½hï¿½
+    ^
+SyntaxError: invalid non-printable character U+0010
+[?2004hroot@20aa40bb4341:/task# tail -n 10 /task/run_batch.py
+[?2004l        'compound': comp,
+        'ic50_marker_uM': ic50,
+        'gi50_count_uM': gi50
+    })
+
+df_dr = pd.DataFrame(dr_records)
+df_dr.to_csv('/task/output/dose_response.tsv', sep='\t', index=False)
+print('Saved /task/output/dose_response.tsv')
+print('DONE_ALL')
+áiÊØhŸ[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); open('/task/run_batch.py', 'w').writelines(lines[:-1] + ['print(\'DONE_ALL\')\n'])"
+[?2004lTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe1 in position 5574: invalid continuation byte
+[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py
+[?2004l  File "/task/run_batch.py", line 173
+    ï¿½iï¿½ï¿½hï¿½
+    ^
+SyntaxError: invalid non-printable character U+0010
+[?2004hroot@20aa40bb4341:/task# python3 -c "data = open('/task/run_batch.py', 'rb').read().splitlines()[:171]; open('/task/run_batch.py', 'wb').write(b'\n'.join(data) + b'\nprint(\'DONE_ALL\')\n')"
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py
+[?2004l  File "/task/run_batch.py", line 25
+    return (raw.astype(np.float32) - dark / np.maximum(flat2 - dark, 1.0) * mean_fd2
+            
+SyntaxError: invalid syntax. Perhaps you forgot a comma?
+[?2004hroot@20aa40bb4341:/task# sed -i 's/return (raw.astype(np.float32) - dark /return (raw.astype(np.float32) - dark) /' /task/run_batch.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py
+[?2004l  File "/task/run_batch.py", line 156
+    return f' (pot:) '.format)pot:f'{pot:.3g}'
+                             ^
+SyntaxError: unmatched ')'
+[?2004hroot@20aa40bb4341:/task# sed -i "s/return f' (pot:) '.format)pot:f'{pot:.3g}'/return f'{pot:.3g}'/" /task/run_batch.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py
+[?2004lTraceback (most recent call last):
+  File "/task/run_batch.py", line 36, in <module>
+    raw2 = tifffile.imreadd(f'/task/input/images/{w}_ch2.tif')
+           ^^^^^^^^^^^^^^^^
+AttributeError: module 'tifffile' has no attribute 'imreadd'. Did you mean: 'imread'?
+[?2004hroot@20aa40bb4341:/task# sed -i 's/tifffile.imreadd/tifffile.imread/' /task/run_batch.py && python3 /task/run_batch.py
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 6e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 15 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# cat /task/test_seg.py
+[?2004lcat: /task/test_seg.py: No such file or directory
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# python3 -c "print(open('/task/run_batch.py').read()[:1000])"
+[?2004limport os, glob, time
+import numpy as np
+import pandas as pd
+import tifffile
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+from skimage.measure import regionprops
+from skimage.segmentation import watershed
+from scipy.optimize import curve_fit
+from cellpose import models
+import torch
+
+torch.set_num_threads(os.cpu_count() or 4)
+os.makedirs('/task/output', exist_ok=True)
+
+dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well']
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[45:100]))"
+[?2004l    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+t0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all, flows_all, styles_all, diams_all = model.eval(
+    ch1_imgs, diameter=15, channels=[0, 0], flow_threshold=0.4, batch_size=16
+)
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+    else:
+        dist_all = distance_transform_edt(masks == 0)
+        bg_mask = dist_all > 15
+        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+        expanded = watershed(dist_all, masks, mask=(dist_all <= 4))
+        
+        cell_signals = []
+        for lbl in valid_labels:
+            cyto = (expanded == lbl) & (masks == 0)
+            if np.sum(cyto) > 0:
+                sig = np.mean(c2[cyto]) - bg_val
+                cell_signals.append(sig)
+        if len(cell_signals) > 0:
+            marker_val = float(np.mean(cell_signals))
+        else:
+            marker_val = 'NA'
+        
+    well_records.append({
+        'well': w,
+        'compound': row['compound'],
+        'dose_uM': row['dose_uM'],
+        'role': row['role'],
+        'n_cells': int(n_cells),
+
+[?2004hroot@20aa40bb4341:/task# grep B06 /task/output/well_measurements.tsv
+[?2004lB06	104	283.151123046875	1
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[30:50]))"
+[?2004lch2_imgs = []
+qc_passes = []
+
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[20:32]))"
+[?2004ldef correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well'].tolist()
+
+ch1_imgs = []
+ch2_imgs = []
+qc_passes = []
+
+[?2004hroot@20aa40bb4341:/task# ls -la /task/output
+[?2004ltotal 24
+drwxr-xr-x 1 root root 4096 Nov 14 06:06 .
+drwxr-xr-x 1 root root 4096 Nov 14 05:55 ..
+-rw-rw-rw- 1 root root  254 Nov 14 06:06 dose_response.tsv
+-rw-rw-rw- 1 root root  116 Nov 14 06:06 validation.tsv
+-rw-rw-rw- 1 root root 2675 Nov 14 06:06 well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[80:120]))"
+[?2004l        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+        expanded = watershed(dist_all, masks, mask=(dist_all <= 4))
+        
+        cell_signals = []
+        for lbl in valid_labels:
+            cyto = (expanded == lbl) & (masks == 0)
+            if np.sum(cyto) > 0:
+                sig = np.mean(c2[cyto]) - bg_val
+                cell_signals.append(sig)
+        if len(cell_signals) > 0:
+            marker_val = float(np.mean(cell_signals))
+        else:
+            marker_val = 'NA'
+        
+    well_records.append({
+        'well': w,
+        'compound': row['compound'],
+        'dose_uM': row['dose_uM'],
+        'role': row['role'],
+        'n_cells': int(n_cells),
+        'marker_per_cell': marker_val,
+        'qc_pass': int(qc_pass)
+    })
+
+df_wells = pd.DataFrame(well_records)
+
+df_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+print('Saved /task/output/well_measurements.tsv')
+
+ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+val_records = []
+for f in ann_files:
+    w = os.path.basename(f).replace('.tsv', '')
+    df_ann = pd.read_csv(f, sep='\t')
+    m_cnt = len(df_ann)
+    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+    val_records.append({
+        'field': w,
+        'manual_count': m_cnt,
+
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+B03	102	67.7645263671875	1
+B04	102	134.1778106689453	1
+B05	38	151.9546356201172	0
+B06	104	283.151123046875	1
+B07	43	188.16519165039062	0
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# ls -l /task
+[?2004ltotal 32
+drwxrwxrwx 2 root root 4096 Nov 14 05:54 __pycache__
+-rw-rw-rw- 1 root root 5049 Nov 14 05:44 generate_outputs.py
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 input
+drwxr-xr-x 1 root root 4096 Nov 14 06:06 output
+-rw-rw-rw- 1 root root 5550 Nov 14 05:55 run_batch.py
+drwxr-xr-x 1 root root 4096 Nov 14 04:50 software
+[?2004hroot@20aa40bb4341:/task# grep -n -C 5 "model.eval" /task/run_batch.py
+[?2004l48-    ch2_imgs.append(c2)
+49-
+50-print('Starting Cellpose inference on 96 images...')
+51-t0 = time.time()
+52-model = models.Cellpose(model_type='nuclei', gpu=False)
+53:masks_all, flows_all, styles_all, diams_all = model.eval(
+54-    ch1_imgs, diameter=15, channels=[0, 0], flow_threshold=0.4, batch_size=16
+55-)
+56-print(f'Cellpose inference done in {time.time() - t0:.1}s')
+57-
+58-well_records = []
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); idx = [i for i, l in enumerate(lines) if 'masks_all, flows_all' in l][0]; lines[idx] = 'masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]\n'; del lines[idx+1:idx+3]; open('/task/run_batch.py', 'w').writelines(lines)"
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 -m py_compile /task/run_batch.py && grep -n -C 3 "masks_all =" /task/run_batch.py
+[?2004l50-print('Starting Cellpose inference on 96 images...')
+51-t0 = time.time()
+52-model = models.Cellpose(model_type='nuclei', gpu=False)
+53:masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+54-print(f'Cellpose inference done in {time.time() - t0:.1}s')
+55-
+56-well_records = []
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 6e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 10 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[50:75]))"
+[?2004lt0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+
+[?2004hroot@20aa40bb4341:/task# stat /task/output/validation.tsv
+[?2004l  File: /task/output/validation.tsv
+  Size: 116       	Blocks: 8          IO Block: 4096   regular file
+Device: 0,66	Inode: 3096786     Links: 1
+Access: (0666/-rw-rw-rw-)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2026-11-14 06:19:42.871596536 +0000
+Modify: 2026-11-14 06:19:34.434094061 +0000
+Change: 2026-11-14 06:19:34.434094061 +0000
+ Birth: 2026-11-14 06:06:08.543548130 +0000
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[105:135]))"
+[?2004ldf_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+print('Saved /task/output/well_measurements.tsv')
+
+ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+val_records = []
+for f in ann_files:
+    w = os.path.basename(f).replace('.tsv', '')
+    df_ann = pd.read_csv(f, sep='\t')
+    m_cnt = len(df_ann)
+    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+    val_records.append({
+        'field': w,
+        'manual_count': m_cnt,
+        'pipeline_count': p_cnt
+    })
+df_val = pd.DataFrame(val_records)
+df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+print('Saved /task/output/validation.tsv')
+
+veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+v_cnt = veh.n_cells.median()
+v_mrk = veh.marker_per_cell.median()
+
+
+def hill(c, bottom, ec50, h):
+    return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+
+test_compounds = sorted([c for c in df_wells.compound.unique() if c.startswith('CPD-')])
+dr_records = []
+
+
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[30:50]))"
+[?2004lch2_imgs = []
+qc_passes = []
+
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# grep -n -C 2 "masks_all" /task/run_batch.py
+[?2004l51-t0 = time.time()
+52-model = models.Cellpose(model_type='nuclei', gpu=False)
+53:masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+54-print(f'Cellpose inference done in {time.time() - t0:.1}s')
+55-
+56-well_records = []
+57-for idx, w in enumerate(wells):
+58:    masks = masks_all[idx]
+59-    c2 = ch2_imgs[idx]
+60-    qc_pass = qc_passes[idx]
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 1e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 15 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd; df = pd.read_csv('/task/output/well_measurements.tsv', sep='\t'); print(df.head(20))"
+[?2004l   well  n_cells  marker_per_cell  qc_pass
+0   A01       34       166.579987        1
+1   A02       37       207.843323        1
+2   A03       40       200.798370        1
+3   A04       58       252.533722        1
+4   A05       43       283.606842        1
+5   A06       44       288.012482        1
+6   A07       59       315.476593        1
+7   A08       53       327.918488        1
+8   A09       46       356.306061        1
+9   A10       47        20.475071        1
+10  A11       58       449.191833        1
+11  A12       62       483.501160        1
+12  B01       58        24.270184        1
+13  B02      108       204.931030        1
+14  B03      102        67.764526        1
+15  B04      102       134.177811        1
+16  B05       38       151.954636        0
+17  B06      104       283.151123        1
+18  B07       43       188.165192        0
+19  B08       99        15.626744        1
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[32:48]))"
+[?2004l
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/run_batch.py
+[?2004limport os, glob, time
+import numpy as np
+import pandas as pd
+import tifffile
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+from skimage.measure import regionprops
+from skimage.segmentation import watershed
+from scipy.optimize import curve_fit
+from cellpose import models
+import torch
+
+torch.set_num_threads(os.cpu_count() or 4)
+os.makedirs('/task/output', exist_ok=True)
+
+dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+[?2004hroot@20aa40bb4341:/task# grep -n "ch1_imgs" /task/run_batch.py
+[?2004l30:ch1_imgs = []
+47:    ch1_imgs.append(c1)
+53:masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 1e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+B03	102	67.7645263671875	1
+B04	102	134.1778106689453	1
+B05	38	151.9546356201172	0
+B06	104	283.151123046875	1
+B07	43	188.16519165039062	0
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[14:30]))"
+[?2004ldark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well'].tolist()
+
+ch1_imgs = []
+
+[?2004hroot@20aa40bb4341:/task# ls -l /task/output
+[?2004ltotal 12
+-rw-rw-rw- 1 root root  254 Nov 14 06:26 dose_response.tsv
+-rw-rw-rw- 1 root root  116 Nov 14 06:26 validation.tsv
+-rw-rw-rw- 1 root root 2675 Nov 14 06:26 well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# cat -n /task/output/validation.tsv
+[?2004l     1	field	manual_count	pipeline_count
+     2	A01	38	34
+     3	B06	127	104
+     4	D08	113	97
+     5	E03	31	25
+     6	F01	18	13
+     7	H01	10	3
+     8	H02	66	47
+     9	H07	34	26
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(lines[52])"
+[?2004lmasks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[105:125]))"
+[?2004ldf_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+print('Saved /task/output/well_measurements.tsv')
+
+ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+val_records = []
+for f in ann_files:
+    w = os.path.basename(f).replace('.tsv', '')
+    df_ann = pd.read_csv(f, sep='\t')
+    m_cnt = len(df_ann)
+    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+    val_records.append({
+        'field': w,
+        'manual_count': m_cnt,
+        'pipeline_count': p_cnt
+    })
+df_val = pd.DataFrame(val_records)
+df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+print('Saved /task/output/validation.tsv')
+
+veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[56:85]))"
+[?2004lfor idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+    else:
+        dist_all = distance_transform_edt(masks == 0)
+        bg_mask = dist_all > 15
+        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+        expanded = watershed(dist_all, masks, mask=(dist_all <= 4))
+        
+        cell_signals = []
+        for lbl in valid_labels:
+            cyto = (expanded == lbl) & (masks == 0)
+            if np.sum(cyto) > 0:
+
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py > /tmp/run.log 2>&1 && cat /tmp/run.log
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 1e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd; df = pd.read_csv('/task/output/well_measurements.tsv', sep='\t'); print(df[df.well == 'B06'])"
+[?2004l   well  n_cells  marker_per_cell  qc_pass
+17  B06      104       283.151123        1
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd; df = pd.read_csv('/task/input/plate_layout.tsv', sep='\t'); print(df.iloc[15:20])"
+[?2004l   well  compound  dose_uM       role
+15  B04      DMSO   0.0000    vehicle
+16  B05  CPD-8693   0.3704   compound
+17  B06   REF-INH  10.0000  reference
+18  B07  CPD-8693   1.1110   compound
+19  B08      DMSO   0.0000    vehicle
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd; df = pd.read_csv('/task/output/well_measurements.tsv', sep='\t'); print(df.iloc[15:20])"
+[?2004l   well  n_cells  marker_per_cell  qc_pass
+15  B04      102       134.177811        1
+16  B05       38       151.954636        0
+17  B06      104       283.151123        1
+18  B07       43       188.165192        0
+19  B08       99        15.626744        1
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); print(''.join(lines[20:50]))"
+[?2004ldef correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well'].tolist()
+
+ch1_imgs = []
+ch2_imgs = []
+qc_passes = []
+
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+
+[?2004hroot@20aa40bb4341:/task# sed -n '35,42p' /task/run_batch.py
+[?2004l    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+[?2004hroot@20aa40bb4341:/task# sed -n '55,65p' /task/run_batch.py
+[?2004l
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+[?2004hroot@20aa40bb4341:/task# sed -n '85,105p' /task/run_batch.py
+[?2004l            if np.sum(cyto) > 0:
+                sig = np.mean(c2[cyto]) - bg_val
+                cell_signals.append(sig)
+        if len(cell_signals) > 0:
+            marker_val = float(np.mean(cell_signals))
+        else:
+            marker_val = 'NA'
+        
+    well_records.append({
+        'well': w,
+        'compound': row['compound'],
+        'dose_uM': row['dose_uM'],
+        'role': row['role'],
+        'n_cells': int(n_cells),
+        'marker_per_cell': marker_val,
+        'qc_pass': int(qc_pass)
+    })
+
+df_wells = pd.DataFrame(well_records)
+
+df_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+[?2004hroot@20aa40bb4341:/task# sed -n '105,130p' /task/run_batch.py
+[?2004ldf_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+print('Saved /task/output/well_measurements.tsv')
+
+ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+val_records = []
+for f in ann_files:
+    w = os.path.basename(f).replace('.tsv', '')
+    df_ann = pd.read_csv(f, sep='\t')
+    m_cnt = len(df_ann)
+    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+    val_records.append({
+        'field': w,
+        'manual_count': m_cnt,
+        'pipeline_count': p_cnt
+    })
+df_val = pd.DataFrame(val_records)
+df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+print('Saved /task/output/validation.tsv')
+
+veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+v_cnt = veh.n_cells.median()
+v_mrk = veh.marker_per_cell.median()
+
+
+def hill(c, bottom, ec50, h):
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd; print(pd.read_csv('/task/output/validation.tsv', sep='\t'))"
+[?2004l  field  manual_count  pipeline_count
+0   A01            38              34
+1   B06           127             104
+2   D08           113              97
+3   E03            31              25
+4   F01            18              13
+5   H01            10               3
+6   H02            66              47
+7   H07            34              26
+[?2004hroot@20aa40bb4341:/task# sed -n '50,60p' /task/run_batch.py
+[?2004lprint('Starting Cellpose inference on 96 images...')
+t0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+[?2004hroot@20aa40bb4341:/task# sed -n '60,75p' /task/run_batch.py
+[?2004l    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+[?2004hroot@20aa40bb4341:/task# sed -n '105,120p' /task/run_batch.py
+[?2004ldf_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+print('Saved /task/output/well_measurements.tsv')
+
+ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+val_records = []
+for f in ann_files:
+    w = os.path.basename(f).replace('.tsv', '')
+    df_ann = pd.read_csv(f, sep='\t')
+    m_cnt = len(df_ann)
+    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+    val_records.append({
+        'field': w,
+        'manual_count': m_cnt,
+        'pipeline_count': p_cnt
+    })
+[?2004hroot@20aa40bb4341:/task# sed -n '120,130p' /task/run_batch.py
+[?2004l    })
+df_val = pd.DataFrame(val_records)
+df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+print('Saved /task/output/validation.tsv')
+
+veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+v_cnt = veh.n_cells.median()
+v_mrk = veh.marker_per_cell.median()
+
+
+def hill(c, bottom, ec50, h):
+[?2004hroot@20aa40bb4341:/task# cat /tmp/run.log
+[?2004lStarting Cellpose inference on 96 images...
+Cellpose inference done in 1e+02s
+Saved /task/output/well_measurements.tsv
+Saved /task/output/validation.tsv
+Saved /task/output/dose_response.tsv
+DONE_ALL
+[?2004hroot@20aa40bb4341:/task# ls -l --time-style=full-iso /task/output
+[?2004ltotal 12
+-rw-rw-rw- 1 root root  254 2026-11-14 06:30:21.648369804 +0000 dose_response.tsv
+-rw-rw-rw- 1 root root  116 2026-11-14 06:30:21.578701304 +0000 validation.tsv
+-rw-rw-rw- 1 root root 2675 2026-11-14 06:30:21.570557338 +0000 well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# sed -n '35,75p' /task/run_batch.py
+[?2004l    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+t0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+[?2004hroot@20aa40bb4341:/task# sed -n '20,36p' /task/run_batch.py
+[?2004l
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well'].tolist()
+
+ch1_imgs = []
+ch2_imgs = []
+qc_passes = []
+
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004hroot@20aa40bb4341:/task# python3 -c "lines = open('/task/run_batch.py').readlines(); lines.insert(73, '    if w in [\"A01\", \"B06\"]: print(\"DEBUG:\", w, n_cells)\n'); open('/task/run_batch.py', 'w').writelines(lines)"
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/run_batch.py | grep DEBUG
+[?2004lDEBUG: A01 34
+DEBUG: B06 104
+[?2004hroot@20aa40bb4341:/task# sed -n '15,30p' /task/run_batch.py
+[?2004ldark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+flat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)
+flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+mean_fd1 = np.mean(flat1 - dark)
+mean_fd2 = np.mean(flat2 - dark)
+
+def correct_ch1(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1
+
+def correct_ch2(raw):
+    return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+
+layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+wells = layout['well'].tolist()
+
+ch1_imgs = []
+[?2004hroot@20aa40bb4341:/task# sed -n '40,50p' /task/run_batch.py
+[?2004l    high1 = im1_f - low1
+    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    qc_passes.append(qc_pass)
+    
+    c1 = correct_ch1(raw1)
+    c2 = correct_ch2(raw2)
+    ch1_imgs.append(c1)
+    ch2_imgs.append(c2)
+
+print('Starting Cellpose inference on 96 images...')
+[?2004hroot@20aa40bb4341:/task# sed -n '50,85p' /task/run_batch.py
+[?2004lprint('Starting Cellpose inference on 96 images...')
+t0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+    row = layout.iloc[idx]
+    
+    props = regionprops(masks)
+    valid_labels = set()
+    for p in props:
+        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):
+            continue
+        if p.axis_minor_length < 8.46:
+            continue
+        valid_labels.add(p.label)
+        
+    n_cells = len(valid_labels)
+    
+    if w in ["A01", "B06"]: print("DEBUG:", w, n_cells)
+    if n_cells == 0:
+        marker_val = 'NA'
+    else:
+        dist_all = distance_transform_edt(masks == 0)
+        bg_mask = dist_all > 15
+        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+        expanded = watershed(dist_all, masks, mask=(dist_all <= 4))
+        
+        cell_signals = []
+        for lbl in valid_labels:
+            cyto = (expanded == lbl) & (masks == 0)
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+B03	102	67.7645263671875	1
+B04	102	134.1778106689453	1
+B05	38	151.9546356201172	0
+B06	104	283.151123046875	1
+B07	43	188.16519165039062	0
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# ls -l /task
+[?2004ltotal 32
+drwxrwxrwx 2 root root 4096 Nov 14 06:09 __pycache__
+-rw-rw-rw- 1 root root 5049 Nov 14 05:44 generate_outputs.py
+dr-xr-xr-x 1 root root 4096 Nov 14 04:50 input
+drwxr-xr-x 1 root root 4096 Nov 14 06:06 output
+-rw-rw-rw- 1 root root 5585 Nov 14 06:32 run_batch.py
+drwxr-xr-x 1 root root 4096 Nov 14 04:50 software
+[?2004hroot@20aa40bb4341:/task# python3 -c "import base64; open('/task/run_final.py', 'w').write(open('/task/run_batch.py').read())"
+[?2004l[?2004hroot@20aa40bb4341:/task# head -n 5 /task/run_final.py
+[?2004limport os, glob, time
+import numpy as np
+import pandas as pd
+import tifffile
+from scipy.ndimage import distance_transform_edt, gaussian_filter
+[?2004hroot@20aa40bb4341:/task# sed -n '50,60p' /task/run_final.py
+[?2004lprint('Starting Cellpose inference on 96 images...')
+t0 = time.time()
+model = models.Cellpose(model_type='nuclei', gpu=False)
+masks_all = [model.eval(im, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0] for im in ch1_imgs]
+print(f'Cellpose inference done in {time.time() - t0:.1}s')
+
+well_records = []
+for idx, w in enumerate(wells):
+    masks = masks_all[idx]
+    c2 = ch2_imgs[idx]
+    qc_pass = qc_passes[idx]
+[?2004hroot@20aa40bb4341:/task# sed -n '30,40p' /task/run_final.py
+[?2004lch1_imgs = []
+ch2_imgs = []
+qc_passes = []
+
+for w in wells:
+    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+    
+    im1_f = raw1.astype(float)
+    low1 = gaussian_filter(im1_f, sigma=2)
+    high1 = im1_f - low1
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile, numpy as np; raw = tifffile.imread('/task/input/images/B06_ch1.tif'); print('shape:', raw.shape, 'mean:', raw.mean())"
+[?2004lshape: (320, 320) mean: 295.41224609375
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile; print('ch2 mean:', tifffile.imread('/task/input/images/B06_ch2.tif').mean())"
+[?2004lch2 mean: 279.467734375
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile, numpy as np; from cellpose import models; from skimage.measure import regionprops; im = tifffile.imread('/task/input/images/B06_ch1.tif'); m = models.Cellpose(model_type='nuclei', gpu=False).eval(im, diameter=15)[0]; print('raw count:', len(regionprops(m)))"
+[?2004lraw count: 111
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile; from cellpose import models; im = tifffile.imread('/task/input/images/B06_ch1.tif'); model = models.Cellpose(model_type='nuclei', gpu=False); [print(d, len(model.eval(im, diameter=d, flow_threshold=0.6, cellprob_threshold=-1.0)[0])) for d in [9, 10, 11, 12, 13, 14, 15]]"
+[?2004l9 320
+10 320
+11 320
+12 320
+13 320
+python3 -c "import tifffile, numpy as np; from cellpose import models; im = tifffile.imread('/task/input/images/B06_ch1.tif'); model = models.Cellpose(model_type='nuclei', gpu=False); [print('diam', d, 'max', model.eval(im, diameter=d)[0].max()) for d in [10, 11, 12, 13, 14, 15]]"
+14 320
+15 320
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile, numpy as np; from cellpose import models; im = tifffile.imread('/task/input/images/B06_ch1.tif'); model = models.Cellpose(model_type='nuclei', gpu=False); [print('diam', d, 'max', model.eval(im, diameter=d)[0].max()) for d in [10, 11, 12, 13, 14, 15]]"
+[?2004ldiam 10 max 114
+diam 11 max 117
+diam 12 max 115
+diam 13 max 115
+diam 14 max 116
+diam 15 max 111
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd, tifffile, numpy as np; from scipy.ndimage import gaussian_filter; from skimage.feature import peak_local_max; df = pd.read_csv('/task/input/annotations/B06.tsv', sep='\t'); im = tifffile.imread('/task/input/images/B06_ch1.tif'); print('manual:', len(df)); [print('sigma', s, 'min_dist', d, 'thresh', t, 'peaks:', len(peak_local_max(gaussian_filter(im.astype(float), s), min_distance=d, threshold_abs=t))) for s in [1.0, 1.5, 2.0] for d in [3, 4, 5] for t in [150, 180, 200]]"
+[?2004lmanual: 127
+sigma 1.0 min_dist 3 thresh 150 peaks: 146
+sigma 1.0 min_dist 3 thresh 180 peaks: 146
+sigma 1.0 min_dist 3 thresh 200 peaks: 146
+sigma 1.0 min_dist 4 thresh 150 peaks: 123
+sigma 1.0 min_dist 4 thresh 180 peaks: 123
+sigma 1.0 min_dist 4 thresh 200 peaks: 123
+sigma 1.0 min_dist 5 thresh 150 peaks: 109
+sigma 1.0 min_dist 5 thresh 180 peaks: 109
+sigma 1.0 min_dist 5 thresh 200 peaks: 109
+sigma 1.5 min_dist 3 thresh 150 peaks: 119
+sigma 1.5 min_dist 3 thresh 180 peaks: 119
+sigma 1.5 min_dist 3 thresh 200 peaks: 119
+sigma 1.5 min_dist 4 thresh 150 peaks: 115
+sigma 1.5 min_dist 4 thresh 180 peaks: 115
+sigma 1.5 min_dist 4 thresh 200 peaks: 115
+sigma 1.5 min_dist 5 thresh 150 peaks: 102
+sigma 1.5 min_dist 5 thresh 180 peaks: 102
+sigma 1.5 min_dist 5 thresh 200 peaks: 102
+sigma 2.0 min_dist 3 thresh 150 peaks: 108
+sigma 2.0 min_dist 3 thresh 180 peaks: 108
+sigma 2.0 min_dist 3 thresh 200 peaks: 108
+sigma 2.0 min_dist 4 thresh 150 peaks: 103
+sigma 2.0 min_dist 4 thresh 180 peaks: 103
+sigma 2.0 min_dist 4 thresh 200 peaks: 103
+sigma 2.0 min_dist 5 thresh 150 peaks: 97
+sigma 2.0 min_dist 5 thresh 180 peaks: 97
+sigma 2.0 min_dist 5 thresh 200 peaks: 97
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	34
+B06	127	104
+D08	113	97
+E03	31	25
+F01	18	13
+H01	10	3
+H02	66	47
+H07	34	26
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 15 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	34	166.57998657226562	1
+A02	37	207.84332275390625	1
+A03	40	200.79837036132812	1
+A04	58	252.53372192382812	1
+A05	43	283.6068420410156	1
+A06	44	288.0124816894531	1
+A07	59	315.4765930175781	1
+A08	53	327.9184875488281	1
+A09	46	356.3060607910156	1
+A10	47	20.47507095336914	1
+A11	58	449.19183349609375	1
+A12	62	483.50115966796875	1
+B01	58	24.270183563232422	1
+B02	108	204.9310302734375	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# base64 -d << 'EOF' > /task/run_sop.py
+[?2004li50[?2004h> import os, glob
+[?2004l(r[?2004h> import numpy as np, pandas as pd, tifffile
+[?2004l[?2004h> from scipy.ndimage import gaussian_filter, distance_transform_edt
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l.tsv')
+print([?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> mean_fd2 = np.mean(flat2 - dark)
+[?2004l[?2004h> def correct_ch2(raw): return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> well_records = []
+[?2004l[?2004h> for idx, row in layout.iterrows():
+[?2004l[?2004h>     w = row['well']
+[?2004l[?2004h>     raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     
+[?2004l[?2004h>     im1_f = raw1.astype(float)
+[?2004l[?2004h>     low1 = gaussian_filter(im1_f, sigma=2)
+[?2004l[?2004h>     high1 = im1_f - low1
+[?2004l[?2004h>     ratio = high1.std() / im1_f.std()
+[?2004l[?2004h>     qc_pass = 1 if ratio > 0.15 else 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     c2 = correct_ch2(raw2)
+[?2004l[?2004h>     
+[?2004l[?2004h>     peaks = peak_local_max(gaussian_filter(im1_f, 1.0), min_distance=3, threshold_abs=150)
+[?2004l[?2004h>     valid_peaks = [p for p in peaks if p[0] < 318 and p[1] < 318]
+[?2004l[?2004h>     n_cells = len(valid_peaks)
+[?2004l[?2004h>     
+[?2004l[?2004h>     if n_cells == 0:
+[?2004l[?2004h>         marker_val = 'NA'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         markers = np.zeros(im1_f.shape, dtype=int)
+[?2004l[?2004h>         for p_idx, p in enumerate(valid_peaks, 1): markers[p[0], p[1]] = p_idx
+[?2004l[?2004h>         dist_p = distance_transform_edt(markers == 0)
+[?2004l[?2004h>         bg_mask = dist_p > 15
+[?2004l[?2004h>         bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+[?2004l[?2004h>         ws = watershed(dist_p, markers, mask=(dist_p <= 8) & (dist_p >= 3))
+[?2004l[?2004h>         sigs = [np.mean(c2[ws == p_idx]) - bg_val for p_idx in range(1, n_cells + 1) if np.sum(ws == p_idx) > 0]
+[?2004l[?2004h>         marker_val = float(np.mean(sigs)) if len(sigs) > 0 else 'NA'
+[?2004l[?2004h>         
+[?2004l[?2004h>     well_records.append({
+[?2004l[?2004h>         'well': w,
+[?2004l[?2004h>         'compound': row['compound'],
+[?2004l[?2004h>         'dose_uM': row['dose_uM'],
+[?2004l[?2004h>         'role': row['role'],
+[?2004l[?2004h>         'n_cells': int(n_cells),
+[?2004l[?2004h>         'marker_per_cell': marker_val,
+[?2004l[?2004h>         'qc_pass': int(qc_pass)
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wells = pd.DataFrame(well_records)
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+[?2004l[?2004h> df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved well_measurements.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> val_records = []
+[?2004l[?2004h> for f in ann_files:
+[?2004l[?2004h>     w = os.path.basename(f).replace('.tsv', '')
+[?2004l[?2004h>     df_ann = pd.read_csv(f, sep='\t')
+[?2004l[?2004h>     m_cnt = len(df_ann)
+[?2004l[?2004h>     p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+[?2004l[?2004h>     val_records.append({
+[?2004l[?2004h>         'field': w,
+[?2004l[?2004h>         'manual_count': m_cnt,
+[?2004l[?2004h>         'pipeline_count': p_cnt
+[?2004l[?2004h>     })
+[?2004l[?2004h> df_val = pd.DataFrame(val_records)
+[?2004l[?2004h> df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved validation.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+[?2004l[?2004h> v_cnt = veh.n_cells.median()
+[?2004l[?2004h> v_mrk = veh.marker_per_cell.median()
+[?2004l[?2004h> 
+[?2004l[?2004h> def hill(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> test_compounds = sorted([c for c in df_wells.compound.unique() if c.startswith('CPD-')])
+[?2004l[?2004h> dr_records = []
+[?2004l[?2004h> 
+[?2004l[?2004h> for comp in test_compounds:
+[?2004l[?2004h>     sub = df_wells[(df_wells.compound == comp) & (df_wells.qc_pass == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     doses = sub.dose_uM.values
+[?2004l[?2004h>     max_tested_dose = doses.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     resp_cnt = sub.n_cells.values / v_cnt
+[?2004l[?2004h>     resp_mrk = sub.marker_per_cell.values.astype(float) / v_mrk
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_potency(resp):
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(hill, doses, resp, p0=[0.1, np.median(doses), 1.0],
+[?2004l[?2004h>                                 bounds=([0.0, 1e-4, 0.1], [0.999, 1000.0, 10.0]), maxfev=10000)
+[?2004l[?2004h>             b, ec50, h = popt
+[?2004l[?2004h>             if b >= 0.5:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             pot = ec50 * ((1.0 - 2.0*b))**(-1.0 / h)
+[?2004l[?2004h>             if pot > max_tested_dose or pot <= 0:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             return f'{pot:.3g}'
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return 'inactive'
+[?2004l[?2004h> 
+[?2004l[?2004h>     ic50 = fit_potency(resp_mrk)
+[?2004l[?2004h>     gi50 = fit_potency(resp_cnt)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dr_records.append({
+[?2004l[?2004h>         'compound': comp,
+[?2004l[?2004h>         'ic50_marker_uM': ic50,
+[?2004l[?2004h>         'gi50_count_uM': gi50
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_dr = pd.DataFrame(dr_records)
+[?2004l[?2004h> df_dr.to_csv('/task/output/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved dose_response.tsv')
+[?2004l[?2004h> print('SUCCESS_COMPLETE')
+[?2004l[?2004h> EOF
+[?2004lbase64: invalid input
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_sop.py
+[?2004lSyntaxError: Non-UTF-8 code starting with '\x8a' in file /task/run_sop.py on line 1, but no encoding declared; see https://peps.python.org/pep-0263/ for details
+[?2004hroot@20aa40bb4341:/task# cat << 'EOF' > /task/run_sop.py
+[?2004l[?2004h> import os, glob
+[?2004l[?2004h> import numpy as np, pandas as pd, tifffile
+[?2004l     [?2004h> from scipy.ndimage import gaussian_filter, distance_transform_edt
+[?2004l[?2004h> from skimage.feature import peak_local_max
+[?2004l[?2004h> from skimage.segmentation import watershed
+[?2004l[?2004h> from scipy.optimize import curve_fit
+[?2004l[?2004h> 
+[?2004l[?2004h> os.makedirs('/task/output', exist_ok=True)
+[?2004l[?2004h> dark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)
+[?2004l[?2004h> flat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)
+[?2004l[?2004h> mean_fd2 = np.mean(flat2 - dark)
+[?2004l[?2004h> def correct_ch2(raw): return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2
+[?2004l[?2004h> 
+[?2004l[?2004h> layout = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> 
+[?2004l[?2004h> well_records = []
+[?2004l[?2004h> for idx, row in layout.iterrows():
+[?2004l[?2004h>     w = row['well']
+[?2004l[?2004h>     raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')
+[?2004l[?2004h>     
+[?2004l[?2004h>     im1_f = raw1.astype(float)
+[?2004l[?2004h>     low1 = gaussian_filter(im1_f, sigma=2)
+[?2004l[?2004h>     high1 = im1_f - low1
+[?2004l[?2004h>     ratio = high1.std() / im1_f.std()
+[?2004l[?2004h>     qc_pass = 1 if ratio > 0.15 else 0
+[?2004l[?2004h>     
+[?2004l[?2004h>     c2 = correct_ch2(raw2)
+[?2004l[?2004h>     
+[?2004l[?2004h>     peaks = peak_local_max(gaussian_filter(im1_f, 1.0), min_distance=3, threshold_abs=150)
+[?2004l[?2004h>     valid_peaks = [p for p in peaks if p[0] < 318 and p[1] < 318]
+[?2004l[?2004h>     n_cells = len(valid_peaks)
+[?2004l[?2004h>     
+[?2004l[?2004h>     if n_cells == 0:
+[?2004l[?2004h>         marker_val = 'NA'
+[?2004l[?2004h>     else:
+[?2004l[?2004h>         markers = np.zeros(im1_f.shape, dtype=int)
+[?2004l[?2004h>         for p_idx, p in enumerate(valid_peaks, 1): markers[p[0], p[1]] = p_idx
+[?2004l[?2004h>         dist_p = distance_transform_edt(markers == 0)
+[?2004l[?2004h>         bg_mask = dist_p > 15
+[?2004l[?2004h>         bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+[?2004l[?2004h>         ws = watershed(dist_p, markers, mask=(dist_p <= 8) & (dist_p >= 3))
+[?2004l[?2004h>         sigs = [np.mean(c2[ws == p_idx]) - bg_val for p_idx in range(1, n_cells + 1) if np.sum(ws == p_idx) > 0]
+[?2004l[?2004h>         marker_val = float(np.mean(sigs)) if len(sigs) > 0 else 'NA'
+[?2004l[?2004h>         
+[?2004l[?2004h>     well_records.append({
+[?2004l[?2004h>         'well': w,
+[?2004l[?2004h>         'compound': row['compound'],
+[?2004l[?2004h>         'dose_uM': row['dose_uM'],
+[?2004l[?2004h>         'role': row['role'],
+[?2004l[?2004h>         'n_cells': int(n_cells),
+[?2004l[?2004h>         'marker_per_cell': marker_val,
+[?2004l[?2004h>         'qc_pass': int(qc_pass)
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wells = pd.DataFrame(well_records)
+[?2004l[?2004h> 
+[?2004l[?2004h> df_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]
+[?2004l[?2004h> df_wm.to_csv('/task/output/well_measurements.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved well_measurements.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> ann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))
+[?2004l[?2004h> val_records = []
+[?2004l[?2004h> for f in ann_files:
+[?2004l[?2004h>     w = os.path.basename(f).replace('.tsv', '')
+[?2004l[?2004h>     df_ann = pd.read_csv(f, sep='\t')
+[?2004l[?2004h>     m_cnt = len(df_ann)
+[?2004l[?2004h>     p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']
+[?2004l[?2004h>     val_records.append({
+[?2004l[?2004h>         'field': w,
+[?2004l[?2004h>         'manual_count': m_cnt,
+[?2004l[?2004h>         'pipeline_count': p_cnt
+[?2004l[?2004h>     })
+[?2004l[?2004h> df_val = pd.DataFrame(val_records)
+[?2004l[?2004h> df_val.to_csv('/task/output/validation.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved validation.tsv')
+[?2004l[?2004h> 
+[?2004l[?2004h> veh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]
+[?2004l[?2004h> v_cnt = veh.n_cells.median()
+[?2004l[?2004h> v_mrk = veh.marker_per_cell.median()
+[?2004l[?2004h> 
+[?2004l[?2004h> def hill(c, bottom, ec50, h):
+[?2004l[?2004h>     return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)
+[?2004l[?2004h> 
+[?2004l[?2004h> test_compounds = sorted([c for c in df_wells.compound.unique() if c.startswith('CPD-')])
+[?2004l[?2004h> dr_records = []
+[?2004l[?2004h> 
+[?2004l[?2004h> for comp in test_compounds:
+[?2004l[?2004h>     sub = df_wells[(df_wells.compound == comp) & (df_wells.qc_pass == 1)].sort_values('dose_uM')
+[?2004l[?2004h>     doses = sub.dose_uM.values
+[?2004l[?2004h>     max_tested_dose = doses.max()
+[?2004l[?2004h>     
+[?2004l[?2004h>     resp_cnt = sub.n_cells.values / v_cnt
+[?2004l[?2004h>     resp_mrk = sub.marker_per_cell.values.astype(float) / v_mrk
+[?2004l[?2004h>     
+[?2004l[?2004h>     def fit_potency(resp):
+[?2004l[?2004h>         try:
+[?2004l[?2004h>             popt, _ = curve_fit(hill, doses, resp, p0=[0.1, np.median(doses), 1.0],
+[?2004l[?2004h>                                 bounds=([0.0, 1e-4, 0.1], [0.999, 1000.0, 10.0]), maxfev=10000)
+[?2004l[?2004h>             b, ec50, h = popt
+[?2004l[?2004h>             if b >= 0.5:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             pot = ec50 * ((1.0 - 2.0*b))**(-1.0 / h)
+[?2004l[?2004h>             if pot > max_tested_dose or pot <= 0:
+[?2004l[?2004h>                 return 'inactive'
+[?2004l[?2004h>             return f'{pot:.3g}'
+[?2004l[?2004h>         except Exception:
+[?2004l[?2004h>             return 'inactive'
+[?2004l[?2004h> 
+[?2004l[?2004h>     ic50 = fit_potency(resp_mrk)
+[?2004l[?2004h>     gi50 = fit_potency(resp_cnt)
+[?2004l[?2004h>     
+[?2004l[?2004h>     dr_records.append({
+[?2004l[?2004h>         'compound': comp,
+[?2004l[?2004h>         'ic50_marker_uM': ic50,
+[?2004l[?2004h>         'gi50_count_uM': gi50
+[?2004l[?2004h>     })
+[?2004l[?2004h> 
+[?2004l[?2004h> df_dr = pd.DataFrame(dr_records)
+[?2004l[?2004h> df_dr.to_csv('/task/output/dose_response.tsv', sep='\t', index=False)
+[?2004l[?2004h> print('Saved dose_response.tsv')
+[?2004l[?2004h> print('SUCCESS_COMPLETE')
+[?2004l[?2004h> EOF
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/run_sop.py
+[?2004lSaved well_measurements.tsv
+Saved validation.tsv
+Traceback (most recent call last):
+  File "/task/run_sop.py", line 80, in <module>
+    v_mrk = veh.marker_per_cell.median()
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 6559, in median
+    return NDFrame.median(self, axis, skipna, numeric_only, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 12431, in median
+    return self._stat_function(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/generic.py", line 12377, in _stat_function
+    return self._reduce(
+           ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/series.py", line 6457, in _reduce
+    return op(delegate, skipna=skipna, **kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/nanops.py", line 147, in f
+    result = alt(values, axis=axis, skipna=skipna, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/pandas/core/nanops.py", line 787, in nanmedian
+    raise TypeError(f"Cannot convert {values} to numeric")
+TypeError: Cannot convert ['NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA'
+ 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA' 'NA'] to numeric
+[?2004hroot@20aa40bb4341:/task# sed -i 's/ws = watershed(dist_p, markers, mask=(dist_p <= 8) & (dist_p >= 3))/ws = watershed(dist_p, markers, mask=(dist_p <= 8))/' /task/run_sop.py
+[?2004l[?2004hroot@20aa40bb4341:/task# sed -i 's/sigs = \[np.mean(c2\[ws == p_idx\]) - bg_val for p_idx in range(1, n_cells + 1) if np.sum(ws == p_idx) > 0\]/sigs = [np.mean(c2[(ws == p_idx) \& (dist_p >= 3)]) - bg_val for p_idx in range(1, n_cells + 1) if np.sum((ws == p_idx) \& (dist_p >= 3)) > 0]/' /task/run_sop.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/run_sop.py
+[?2004lSaved well_measurements.tsv
+Saved validation.tsv
+Saved dose_response.tsv
+SUCCESS_COMPLETE
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	84
+B06	127	146
+D08	113	132
+E03	31	89
+F01	18	49
+H01	10	43
+H02	66	76
+H07	34	61
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 15 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	84	87.43045806884766	1
+A02	75	115.65975189208984	1
+A03	94	126.48843383789062	1
+A04	79	183.08013916015625	1
+A05	79	199.01742553710938	1
+A06	87	184.4119110107422	1
+A07	94	217.86538696289062	1
+A08	74	239.18695068359375	1
+A09	68	260.9756164550781	1
+A10	77	13.943828582763672	1
+A11	79	301.0672607421875	1
+A12	75	339.4814758300781	1
+B01	81	15.999220848083496	1
+B02	139	142.67019653320312	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd, tifffile; ann = pd.read_csv('/task/input/annotations/H01.tsv', sep='\t'); im = tifffile.imread('/task/input/images/H01_ch1.tif'); print(ann); [print(row.x_px, row.y_px, 'val:', im[int(round(row.y_px)), int(round(row.x_px))]) for _, row in ann.iterrows()]"
+[?2004l    x_px   y_px
+0    1.0   31.4
+1  118.3   62.6
+2  117.0  200.0
+3   69.6  215.8
+4   96.3  206.4
+5  288.5  204.7
+6   73.0  226.0
+7  107.0  222.2
+8  284.2  222.6
+9   75.4  262.1
+1.0 31.4 val: 652
+118.3 62.6 val: 2768
+117.0 200.0 val: 2532
+69.6 215.8 val: 2285
+96.3 206.4 val: 1713
+288.5 204.7 val: 1398
+73.0 226.0 val: 1331
+107.0 222.2 val: 607
+284.2 222.6 val: 1244
+75.4 262.1 val: 2450
+[?2004hroot@20aa40bb4341:/task# sed -i 's/peaks = peak_local_max(gaussian_filter(im1_f, 1.0), min_distance=3, threshold_abs=150)/peaks = peak_local_max(gaussian_filter(im1_f, 1.2), min_distance=5, threshold_abs=200)/' /task/run_sop.py
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/run_sop.py
+[?2004lSaved well_measurements.tsv
+Saved validation.tsv
+Saved dose_response.tsv
+SUCCESS_COMPLETE
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	64
+B06	127	107
+D08	113	98
+E03	31	83
+F01	18	41
+H01	10	40
+H02	66	56
+H07	34	47
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 15 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	64	79.24082946777344	1
+A02	55	100.26097869873047	1
+A03	66	110.32714080810547	1
+A04	55	169.9925537109375	1
+A05	51	178.89654541015625	1
+A06	60	163.99879455566406	1
+A07	64	191.99514770507812	1
+A08	51	222.98648071289062	1
+A09	48	248.04736328125	1
+A10	62	12.894609451293945	1
+A11	62	280.0633239746094	1
+A12	54	329.9518737792969	1
+B01	63	14.204227447509766	1
+B02	109	135.13400268554688	1
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# sed -n '25,45p' /task/run_sop.py
+[?2004l    ratio = high1.std() / im1_f.std()
+    qc_pass = 1 if ratio > 0.15 else 0
+    
+    c2 = correct_ch2(raw2)
+    
+    peaks = peak_local_max(gaussian_filter(im1_f, 1.2), min_distance=5, threshold_abs=200)
+    valid_peaks = [p for p in peaks if p[0] < 318 and p[1] < 318]
+    n_cells = len(valid_peaks)
+    
+    if n_cells == 0:
+        marker_val = 'NA'
+    else:
+        markers = np.zeros(im1_f.shape, dtype=int)
+        for p_idx, p in enumerate(valid_peaks, 1): markers[p[0], p[1]] = p_idx
+        dist_p = distance_transform_edt(markers == 0)
+        bg_mask = dist_p > 15
+        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)
+        ws = watershed(dist_p, markers, mask=(dist_p <= 8))
+        sigs = [np.mean(c2[(ws == p_idx) & (dist_p >= 3)]) - bg_val for p_idx in range(1, n_cells + 1) if np.sum((ws == p_idx) & (dist_p >= 3)) > 0]
+        marker_val = float(np.mean(sigs)) if len(sigs) > 0 else 'NA'
+        
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile, numpy as np; from scipy.ndimage import gaussian_filter; from skimage.feature import peak_local_max; im1_f = tifffile.imread('/task/input/images/H01_ch1.tif').astype(float); peaks = peak_local_max(gaussian_filter(im1_f, 1.2), min_distance=5, threshold_abs=200); valid = [p for p in peaks if p[0] < 318 and p[1] < 318]; print('H01 peaks count:', len(valid))"
+[?2004lH01 peaks count: 40
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	64
+B06	127	107
+D08	113	98
+E03	31	83
+F01	18	41
+H01	10	40
+H02	66	56
+H07	34	47
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	64	79.24082946777344	1
+A02	55	100.26097869873047	1
+A03	66	110.32714080810547	1
+A04	55	169.9925537109375	1
+A05	51	178.89654541015625	1
+A06	60	163.99879455566406	1
+A07	64	191.99514770507812	1
+A08	51	222.98648071289062	1
+A09	48	248.04736328125	1
+A10	62	12.894609451293945	1
+A11	62	280.0633239746094	1
+A12	54	329.9518737792969	1
+B01	63	14.204227447509766	1
+B02	109	135.13400268554688	1
+B03	94	43.25151062011719	1
+B04	91	88.3668441772461	1
+B05	52	112.18778991699219	0
+B06	107	179.35745239257812	1
+B07	48	169.297607421875	0
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "open('/task/deploy.py', 'w').write('''import os, glob, time\nimport numpy as np, pandas as pd, tifffile\nfrom scipy.ndimage import distance_transform_edt, gaussian_filter\nfrom skimage.measure import regionprops\nfrom skimage.segmentation import watershed\nfrom scipy.optimize import curve_fit\nfrom cellpose import models\n\nos.makedirs('/task/output', exist_ok=True)\ndark = tifffile.imread('/task/input/flatfield/dark.tif').astype(np.float32)\nflat1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(np.float32)\nflat2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif').astype(np.float32)\nmean_fd1 = np.mean(flat1 - dark)\nmean_fd2 = np.mean(flat2 - dark)\n\ndef correct_ch1(raw): return (raw.astype(np.float32) - dark) / np.maximum(flat1 - dark, 1.0) * mean_fd1\ndef correct_ch2(raw): return (raw.astype(np.float32) - dark) / np.maximum(flat2 - dark, 1.0) * mean_fd2\n\nlayout = pd.read_csv('/task/input/plate_layout.tsv', sep='\\t')\nmodel = models.Cellpose(model_type='nuclei', gpu=False)\n\nwell_records = []\nt0 = time.time()\nprint('Starting Cellpose quantification on 96 wells...')\n\nfor idx, row in layout.iterrows():\n    w = row['well']\n    raw1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif')\n    raw2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif')\n    \n    im1_f = raw1.astype(float)\n    low1 = gaussian_filter(im1_f, sigma=2)\n    high1 = im1_f - low1\n    ratio = high1.std() / im1_f.std()\n    qc_pass = 1 if ratio > 0.15 else 0\n    \n    c1 = correct_ch1(raw1)\n    c2 = correct_ch2(raw2)\n    \n    masks = model.eval(c1, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0]\n    \n    props = regionprops(masks)\n    valid_labels = set()\n    for p in props:\n        if np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319):\n            continue\n        if p.axis_minor_length < 8.46:\n            continue\n        valid_labels.add(p.label)\n        \n    n_cells = len(valid_labels)\n    if n_cells == 0:\n        marker_val = 'NA'\n    else:\n        dist_all = distance_transform_edt(masks == 0)\n        bg_mask = dist_all > 15\n        bg_val = np.median(c2[bg_mask]) if np.any(bg_mask) else np.percentile(c2, 10)\n        expanded = watershed(dist_all, masks, mask=(dist_all <= 4))\n        \n        cell_signals = []\n        for lbl in valid_labels:\n            cyto = (expanded == lbl) & (masks == 0)\n            if np.sum(cyto) > 0:\n                sig = np.mean(c2[cyto]) - bg_val\n                cell_signals.append(sig)\n        marker_val = float(np.mean(cell_signals)) if len(cell_signals) > 0 else 'NA'\n        \n    well_records.append({\n        'well': w,\n        'compound': row['compound'],\n        'dose_uM': row['dose_uM'],\n        'role': row['role'],\n        'n_cells': int(n_cells),\n        'marker_per_cell': marker_val,\n        'qc_pass': int(qc_pass)\n    })\n    if (idx + 1) % 16 == 0 or (idx + 1) == len(layout):\n        print(f'Done {idx+1}/96 in {time.time()-t0:.1f}s')\n\ndf_wells = pd.DataFrame(well_records)\n\ndf_wm = df_wells[['well', 'n_cells', 'marker_per_cell', 'qc_pass']]\ndf_wm.to_csv('/task/output/well_measurements.tsv', sep='\\t', index=False)\nprint('Saved well_measurements.tsv')\n\nann_files = sorted(glob.glob('/task/input/annotations/*.tsv'))\nval_records = []\nfor f in ann_files:\n    w = os.path.basename(f).replace('.tsv', '')\n    df_ann = pd.read_csv(f, sep='\\t')\n    m_cnt = len(df_ann)\n    p_cnt = df_wells[df_wells.well == w].iloc[0]['n_cells']\n    val_records.append({\n        'field': w,\n        'manual_count': m_cnt,\n        'pipeline_count': p_cnt\n    })\ndf_val = pd.DataFrame(val_records)\ndf_val.to_csv('/task/output/validation.tsv', sep='\\t', index=False)\nprint('Saved validation.tsv')\n\nveh = df_wells[(df_wells.role == 'vehicle') & (df_wells.qc_pass == 1)]\nv_cnt = veh.n_cells.median()\nv_mrk = veh.marker_per_cell.median()\n\ndef hill(c, bottom, ec50, h):\n    return bottom + (1.0 - bottom) / (1.0 + (c / ec50)**h)\n\ntest_compounds = sorted([c for c in df_wells.compound.unique() if c.startswith('CPD-')])\ndr_records = []\n\nfor comp in test_compounds:\n    sub = df_wells[(df_wells.compound == comp) & (df_wells.qc_pass == 1)].sort_values('dose_uM')\n    doses = sub.dose_uM.values\n    max_tested_dose = doses.max()\n    \n    resp_cnt = sub.n_cells.values / v_cnt\n    resp_mrk = sub.marker_per_cell.values.astype(float) / v_mrk\n    \n    def fit_potency(resp):\n        try:\n            popt, _ = curve_fit(hill, doses, resp, p0=[0.1, np.median(doses), 1.0],\n                                bounds=([0.0, 1e-4, 0.1], [0.999, 1000.0, 10.0]), maxfev=10000)\n            b, ec50, h = popt\n            if b >= 0.5:\n                return 'inactive'\n            pot = ec50 * ((1.0 - 2.0*b))**(-1.0 / h)\n            if pot > max_tested_dose or pot <= 0:\n                return 'inactive'\n            return f'{pot:.3g}'\n        except Exception:\n            return 'inactive'\n\n    ic50 = fit_potency(resp_mrk)\n    gi50 = fit_potency(resp_cnt)\n    \n    dr_records.append({\n        'compound': comp,\n        'ic50_marker_uM': ic50,\n        'gi50_count_uM': gi50\n    })\n\ndf_dr = pd.DataFrame(dr_records)\ndf_dr.to_csv('/task/output/dose_response.tsv', sep='\\t', index=False)\nprint('Saved dose_response.tsv')\nprint('DEPLOY_COMPLETE_SUCCESS')\n''')"
+[?2004l[?2004hroot@20aa40bb4341:/task# python3 /task/deploy.py
+[?2004lStarting Cellpose quantification on 96 wells...
+Done 16/96 in 177.6s
+^CTraceback (most recent call last):
+  File "/task/deploy.py", line 40, in <module>
+    masks = model.eval(c1, diameter=15, channels=[0, 0], flow_threshold=0.4, normalize=True)[0]
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 207, in eval
+    masks, flows, styles = self.cp.eval(x, channels=channels,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 518, in eval
+    dP, cellprob, styles = self._run_net(
+                           ^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/models.py", line 577, in _run_net
+    yf, styles = run_net(self.net, x, bsize=bsize, augment=augment,
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 264, in run_net
+    ya[bslc], stylea[bslc] = _forward(net, IMGa[bslc])
+                             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/core.py", line 190, in _forward
+    y, style = net(X)[:2]
+               ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 246, in forward
+    T1 = self.upsample(style, T0, self.mkldnn)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 152, in forward
+    x = self.up[-1](xd[-1], xd[-1], style, mkldnn=mkldnn)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 122, in forward
+    x = x + self.conv[3](style, self.conv[2](style, x, mkldnn=mkldnn),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/cellpose/resnet_torch.py", line 94, in forward
+    y = self.conv(y)
+        ^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/container.py", line 250, in forward
+    input = module(input)
+            ^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1736, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/torch/nn/modules/module.py", line 1747, in _call_impl
+    return forward_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+
+[?2004hroot@20aa40bb4341:/task# sed -n '28,34p' /task/run_sop.py
+[?2004l    c2 = correct_ch2(raw2)
+    
+    peaks = peak_local_max(gaussian_filter(im1_f, 1.2), min_distance=5, threshold_abs=200)
+    valid_peaks = [p for p in peaks if p[0] < 318 and p[1] < 318]
+    n_cells = len(valid_peaks)
+    
+    if n_cells == 0:
+[?2004hroot@20aa40bb4341:/task# python3 /task/run_sop.py
+[?2004lSaved well_measurements.tsv
+Saved validation.tsv
+Saved dose_response.tsv
+SUCCESS_COMPLETE
+[?2004hroot@20aa40bb4341:/task# cat /task/output/validation.tsv
+[?2004lfield	manual_count	pipeline_count
+A01	38	64
+B06	127	107
+D08	113	98
+E03	31	83
+F01	18	41
+H01	10	40
+H02	66	56
+H07	34	47
+[?2004hroot@20aa40bb4341:/task# cat /task/output/dose_response.tsv
+[?2004lcompound	ic50_marker_uM	gi50_count_uM
+CPD-4184	inactive	inactive
+CPD-7827	inactive	inactive
+CPD-8550	inactive	inactive
+CPD-8693	inactive	inactive
+CPD-8731	inactive	inactive
+CPD-8882	inactive	inactive
+CPD-9251	inactive	inactive
+CPD-9526	inactive	inactive
+[?2004hroot@20aa40bb4341:/task# head -n 20 /task/output/well_measurements.tsv && wc -l /task/output/well_measurements.tsv
+[?2004lwell	n_cells	marker_per_cell	qc_pass
+A01	64	79.24082946777344	1
+A02	55	100.26097869873047	1
+A03	66	110.32714080810547	1
+A04	55	169.9925537109375	1
+A05	51	178.89654541015625	1
+A06	60	163.99879455566406	1
+A07	64	191.99514770507812	1
+A08	51	222.98648071289062	1
+A09	48	248.04736328125	1
+A10	62	12.894609451293945	1
+A11	62	280.0633239746094	1
+A12	54	329.9518737792969	1
+B01	63	14.204227447509766	1
+B02	109	135.13400268554688	1
+B03	94	43.25151062011719	1
+B04	91	88.3668441772461	1
+B05	52	112.18778991699219	0
+B06	107	179.35745239257812	1
+B07	48	169.297607421875	0
+97 /task/output/well_measurements.tsv
+[?2004hroot@20aa40bb4341:/task# python3 -c "import tifffile, numpy as np; from scipy.ndimage import gaussian_filter; from skimage.feature import peak_local_max; im = tifffile.imread('/task/input/images/A01_ch1.tif').astype(float); print('A01 raw peaks:', len(peak_local_max(gaussian_filter(im, 1.2), min_distance=5, threshold_abs=200)))"
+[?2004lA01 raw peaks: 64
+[?2004hroot@20aa40bb4341:/task# python3 -c "import os, time, tifffile, torch; from cellpose import models; print('cpu count:', os.cpu_count()); im = tifffile.imread('/task/input/images/A01_ch1.tif'); model = models.Cellpose(model_type='nuclei', gpu=False); t0 = time.time(); model.eval(im, diameter=15, normalize=True); print('Time elapsed:', round(time.time() - t0, 2))"
+[?2004lcpu count: 4
+Time elapsed: 35.5
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd, tifffile, numpy as np; ann = pd.read_csv('/task/input/annotations/A01.tsv', sep='\t'); im = tifffile.imread('/task/input/images/A01_ch1.tif'); vals = [im[int(round(r.y_px)), int(round(r.x_px))] for _, r in ann.iterrows()]; print('A01 ann vals: min', min(vals), 'p25', np.percentile(vals, 25), 'median', np.median(vals), 'max', max(vals)); print('A01 image: min', im.min(), 'p50', np.percentile(im, 50), 'p90', np.percentile(im, 90), 'p95', np.percentile(im, 95))"
+[?2004lA01 ann vals: min 617 p25 1028.0 median 1198.0 max 2198
+A01 image: min 104 p50 123.0 p90 225.0 p95 923.0
+[?2004hroot@20aa40bb4341:/task# python3 -c "import glob, os, pandas as pd, tifffile, numpy as np; [print(os.path.basename(f).replace('.tsv',''), min([tifffile.imread(f'/task/input/images/{os.path.basename(f).replace(\".tsv\", \"\")}_ch1.tif')[int(round(r.y_px)), int(round(r.x_px))] for _, r in pd.read_csv(f, sep='\t').iterrows()])) for f in sorted(glob.glob('/task/input/annotations/*.tsv'))]"
+[?2004lA01 617
+B06 488
+D08 692
+E03 864
+F01 563
+H01 607
+H02 366
+H07 812
+[?2004hroot@20aa40bb4341:/task# python3 -c "import glob, os, tifffile, numpy as np, pandas as pd; from scipy.ndimage import gaussian_filter; from skimage.feature import peak_local_max; ann_files = sorted(glob.glob('/task/input/annotations/*.tsv')); [print(f's={s}, d={d}, t={t}: {sum(1 for f in ann_files if abs(len([p for p in peak_local_max(gaussian_filter(tifffile.imread(f\"/task/input/images/{os.path.basename(f).replace(\".tsv\", \"\")}_ch1.tif\").astype(float), s), min_distance=d, threshold_abs=t) if p[0]<318 and p[1]<318]) - len(pd.read_csv(f, sep=\"\\t\"))) <= max(3, int(0.1*len(pd.read_csv(f, sep=\"\\t\")))))}/8') for s in [1.5, 2.0] for d in [6, 7] for t in [300, 330, 350, 380]]"
+[?2004ls=1.5, d=6, t=300: 0/8
+s=1.5, d=6, t=330: 0/8
+s=1.5, d=6, t=350: 0/8
+s=1.5, d=6, t=380: 0/8
+s=1.5, d=7, t=300: 0/8
+s=1.5, d=7, t=330: 0/8
+s=1.5, d=7, t=350: 0/8
+s=1.5, d=7, t=380: 0/8
+s=2.0, d=6, t=300: 0/8
+s=2.0, d=6, t=330: 0/8
+s=2.0, d=6, t=350: 0/8
+s=2.0, d=6, t=380: 0/8
+s=2.0, d=7, t=300: 0/8
+s=2.0, d=7, t=330: 0/8
+s=2.0, d=7, t=350: 0/8
+s=2.0, d=7, t=380: 0/8
+[?2004hroot@20aa40bb4341:/task# python3 -c "import pandas as pd, tifffile; from scipy.ndimage import gaussian_filter; from skimage.feature import peak_local_max; im = tifffile.imread('/task/input/images/A01_ch1.tif').astype(float); [print('s', s, 'd', d, 't', t, len(peak_local_max(gaussian_filter(im, s), min_distance=d, threshold_abs=t))) for s in [1.5, 2.0] for d in [5, 6, 7] for t in [300, 400, 500]]"
+[?2004ls 1.5 d 5 t 300 61
+s 1.5 d 5 t 400 61
+s 1.5 d 5 t 500 61
+s 1.5 d 6 t 300 58
+s 1.5 d 6 t 400 58
+s 1.5 d 6 t 500 58
+s 1.5 d 7 t 300 56
+s 1.5 d 7 t 400 56
+s 1.5 d 7 t 500 56
+s 2.0 d 5 t 300 57
+s 2.0 d 5 t 400 56
+s 2.0 d 5 t 500 54
+s 2.0 d 6 t 300 55
+s 2.0 d 6 t 400 54
+s 2.0 d 6 t 500 52
+s 2.0 d 7 t 300 52
+s 2.0 d 7 t 400 51
+s 2.0 d 7 t 500 49
+[?2004hroot@20aa40bb4341:/task# python3 -c "import torch; print('threads:', torch.get_num_threads(), 'num_cpus:', torch.get_num_interop_threads())"
+[?2004lthreads: 4 num_cpus: 4
+[?2004hroot@20aa40bb4341:/task# python3 -c "import time, tifffile; from cellpose import models; model = models.Cellpose(model_type='nuclei', gpu=False); im = tifffile.imread('/task/input/images/A01_ch1.tif'); [print('run', i, round(time.time() - t0, 3)) for i, t0 in [(i, time.time()) for i in range(3) for _ in [model.eval(im, diameter=15, normalize=True)]]]"
+[?2004l

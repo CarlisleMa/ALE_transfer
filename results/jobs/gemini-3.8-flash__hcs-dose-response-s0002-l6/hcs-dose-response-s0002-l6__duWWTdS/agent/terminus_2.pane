@@ -1,0 +1,1335 @@
+[?2004hroot@ec77f99773e0:/task# ls -la /task/input
+[?2004ltotal 32
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 .
+drwxr-xr-x 1 root root 4096 Nov 14 04:46 ..
+-r--r--r-- 1 root root 3557 Nov 14 04:45 analysis_sop.md
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 annotations
+-r--r--r-- 1 root root 1678 Nov 14 04:45 assay_notes.md
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 flatfield
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 images
+-r--r--r-- 1 root root 2475 Nov 14 04:45 plate_layout.tsv
+[?2004hroot@ec77f99773e0:/task# cat /task/input/assay_notes.md
+[?2004l# Assay notes - plate HCS-4588 (imaged 2025-03-09)
+
+## Wet lab
+- Cells: adherent reporter line (identity blinded), 96-well imaging plate with optical bottom, all 96 wells in use.
+- Compounds: eight blinded test compounds, 8-point 3-fold series from 30 uM, one well per concentration; vehicle = DMSO (0.3% in every well); REF-INH = reference inhibitor of the marker pathway at 10 uM. Dispensed acoustically according to plate_layout.tsv, 48 h treatment.
+- Incubation: 37 C / 5% CO2, standard polystyrene lid.
+- Fixation 4% PFA, permeabilisation 0.1% Triton X-100.
+- Staining: Alexa Fluor 488 conjugate against the marker protein, two PBS washes, wells left in 100 uL PBS.
+- Nuclear counterstain: Hoechst 33342 in the last wash.
+
+## Imaging
+- Automated widefield microscope, 10x / NA 0.45 air objective, sCMOS camera with 2 x 2 binning (1.3 um per pixel), 16 bit.
+- Channel 1: Hoechst (ex 385 nm). Channel 2: Alexa Fluor 488 (ex 475 nm). One field per well at the well centre, cropped to 320 x 320 pixels for transfer. Same exposure time for all wells of a channel.
+- Focus: hardware autofocus on the plate bottom.
+- Reference frames (flatfield/): average of 50 exposures of a uniform dye slide per channel and of 50 exposures with the shutter closed, recorded the same day.
+- Files are raw camera frames: no illumination, background or any other correction was applied.
+
+## Manual counts
+- 8 fields of this plate were counted by hand by two technicians with the point tool of the image viewer, following SOP IA-07 section 1 (annotations/). Fields were picked to cover untreated wells of the inner and outer plate area and wells of the highest and of intermediate concentrations.
+[?2004hroot@ec77f99773e0:/task# cat /task/input/analysis_sop.md
+[?2004l# SOP IA-07 (v5): image analysis of two-channel potency plates (nuclear stain / cytoplasmic marker)
+
+This SOP applies to every plate of this assay format. It defines what is reported and which
+criteria a result has to meet, not how a particular plate has to be processed.
+
+## 1 Readouts (per well)
+- **R1, cell number**: the number of cells in the imaged field. One nucleus is one cell; nuclei
+  that touch or overlap each other are separate cells. Two rules decide what is counted:
+  - *Fragments are not cells.* Nuclear fragments, apoptotic bodies and other stained debris are
+    compact objects of a few micrometres (the largest are about 6.5 um across). Intact nuclei of
+    this cell line measure at least 11 um in their shortest dimension, with or without treatment.
+  - *Counting frame.* A nucleus that is cut by the top or the left edge of the image is counted.
+    A nucleus that is cut by the bottom or the right edge of the image is not counted (also when
+    it is cut by the top or the left edge as well).
+- **R2, marker per cell**: for each counted cell, the mean marker-channel intensity of its
+  cytoplasm that is due to the stain bound in the cell. Marker-channel signal that does not come
+  from the cells is background and is not part of R2. The well value is the mean over the counted
+  cells of the field.
+
+## 2 Validation of the counting procedure
+On every plate the lab counts a number of fields by hand under the rules of section 1 (point
+annotations). Before a counting procedure is used on a plate, its counts are compared with these
+manual counts. The procedure is fit for use when, for every annotated field,
+
+    | procedure count - manual count |  <=  max(3 cells, 10 % of the manual count)
+
+A procedure that does not meet this on every annotated field is not used: it is changed and
+compared again. The comparison is reported for the procedure that was finally used. Annotated
+fields are counted by the procedure like every other field; manual counts are not entered into
+the well table.
+
+## 3 Image QC
+A field that was acquired out of focus cannot be quantified. Such a well fails QC (`qc_pass` = 0).
+It stays in the well table but is not used for anything downstream (neither as a control nor as a
+point of a curve). Every other well passes (`qc_pass` = 1). Few cells, a weak signal or any other
+compound effect is a result, not a QC failure.
+
+## 4 Response scale
+Responses are relative to vehicle-treated cells:
+
+    response = readout of the well / readout the same well would have given with vehicle only
+
+so that vehicle-treated cells have response 1 for both readouts. The reference inhibitor (single
+concentration) is a plate control; it does not define the scale.
+
+## 5 Curve model, potency, `inactive`
+For each compound and readout, the responses of the usable wells are described by a four-parameter
+logistic function of the concentration c whose upper asymptote is fixed at the vehicle level:
+
+    response(c) = bottom + (1 - bottom) / (1 + (c / EC50)^h),   0 <= bottom < 1,  h > 0
+
+The reported potency is the concentration at which the fitted curve equals 0.5, i.e. the readout
+is half of that of vehicle-treated cells (IC50 for R2, GI50 for R1). This equals EC50 only when
+bottom = 0.
+
+A compound is **inactive** on a readout when the fitted curve does not come down to 0.5 at or
+below the highest concentration tested in a usable well (no effect, a plateau above 0.5, a
+potency beyond the tested range, or a readout that does not fall at all). In that case the
+literal `inactive` is reported, never a number.
+[?2004hroot@ec77f99773e0:/task# head -n 25 /task/input/plate_layout.tsv
+[?2004lwell	compound	dose_uM	role
+A01	REF-INH	10	reference
+A02	CPD-3353	0.01372	compound
+A03	DMSO	0	vehicle
+A04	CPD-3353	0.04115	compound
+A05	CPD-3353	0.1235	compound
+A06	CPD-3353	0.3704	compound
+A07	DMSO	0	vehicle
+A08	CPD-3353	1.111	compound
+A09	CPD-3353	3.333	compound
+A10	CPD-3353	10	compound
+A11	DMSO	0	vehicle
+A12	CPD-3353	30	compound
+B01	CPD-2467	0.01372	compound
+B02	DMSO	0	vehicle
+B03	CPD-2467	0.04115	compound
+B04	CPD-2467	0.1235	compound
+B05	CPD-2467	0.3704	compound
+B06	DMSO	0	vehicle
+B07	CPD-2467	1.111	compound
+B08	CPD-2467	3.333	compound
+B09	CPD-2467	10	compound
+B10	DMSO	0	vehicle
+B11	CPD-2467	30	compound
+B12	REF-INH	10	reference
+[?2004hroot@ec77f99773e0:/task# ls -la /task/input/annotations
+[?2004ltotal 40
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 .
+dr-xr-xr-x 1 root root 4096 Nov 14 04:45 ..
+-r--r--r-- 1 root root  396 Nov 14 04:45 A08.tsv
+-r--r--r-- 1 root root  102 Nov 14 04:45 A12.tsv
+-r--r--r-- 1 root root 1328 Nov 14 04:45 C10.tsv
+-r--r--r-- 1 root root  797 Nov 14 04:45 D01.tsv
+-r--r--r-- 1 root root  238 Nov 14 04:45 D12.tsv
+-r--r--r-- 1 root root 1431 Nov 14 04:45 G03.tsv
+-r--r--r-- 1 root root  387 Nov 14 04:45 G10.tsv
+-r--r--r-- 1 root root  454 Nov 14 04:45 H12.tsv
+[?2004hroot@ec77f99773e0:/task# ls -la /task/input/flatfield
+[?2004ltotal 196
+dr-xr-xr-x 1 root root  4096 Nov 14 04:45 .
+dr-xr-xr-x 1 root root  4096 Nov 14 04:45 ..
+-r--r--r-- 1 root root 19897 Nov 14 04:45 dark.tif
+-r--r--r-- 1 root root 85122 Nov 14 04:45 flat_ch1.tif
+-r--r--r-- 1 root root 82825 Nov 14 04:45 flat_ch2.tif
+[?2004hroot@ec77f99773e0:/task# python3 -c "import glob, os, pandas as pd; print([(os.path.basename(f), len(pd.read_csv(f, sep='\t'))) for f in sorted(glob.glob('/task/input/annotations/*.tsv'))])"
+[?2004l[('A08.tsv', 33), ('A12.tsv', 8), ('C10.tsv', 116), ('D01.tsv', 68), ('D12.tsv', 21), ('G03.tsv', 123), ('G10.tsv', 33), ('H12.tsv', 40)]
+[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> 
+[?2004l[?2004h> fl1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif')
+[?2004l[?2004h> fl2 = tifffile.imread('/task/input/flatfield/flat_ch2.tif')
+[?2004l[?2004h> dk = tifffile.imread('/task/input/flatfield/dark.tif')
+[?2004l[?2004h> print('Flat1:', fl1.dtype, fl1.shape, fl1.min(), fl1.max(), fl1.mean())
+[?2004l[?2004h> print('Flat2:', fl2.dtype, fl2.shape, fl2.min(), fl2.max(), fl2.mean())
+[?2004l[?2004h> print('Dark:', dk.dtype, dk.shape, dk.min(), dk.max(), dk.mean())
+[?2004l[?2004h> " 
+[?2004lFlat1: uint16 (320, 320) 1775 2514 2258.509296875
+Flat2: uint16 (320, 320) 1649 2213 2016.85623046875
+Dark: uint16 (320, 320) 99 102 100.0012890625
+[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, scipy.ndimage as ndi
+[?2004l[?2004h> wells = sorted([os.path.basename(f).split('_')[0] for f in glob.glob('/task/input/images/*_ch1.tif')])
+[?2004l[?2004h> print('Total wells:', len(wells))
+[?2004l[?2004h> focus_scores = []
+[?2004l[?2004h> for w in wells:
+[?2004l[?2004h>     im1 = tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float)
+[?2004l[?2004h>     im2 = tifffile.imread(f'/task/input/images/{w}_ch2.tif').astype(float)
+[?2004l[?2004h>     # Laplacian variance
+[?2004l[?2004h>     lap1 = ndi.laplace(im1).var()
+[?2004l[?2004h>     lap2 = ndi.laplace(im2).var()
+[?2004l[?2004h>     # Max/min
+[?2004l[?2004h>     focus_scores.append((w, lap1, lap2, im1.max(), im2.max(), im1.mean(), im2.mean()))
+[?2004l[?2004h> 
+[?2004l[?2004h> focus_scores.sort(key=lambda x: x[1])
+[?2004l[?2004h> print('Lowest 10 lap1:')
+[?2004l[?2004h> for x in focus_scores[:10]:
+[?2004l[?2004h>     print(f'{x[0]}: lap1={x[1]:.1f}, lap2={x[2]:.1f}, max1={x[3]}, max2={x[4]}')
+[?2004l[?2004h> print('Highest 5 lap1:')
+[?2004l[?2004h> for x in focus_scores[-5:]:
+[?2004l[?2004h>     print(f'{x[0]}: lap1={x[1]:.1f}, lap2={x[2]:.1f}, max1={x[3]}, max2={x[4]}')
+[?2004l[?2004h> " 
+[?2004lTotal wells: 96
+Lowest 10 lap1:
+D04: lap1=1870.1, lap2=2020.4, max1=1276.0, max2=460.0
+E07: lap1=1878.1, lap2=1768.8, max1=1304.0, max2=507.0
+C06: lap1=1964.8, lap2=2374.2, max1=1745.0, max2=648.0
+E06: lap1=2031.2, lap2=1904.3, max1=1856.0, max2=648.0
+D06: lap1=2083.6, lap2=1493.2, max1=1915.0, max2=329.0
+A12: lap1=3334.6, lap2=964.4, max1=3083.0, max2=532.0
+A09: lap1=5010.8, lap2=1303.5, max1=3198.0, max2=851.0
+A10: lap1=5274.9, lap2=1394.8, max1=3341.0, max2=1050.0
+A07: lap1=5373.7, lap2=1826.3, max1=2732.0, max2=803.0
+C12: lap1=5567.9, lap2=935.5, max1=2915.0, max2=393.0
+Highest 5 lap1:
+F10: lap1=13252.3, lap2=1049.0, max1=4095.0, max2=242.0
+B10: lap1=13402.7, lap2=1772.7, max1=3352.0, max2=756.0
+E09: lap1=13465.0, lap2=1598.4, max1=3484.0, max2=534.0
+C11: lap1=13915.5, lap2=1400.6, max1=4110.0, max2=492.0
+C09: lap1=14151.1, lap2=1646.0, max1=3526.0, max2=609.0
+[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import tifffile, glob, os, numpy as np, pandas as pd
+[?2004l[?2004h> pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+[?2004l[?2004h> print(pl[pl['well'].isin(['D04', 'E07', 'C06', 'E06', 'D06'])])
+[?2004l[?2004h> " 
+[?2004l   well  compound  dose_uM      role
+29  C06      DMSO   0.0000   vehicle
+39  D04  CPD-1550   0.1235  compound
+41  D06  CPD-1550   0.3704  compound
+53  E06  CPD-1142   0.3704  compound
+54  E07  CPD-1142   1.1110  compound
+[?2004hroot@ec77f99773e0:/task# python3 -c "import tifffile, pandas as pd; pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t'); vehicles = pl[pl['role'] == 'vehicle']; [print(w, tifffile.imread(f'/task/input/images/{w}_ch1.tif').mean(), tifffile.imread(f'/task/input/images/{w}_ch1.tif').max(), tifffile.imread(f'/task/input/images/{w}_ch1.tif').std()) for w in vehicles['well']]"
+[?2004lA03 205.89103515625 3226 295.33491495901785
+A07 197.185341796875 2732 268.0635935910828
+A11 208.12390625 4126 312.5862196352152
+B02 276.03171875 3729 405.39542341515414
+B06 278.184619140625 3415 400.3789240214056
+B10 281.6912890625 3352 399.43507797133105
+C02 284.5407421875 3767 425.0751185455112
+C06 281.79716796875 1745 271.3044183096238
+C10 270.415771484375 3200 383.9723526669445
+D01 217.14013671875 3340 328.0836867301067
+D05 280.319130859375 2878 391.89805464632343
+D09 280.713291015625 3318 400.1445050198336
+E04 276.30626953125 3297 386.8475074133773
+E08 280.9558203125 3618 408.0279707847079
+E12 207.955458984375 3464 302.24603611325665
+F04 270.737119140625 3322 374.3978628571658
+F08 273.242587890625 3594 383.3466429243247
+F12 207.8705078125 2708 295.9183209026367
+G03 285.0528125 3094 402.3739959309807
+G07 278.93064453125 3077 388.2884426576945
+G11 283.261396484375 2875 397.8415781571225
+H01 207.308837890625 3166 294.45119309862577
+H05 211.02158203125 2727 299.6485945859598
+H09 204.577529296875 2568 287.30262658582564
+[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import tifffile, numpy as np, scipy.ndimage as ndi
+[?2004l[?2004h> for w in ['C06', 'C02', 'C10', 'D04', 'D06', 'E06', 'E07']:
+[?2004l[?2004h>     im = tifffile.imread(f'/task/input/images/{w}_ch1.tif')
+[?2004l[?2004h>     # Power spectrum or edge sharpness
+[?2004l[?2004h>     sobel = ndi.sobel(im.astype(float))
+[?2004l[?2004h>     print(f'{w}: mean={im.mean():.1f}, max={im.max()}, p99={np.percentile(im, 99):.1f}, sobel_mean={np.abs(sobel).mean():.2f}, sobel_max={np.abs(sobel).max():.2f}')
+[?2004l[?2004h> " 
+[?2004lC06: mean=281.8, max=1745, p99=1202.0, sobel_mean=99.41, sobel_max=1090.00
+C02: mean=284.5, max=3767, p99=2034.0, sobel_mean=256.71, sobel_max=7439.00
+C10: mean=270.4, max=3200, p99=1821.0, sobel_mean=245.94, sobel_max=7362.00
+D04: mean=272.8, max=1276, p99=1015.0, sobel_mean=82.59, sobel_max=785.00
+D06: mean=288.7, max=1915, p99=1205.0, sobel_mean=120.27, sobel_max=1448.00
+E06: mean=282.7, max=1856, p99=1252.0, sobel_mean=109.60, sobel_max=1310.00
+E07: mean=274.6, max=1304, p99=1008.0, sobel_mean=82.54, sobel_max=814.00
+[?2004hroot@ec77f99773e0:/task# python3 -c "import tifffile, os, numpy as np, scipy.ndimage as ndi, pandas as pd; pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t'); res = [(w, row['compound'], row['dose_uM'], row['role'], np.hypot(ndi.sobel(im := tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float), 0), ndi.sobel(im, 1)).mean(), im.mean(), im.max()) for _, row in pl.iterrows() for w in [row['well']]]; res.sort(key=lambda x: x[4]); [print(f'{r[0]} | {r[1]:10s} | dose={r[2]:8.4f} | role={r[3]:10s} | sob_mean={r[4]:6.1f} | mean={r[5]:5.1f} | max={r[6]:5.0f}') for r in res[:20]]"
+[?2004lA12 | CPD-3353   | dose= 30.0000 | role=compound   | sob_mean=  81.1 | mean=138.0 | max= 3083
+A10 | CPD-3353   | dose= 10.0000 | role=compound   | sob_mean= 105.9 | mean=144.5 | max= 3341
+A09 | CPD-3353   | dose=  3.3330 | role=compound   | sob_mean= 122.1 | mean=151.1 | max= 3198
+E07 | CPD-1142   | dose=  1.1110 | role=compound   | sob_mean= 129.7 | mean=274.6 | max= 1304
+D04 | CPD-1550   | dose=  0.1235 | role=compound   | sob_mean= 130.7 | mean=272.8 | max= 1276
+G12 | CPD-1987   | dose= 30.0000 | role=compound   | sob_mean= 134.0 | mean=154.2 | max= 3111
+C06 | DMSO       | dose=  0.0000 | role=vehicle    | sob_mean= 157.3 | mean=281.8 | max= 1745
+A08 | CPD-3353   | dose=  1.1110 | role=compound   | sob_mean= 170.1 | mean=170.5 | max= 3278
+E06 | CPD-1142   | dose=  0.3704 | role=compound   | sob_mean= 177.1 | mean=282.7 | max= 1856
+D06 | CPD-1550   | dose=  0.3704 | role=compound   | sob_mean= 183.3 | mean=288.7 | max= 1915
+D12 | CPD-1550   | dose= 30.0000 | role=compound   | sob_mean= 185.5 | mean=191.2 | max= 3717
+G01 | CPD-1987   | dose=  0.0137 | role=compound   | sob_mean= 198.0 | mean=191.6 | max= 3329
+A07 | DMSO       | dose=  0.0000 | role=vehicle    | sob_mean= 201.2 | mean=197.2 | max= 2732
+A06 | CPD-3353   | dose=  0.3704 | role=compound   | sob_mean= 202.1 | mean=193.6 | max= 3200
+C12 | CPD-1985   | dose= 30.0000 | role=compound   | sob_mean= 203.6 | mean=197.9 | max= 2915
+G10 | CPD-1987   | dose= 10.0000 | role=compound   | sob_mean= 210.2 | mean=176.6 | max= 3117
+G08 | CPD-1987   | dose=  3.3330 | role=compound   | sob_mean= 213.0 | mean=177.8 | max= 3115
+G06 | CPD-1987   | dose=  1.1110 | role=compound   | sob_mean= 214.6 | mean=179.0 | max= 3183
+A11 | DMSO       | dose=  0.0000 | role=vehicle    | sob_mean= 217.8 | mean=208.1 | max= 4126
+H11 | REF-INH    | dose= 10.0000 | role=reference  | sob_mean= 221.8 | mean=206.4 | max= 3389
+[?2004hroot@ec77f99773e0:/task# echo 'aW1wb3J0IHRpZmZmaWxlLCBnbG9iLCBvcywgbnVtcHkgYXMgbnAsIHBhbmRhcyBhcyBwZGFuZApmcm9tIHNjaXB5IGltcG9ydCBuZGltYWdlIGFzIG5kaQoKcGwgPSBwZC5yZWFkX2NzdignL3Rhc2svaW5wdXQvcGxhdGVfbGF5b3V0LnRzdicsIHNlcD0nXHQnKQoKcmVzdWx0cyA9IFtdCmZvciBfLCByb3cgaW4gcGwuaXRlcnJvd3MoKToKICAgIHcgPSByb3dbJ3dlbGwnXQogICAgaW0xID0gdGlmZmZpbGUuaW1yZWFkKGYnL3Rhc2svaW5wdXQvaW1hZ2VzL3t3fV9jaDEudGlmJykuYXN0eXBlKGZsb2F0KQogICAgaW0yID0gdGlmZmZpbGUuaW1yZWFkKGYnL3Rhc2svaW5wdXQvaW1hZ2VzL3t3fV9jaDIudGlmJykuYXN0eXBlKGZsb2F0KQogICAgZ3ggPSBuZGkuc29iZWwoaW0xLCBheGlzPTApCiAgICBneSA9IG5kaS5zb2JlbChpbTEsIGF4aXM9MSkKICAgIGdyYWRfc3EgPSBneCoqMiArIGd5KioyCiAgICBmZyA9IGltMSA+IDMwMAogICAgbl9mZyA9IGZnLnN1bSgpCiAgICBncmFkX2ZnID0gbnAuc3FydChncmFkX3NxW2ZnXSkubWVhbigpIGlmIG5fZmcgPiAwIGVsc2UgMAogICAgbWF4X2dyYWQgPSBucC5zcXJ0KGdyYWRfc3EpLm1heCgpCiAgICByZXN1bHRzLmFwcGVuZCh7CiAgICAgICAgJ3dlbGwnOiB3LAogICAgICAgICdjb21wb3VuZCc6IHJvd1snY29tcG91bmQnXSwKICAgICAgICAnZG9zZSc6IHJvd1snZG9zZV91TScgXSwKICAgICAgICAncm9sZSc6IHJvd1sncm9sZSddLAogICAgICAgICdtYXgxJzogaW0xLm1heCgpLAogICAgICAgICdtYXhfZ3JhZDEnOiBtYXhfZ3JhZCwKICAgICAgICAnZ3JhZF9mZyc6IGdyYWRfZmcsCiAgICB9KQoKZGYgPSBwZC5EYXRhRnJhbWUocmVzdWx0cykKcHJpbnQoZGYuc29ydF92YWx1ZXMoJ21heF9ncmFkMScpLmhlYWQoMTUpKQo=' | base64 -d > check_focus.py && python3 check_focus.py
+[?2004lTraceback (most recent call last):
+  File "/task/check_focus.py", line 4, in <module>
+    pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+         ^^
+NameError: name 'pd' is not defined. Did you mean: 'id'?
+[?2004hroot@ec77f99773e0:/task# sed -i 's/pandas as pdan/pandas as pd/' check_focus.py && python3 check_focus.py
+[?2004lTraceback (most recent call last):
+  File "/task/check_focus.py", line 4, in <module>
+    pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+         ^^
+NameError: name 'pd' is not defined. Did you mean: 'pdd'?
+[?2004hroot@ec77f99773e0:/task# head -n 5 check_focus.py
+[?2004limport tifffile, glob, os, numpy as np, pandas as pdd
+from scipy import ndimage as ndi
+
+pl = pd.read_csv('/task/input/plate_layout.tsv', sep='\t')
+
+[?2004hroot@ec77f99773e0:/task# sed -i '1s/.*/import tifffile, glob, os, numpy as np, pandas as pd/' check_focus.py && python3 check_focus.py
+[?2004l   well  compound      dose      role    max1    max_grad1      grad_fg
+39  D04  CPD-1550   0.12350  compound  1276.0   887.373653   314.097141
+54  E07  CPD-1142   1.11100  compound  1304.0   922.344838   307.143686
+29  C06      DMSO   0.00000   vehicle  1745.0  1287.572911   423.061010
+41  D06  CPD-1550   0.37040  compound  1915.0  1455.192084   466.676217
+53  E06  CPD-1142   0.37040  compound  1856.0  1488.131715   470.283955
+71  F12      DMSO   0.00000   vehicle  2708.0  6443.219071  1930.081325
+92  H09      DMSO   0.00000   vehicle  2568.0  6699.265631  1972.053678
+88  H05      DMSO   0.00000   vehicle  2727.0  6815.558671  1935.392258
+60  F01  CPD-7090   0.01372  compound  2714.0  6943.309297  2111.036741
+61  F02  CPD-7090   0.04115  compound  3099.0  7043.443050  1937.089748
+6   A07      DMSO   0.00000   vehicle  2732.0  7214.886971  1787.401656
+89  H06  CPD-5484   0.37040  compound  3030.0  7223.182678  2035.346392
+35  C12  CPD-1985  30.00000  compound  2915.0  7232.848678  1809.344824
+1   A02  CPD-3353   0.01372  compound  2663.0  7260.001102  1967.335706
+65  F06  CPD-7090   1.11100  compound  2971.0  7305.470005  1998.070107
+[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> df = pd.read_csv('/task/check_focus.py', sep='\t') # wait, df is in memory
+[?2004l[?2004h> "
+[?2004l[?2004hroot@ec77f99773e0:/task# python3 -c "
+[?2004l[?2004h> import pandas as pd
+[?2004l[?2004h> from check_focus import df
+[?2004l[?2004h> print(df[df['well'].isin(['C04', 'C05', 'C06', 'C07', 'D04', 'D05', 'D06', 'D07', 'E04', 'E05', 'E06', 'E07'])][['well', 'compound', 'dose', 'role', 'max1', 'max_grad1', 'grad_fg']])
+[?2004l[?2004h> "
+[?2004l   well  compound      dose      role    max1    max_grad1      grad_fg
+39  D04  CPD-1550   0.12350  compound  1276.0   887.373653   314.097141
+54  E07  CPD-1142   1.11100  compound  1304.0   922.344838   307.143686
+29  C06      DMSO   0.00000   vehicle  1745.0  1287.572911   423.061010
+41  D06  CPD-1550   0.37040  compound  1915.0  1455.192084   466.676217
+53  E06  CPD-1142   0.37040  compound  1856.0  1488.131715   470.283955
+71  F12      DMSO   0.00000   vehicle  2708.0  6443.219071  1930.081325
+92  H09      DMSO   0.00000   vehicle  2568.0  6699.265631  1972.053678
+88  H05      DMSO   0.00000   vehicle  2727.0  6815.558671  1935.392258
+60  F01  CPD-7090   0.01372  compound  2714.0  6943.309297  2111.036741
+61  F02  CPD-7090   0.04115  compound  3099.0  7043.443050  1937.089748
+6   A07      DMSO   0.00000   vehicle  2732.0  7214.886971  1787.401656
+89  H06  CPD-5484   0.37040  compound  3030.0  7223.182678  2035.346392
+35  C12  CPD-1985  30.00000  compound  2915.0  7232.848678  1809.344824
+1   A02  CPD-3353   0.01372  compound  2663.0  7260.001102  1967.335706
+65  F06  CPD-7090   1.11100  compound  2971.0  7305.470005  1998.070107
+   well  compound     dose       role    max1    max_grad1      grad_fg
+27  C04   REF-INH  10.0000  reference  2956.0  7870.149300  2040.885561
+28  C05  CPD-1985   0.1235   compound  3712.0  8964.942498  2017.141895
+29  C06      DMSO   0.0000    vehicle  1745.0  1287.572911   423.061010
+30  C07  CPD-1985   0.3704   compound  2840.0  7716.799466  1961.713105
+39  D04  CPD-1550   0.1235   compound  1276.0   887.373653   314.097141
+40  D05      DMSO   0.0000    vehicle  2878.0  7605.482365  1967.441399
+41  D06  CPD-1550   0.3704   compound  1915.0  1455.192084   466.676217
+42  D07   REF-INH  10.0000  reference  3384.0  7997.054083  1931.268946
+51  E04      DMSO   0.0000    vehicle  3297.0  8628.092837  1966.518780
+52  E05  CPD-1142   0.1235   compound  3050.0  8200.207802  1990.224536
+53  E06  CPD-1142   0.3704   compound  1856.0  1488.131715   470.283955
+54  E07  CPD-1142   1.1110   compound  1304.0   922.344838   307.143686
+[?2004hroot@ec77f99773e0:/task# python3 -c "from check_focus import df; print('Out of focus:', df[df['max_grad1'] < 5000]['well'].tolist()); print('Min of passing:', df[df['max_grad1'] >= 5000]['max_grad1'].min())"
+[?2004l   well  compound      dose      role    max1    max_grad1      grad_fg
+39  D04  CPD-1550   0.12350  compound  1276.0   887.373653   314.097141
+54  E07  CPD-1142   1.11100  compound  1304.0   922.344838   307.143686
+29  C06      DMSO   0.00000   vehicle  1745.0  1287.572911   423.061010
+41  D06  CPD-1550   0.37040  compound  1915.0  1455.192084   466.676217
+53  E06  CPD-1142   0.37040  compound  1856.0  1488.131715   470.283955
+71  F12      DMSO   0.00000   vehicle  2708.0  6443.219071  1930.081325
+92  H09      DMSO   0.00000   vehicle  2568.0  6699.265631  1972.053678
+88  H05      DMSO   0.00000   vehicle  2727.0  6815.558671  1935.392258
+60  F01  CPD-7090   0.01372  compound  2714.0  6943.309297  2111.036741
+61  F02  CPD-7090   0.04115  compound  3099.0  7043.443050  1937.089748
+6   A07      DMSO   0.00000   vehicle  2732.0  7214.886971  1787.401656
+89  H06  CPD-5484   0.37040  compound  3030.0  7223.182678  2035.346392
+35  C12  CPD-1985  30.00000  compound  2915.0  7232.848678  1809.344824
+1   A02  CPD-3353   0.01372  compound  2663.0  7260.001102  1967.335706
+65  F06  CPD-7090   1.11100  compound  2971.0  7305.470005  1998.070107
+Out of focus: ['C06', 'D04', 'D06', 'E06', 'E07']
+Min of passing: 6443.21907124071
+[?2004hroot@ec77f99773e0:/task# python3 -c "import pandas as pd, glob; [print(f, len(pd.read_csv(f, sep='\t'))) for f in sorted(glob.glob('/task/input/annotations/*.tsv'))]"
+[?2004l/task/input/annotations/A08.tsv 33
+/task/input/annotations/A12.tsv 8
+/task/input/annotations/C10.tsv 116
+/task/input/annotations/D01.tsv 68
+/task/input/annotations/D12.tsv 21
+/task/input/annotations/G03.tsv 123
+/task/input/annotations/G10.tsv 33
+/task/input/annotations/H12.tsv 40
+[?2004hroot@ec77f99773e0:/task# python3 -c "import cellpose, cellpose.models, tifffile, time; t0 = time.time(); model = cellpose.models.Cellpose(gpu=False, model_type='nuclei'); im = tifffile.imread('/task/input/images/A12_ch1.tif'); masks, flows, styles, diams = model.eval(im, diameter=None, channels=[0,0]); print('Done in', round(time.time()-t0, 2), 's. Masks found:', masks.max(), 'diam:', diams)"
+[?2004lDone in 27.79 s. Masks found: 1 diam: 8.235356104484062
+[?2004hroot@ec77f99773e0:/task# echo 'aW1wb3J0IHRpZmZmaWxlLCBnbG9iLCBvcywgbnVtcHkgYXMgbnAsIHBhbmRhcyBhcyBwZGFuZApmcm9tIHNjaXB5IGltcG9ydCBuZGltYWdlIGFzIG5kaQpmcm9tIHNraW1hZ2UgaW1wb3J0IGZpbHRlcnMsIG1vcnBob2xvZ3ksIG1lYXN1cmUsIHNlZ21lbnRhdGlvbgoKZGVmIGNoZWNrKCk6CiAgICBmMSA9IHRpZmZmaWxlLmltcmVhZCgnL3Rhc2svaW5wdXQvZmxhdGZpZWxkL2ZsYXRfY2gxLnRpZicpLmFzdHlwZShmbG9hdCkKICAgIGRrID0gdGlmZmZpbGUuaW1yZWFkKCcvdGFzay9pbnB1dC9mbGF0ZmllbGQvZGFyay50aWYnKS5hc3R5cGUoZmxvYXQpCiAgICBmMWNvbXAgPSAoZjEgLSBkaykgLyAoZjEgLSBkaykubWVhbigpCgogICAgYW5ucyA9IHNvcnRlZChnbG9iLmdsb2IoJy90YXNrL2lucHV0L2Fubm90YXRpb25zLyoudHN2JykpCiAgICBmb3IgYSBpbiBhbm5zOgogICAgICAgIHcgPSBvcy5wYXRoLmJhc2VuYW1lKGEpLnJlcGxhY2UoJy50c3YnLCAnJykKICAgICAgICBtYW5fdj0gbGVuKHBkYW4ucmVhZF9jc3YoYSwgc2VwPSdcdCcpKQogICAgICAgIGltID0gdGlmZmZpbGUuaW1yZWFkKGYnL3Rhc2svaW5wdXQvaW1hZ2VzL3t3fV9jaDEudGlmJykuYXN0eXBlKGZsb2F0KQogICAgICAgIGNvcnIgPSAoaW0gLSBkaykgLyBmMWNvbXAKICAgICAgICBwcmludChmJ3t3fTogbWFudWFsPXttYW5fdn0sIGNvcnIgbWluPXtjb3JyLm1pbigpOi4xfSBtYXg9e2NvcnIubWF4KCk6LjF9IG1lYW49e2NvcnIubWVhbigpOi4xfScpCgpjaGVjaygpCg==' | base64 -d > test_seg.py && sed -i 's/pdan/pd/' test_seg.py && python3 test_seg.py
+[?2004lTraceback (most recent call last):
+  File "/task/test_seg.py", line 18, in <module>
+    check()
+  File "/task/test_seg.py", line 13, in check
+    man_v= len(pd.read_csv(a, sep='\t'))
+               ^^
+NameError: name 'pd' is not defined. Did you mean: 'pdd'?
+[?2004hroot@ec77f99773e0:/task# sed -i '1s/.*/import tifffile, glob, os, numpy as np, pandas as pd/' test_seg.py && python3 test_seg.py
+[?2004lA08: manual=33, corr min=5e+00 max=3e+03 mean=7e+01
+A12: manual=8, corr min=5e+00 max=3e+03 mean=4e+01
+C10: manual=116, corr min=6e+00 max=3e+03 mean=2e+02
+D01: manual=68, corr min=6e+00 max=3e+03 mean=1e+02
+D12: manual=21, corr min=6e+00 max=3e+03 mean=9e+01
+G03: manual=123, corr min=5e+00 max=3e+03 mean=2e+02
+G10: manual=33, corr min=4e+00 max=3e+03 mean=8e+01
+H12: manual=40, corr min=3e+00 max=3e+03 mean=1e+02
+[?2004hroot@ec77f99773e0:/task# python3 -c "import tifffile, glob, os, numpy as np, pandas as pd; f1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float); dk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float); f1comp = (f1 - dk) / (f1 - dk).mean(); [print(os.path.basename(a).replace('.tsv',''), len(ann := pd.read_csv(a, sep='\t')), f'min={np.min(vals):.1f}, med={np.median(vals):.1f}, max={np.max(vals):.1f}') for a in sorted(glob.glob('/task/input/annotations/*.tsv')) for im in [(tifffile.imread('/task/input/images/' + os.path.basename(a).replace('.tsv','') + '_ch1.tif').astype(float) - dk)/f1comp] for vals in [[im[int(r['y_px']), int(r['x_px'])] for _, r in ann.iterrows()]]]"
+[?2004lTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+NameError: name 'ann' is not defined. Did you mean: 'any'?
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float)\n    corr = (im - dk) / f1comp\n    vals = [corr[int(r['y_px']), int(r['x_px'])] for _, r in ann.iterrows()]\n    print(f'{w} ({len(ann)} cells): min_ann={np.min(vals):.1f}, med_ann={np.median(vals):.1f}, max_ann={np.max(vals):.1f}, bg_p25={np.percentile(corr, 25):.1f}')\n'''; open('inspect_cells.py', 'w').write(code)" && python3 inspect_cells.py
+[?2004lA08 (33 cells): min_ann=411.6, med_ann=1235.9, max_ann=1850.6, bg_p25=19.9
+A12 (8 cells): min_ann=493.5, med_ann=1009.0, max_ann=1728.3, bg_p25=19.7
+C10 (116 cells): min_ann=463.5, med_ann=1168.3, max_ann=2317.5, bg_p25=20.5
+D01 (68 cells): min_ann=593.6, med_ann=1282.3, max_ann=2739.0, bg_p25=20.1
+D12 (21 cells): min_ann=498.1, med_ann=1225.4, max_ann=2293.6, bg_p25=20.0
+G03 (123 cells): min_ann=391.2, med_ann=1209.7, max_ann=2447.5, bg_p25=20.6
+G10 (33 cells): min_ann=595.8, med_ann=1058.1, max_ann=2920.1, bg_p25=20.0
+H12 (40 cells): min_ann=472.3, med_ann=1040.4, max_ann=2183.6, bg_p25=20.1
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import pandas as pd, glob\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    df = pd.read_csv(a, sep='\\t')\n    min_x, max_x = df['x_px'].min(), df['x_px'].max()\n    min_y, max_y = df['y_px'].min(), df['y_px'].max()\n    print(f'{a}: x in [{min_x}, {max_x}], y in [{min_y}, {max_y}]')\n'''; open('check_ann_borders.py', 'w').write(code)" && python3 check_ann_borders.py
+[?2004l/task/input/annotations/A08.tsv: x in [2.1, 277.2], y in [16.6, 288.3]
+/task/input/annotations/A12.tsv: x in [68.7, 305.0], y in [33.7, 244.6]
+/task/input/annotations/C10.tsv: x in [1.0, 307.7], y in [2.7, 307.5]
+/task/input/annotations/D01.tsv: x in [1.0, 306.3], y in [14.6, 310.1]
+/task/input/annotations/D12.tsv: x in [1.0, 230.6], y in [1.7, 285.9]
+/task/input/annotations/G03.tsv: x in [10.5, 299.3], y in [1.0, 302.1]
+/task/input/annotations/G10.tsv: x in [23.3, 284.3], y in [27.9, 308.4]
+/task/input/annotations/H12.tsv: x in [1.0, 306.1], y in [15.5, 287.9]
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom scipy import ndimage as ndi\nfrom skimage import filters, morphology, measure, segmentation, feature\n\n# Load flatfield\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float)\n    corr = (im - dk) / f1comp\n    # Threshold\n    thresh = filters.threshold_otsu(corr)\n    # smooth slightly\n    smoothed = ndi.gaussian_filter(corr, sigma=1.0)\n    mask = smoothed > thresh\n    # remove small holes\n    mask = morphology.remove_small_holes(mask, area_threshold=50)\n    # distance transform\n    dist = ndi.distance_transform_edt(mask)\n    # find local maxima\n    coords = feature.peak_local_max(dist, min_distance=5, labels=mask)\n    print(f'{w}: manual={len(ann)}, otsu_thresh={thresh:.1f}, n_peaks={len(coords)}')\n'''; open('test_thresh.py', 'w').write(code)" && python3 test_thresh.py
+[?2004lA08: manual=33, otsu_thresh=585.5, n_peaks=52
+A12: manual=8, otsu_thresh=511.2, n_peaks=35
+C10: manual=116, otsu_thresh=585.0, n_peaks=112
+D01: manual=68, otsu_thresh=604.9, n_peaks=52
+D12: manual=21, otsu_thresh=645.0, n_peaks=40
+G03: manual=123, otsu_thresh=576.1, n_peaks=115
+G10: manual=33, otsu_thresh=556.5, n_peaks=88
+H12: manual=40, otsu_thresh=553.1, n_peaks=52
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom skimage import measure, morphology, filters\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    # At annotation coords, what is the intensity?\n    intensities = [im[int(r['y_px']), int(r['x_px'])] for _, r in ann.iterrows()]\n    print(f'{w}: manual={len(ann)}, min_int={min(intensities):.1f}, med_int={np.median(intensities):.1f}, bg_mode={np.median(im[im < 100]):.1f}')\n'''; open('ann_stats.py', 'w').write(code)" && python3 ann_stats.py M[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[Ky
+[?2004lA08: manual=33, min_int=411.6, med_int=1235.9, bg_mode=22.6
+A12: manual=8, min_int=493.5, med_int=1009.0, bg_mode=22.5
+C10: manual=116, min_int=463.5, med_int=1168.3, bg_mode=22.8
+D01: manual=68, min_int=593.6, med_int=1282.3, bg_mode=22.6
+D12: manual=21, min_int=498.1, med_int=1225.4, bg_mode=22.6
+G03: manual=123, min_int=391.2, med_int=1209.7, bg_mode=22.8
+G10: manual=33, min_int=595.8, med_int=1058.1, bg_mode=22.7
+H12: manual=40, min_int=472.3, med_int=1040.4, bg_mode=22.6
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom skimage import measure, morphology, filters, segmentation\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nw = 'A12'\nann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\nim = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n\n# If we threshold at e.g. 150\nmask = im > 150\nlbl = measure.label(mask)\nprops = measure.regionprops(lbl)\nprint(f'{w}: total objects > 150 = {len(props)}')\nfor p in props:\n    # check if cut by bottom/right\n    coords = p.coords\n    cut_br = np.any(coords[:, 0] == 319) or np.any(coords[:, 1] == 319)\n    print(f'area={p.area}, minor_axis={p.axis_minor_length:.1f}, major={p.axis_major_length:.1f}, cut_br={cut_br}, bbox={p.bbox}')\n'''; open('test_a12.py', 'w').write(code)" && python3 test_a12.py
+[?2004lA12: total objects > 150 = 34
+area=20.0, minor_axis=4.8, major=5.2, cut_br=False, bbox=(14, 200, 19, 205)
+area=19.0, minor_axis=4.7, major=5.1, cut_br=False, bbox=(20, 208, 25, 213)
+area=148.0, minor_axis=13.3, major=14.1, cut_br=False, bbox=(28, 239, 42, 252)
+area=22.0, minor_axis=5.0, major=5.5, cut_br=False, bbox=(35, 35, 40, 40)
+area=29.0, minor_axis=5.8, major=6.4, cut_br=False, bbox=(37, 91, 43, 97)
+area=33.0, minor_axis=6.5, major=6.5, cut_br=False, bbox=(43, 24, 50, 31)
+area=44.0, minor_axis=7.3, major=7.7, cut_br=False, bbox=(45, 229, 53, 237)
+area=189.0, minor_axis=14.2, major=17.0, cut_br=False, bbox=(55, 233, 71, 248)
+area=181.0, minor_axis=13.3, major=17.3, cut_br=False, bbox=(58, 299, 75, 313)
+area=18.0, minor_axis=4.8, major=4.9, cut_br=False, bbox=(62, 220, 67, 225)
+area=21.0, minor_axis=4.9, major=5.5, cut_br=False, bbox=(65, 143, 71, 148)
+area=32.0, minor_axis=6.3, major=6.3, cut_br=False, bbox=(73, 101, 79, 107)
+area=28.0, minor_axis=5.4, major=6.5, cut_br=False, bbox=(88, 143, 93, 149)
+area=19.0, minor_axis=4.2, major=5.7, cut_br=False, bbox=(88, 193, 92, 199)
+area=27.0, minor_axis=5.3, major=6.4, cut_br=False, bbox=(95, 222, 101, 227)
+area=206.0, minor_axis=14.3, major=18.3, cut_br=False, bbox=(105, 164, 120, 181)
+area=25.0, minor_axis=5.2, major=6.0, cut_br=False, bbox=(108, 299, 114, 304)
+area=174.0, minor_axis=13.2, major=16.8, cut_br=False, bbox=(123, 204, 136, 221)
+area=33.0, minor_axis=5.9, major=7.1, cut_br=False, bbox=(128, 119, 135, 125)
+area=151.0, minor_axis=13.1, major=14.7, cut_br=False, bbox=(155, 215, 170, 228)
+area=19.0, minor_axis=4.3, major=5.5, cut_br=False, bbox=(161, 143, 166, 147)
+area=27.0, minor_axis=5.6, major=6.1, cut_br=False, bbox=(161, 234, 167, 240)
+area=176.0, minor_axis=14.0, major=16.0, cut_br=False, bbox=(171, 61, 187, 75)
+area=23.0, minor_axis=5.4, major=5.4, cut_br=False, bbox=(182, 169, 187, 174)
+area=20.0, minor_axis=4.1, major=6.0, cut_br=False, bbox=(194, 279, 200, 283)
+area=34.0, minor_axis=6.1, major=7.1, cut_br=False, bbox=(225, 196, 232, 202)
+area=145.0, minor_axis=12.5, major=14.8, cut_br=False, bbox=(238, 184, 252, 198)
+area=19.0, minor_axis=4.7, major=5.1, cut_br=False, bbox=(240, 266, 245, 271)
+area=25.0, minor_axis=5.7, major=5.7, cut_br=False, bbox=(244, 17, 249, 22)
+area=30.0, minor_axis=5.8, major=6.5, cut_br=False, bbox=(258, 194, 264, 200)
+area=18.0, minor_axis=4.3, major=5.3, cut_br=False, bbox=(268, 198, 273, 202)
+area=33.0, minor_axis=6.0, major=7.0, cut_br=False, bbox=(288, 67, 295, 74)
+area=24.0, minor_axis=5.3, major=5.8, cut_br=False, bbox=(289, 92, 294, 97)
+area=38.0, minor_axis=6.7, major=7.2, cut_br=False, bbox=(291, 136, 298, 143)
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom skimage import measure, morphology, filters, segmentation, feature\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef segment_well(w, thresh_val=150, min_dist=7):\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    smoothed = ndi.gaussian_filter(im, sigma=1.0)\n    mask = smoothed > thresh_val\n    dist = ndi.distance_transform_edt(mask)\n    coords = feature.peak_local_max(dist, min_distance=min_dist, labels=mask)\n    marker_img = np.zeros_like(mask, dtype=int)\n    for i, (r, c) in enumerate(coords, 1):\n        marker_img[r, c] = i\n    labels = segmentation.watershed(-dist, marker_img, mask=mask)\n    count = 0\n    for p in measure.regionprops(labels):\n        coords_p = p.coords\n        if np.any(coords_p[:, 0] == 319) or np.any(coords_p[:, 1] == 319):\n            continue\n        if p.axis_minor_length < 7.5 or p.area < 50:\n            continue\n        count += 1\n    tol = max(3, int(0.1 * len(ann)))\n    diff = abs(count - len(ann))\n    ok = 'PASS' if diff <= tol else 'FAIL'\n    print(f'{w}: manual={len(ann)}, pipeline={count}, diff={count - len(ann)}, tol={tol} -> {ok}')\n\nfor w in ['A08', 'A12', 'C10', 'D01', 'D12', 'G03', 'G10', 'H12']:\n    segment_well(w)\n'''; open('test_pipeline.py', 'w').write(code)" && python3 test_pipeline.py
+[?2004lA08: manual=33, pipeline=33, diff=0, tol=3 -> PASS
+A12: manual=8, pipeline=10, diff=2, tol=3 -> PASS
+C10: manual=116, pipeline=74, diff=-42, tol=11 -> FAIL
+D01: manual=68, pipeline=42, diff=-26, tol=6 -> FAIL
+D12: manual=21, pipeline=22, diff=1, tol=3 -> PASS
+G03: manual=123, pipeline=79, diff=-44, tol=12 -> FAIL
+G10: manual=33, pipeline=35, diff=2, tol=3 -> PASS
+H12: manual=40, pipeline=41, diff=1, tol=4 -> PASS
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import pandas as pd, numpy as np\nfrom scipy.spatial.distance import pdist, squareform\nfor w in ['C10', 'D01', 'G03']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    pts = ann[['y_px', 'x_px']].values\n    d = squareform(pdist(pts))\n    np.fill_diagonal(d, 9999)\n    min_dists = d.min(axis=1)\n    print(f'{w}: nearest neighbor distances min={min_dists.min():.1f}, p10={np.percentile(min_dists, 10):.1f}, med={np.median(min_dists):.1f}, mean={min_dists.mean():.1f}')\n'''; open('test_dists.py', 'w').write(code)" && python3 test_dists.py
+[?2004lC10: nearest neighbor distances min=7.8, p10=8.8, med=10.9, mean=12.4
+D01: nearest neighbor distances min=8.4, p10=9.2, med=10.8, mean=14.3
+G03: nearest neighbor distances min=7.5, p10=9.2, med=10.7, mean=12.4
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom skimage import feature, morphology, measure, filters\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor sigma in [1.5, 2.0, 2.5]:\n    for min_d in [4, 5, 6]:\n        for thresh in [150, 200, 250]:\n            counts = []\n            for w in ['A08', 'A12', 'C10', 'D01', 'D12', 'G03', 'G10', 'H12']:\n                ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n                im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n                sm = ndi.gaussian_filter(im, sigma=sigma)\n                mask = sm > thresh\n                peaks = feature.peak_local_max(sm, min_distance=min_d, labels=mask)\n                counts.append((w, len(ann), len(peaks)))\n            if sigma == 2.0 and min_d == 5 and thresh == 200:\n                print(f'sigma={sigma}, min_d={min_d}, thresh={thresh}:')\n                for w, m, c in counts:\n                    print(f'  {w}: man={m}, peaks={c}')\n'''; open('test_peaks.py', 'w').write(code)" && python3 test_peaks.py
+[?2004lsigma=2.0, min_d=5, thresh=200:
+  A08: man=33, peaks=48
+  A12: man=8, peaks=35
+  C10: man=116, peaks=90
+  D01: man=68, peaks=52
+  D12: man=21, peaks=44
+  G03: man=123, peaks=104
+  G10: man=33, peaks=83
+  H12: man=40, peaks=51
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, sigma=1.0)\n    for t in [100, 150, 200]:\n        m = sm > t\n        print(f'{w}: man={len(ann):3d}, t={t}: area={m.sum():6d}, area/man={m.sum()/len(ann):.1f}')\n'''; open('test_areas.py', 'w').write(code)" && python3 test_areas.py
+[?2004lA08: man= 33, t=100: area=  6957, area/man=210.8
+A08: man= 33, t=150: area=  6303, area/man=191.0
+A08: man= 33, t=200: area=  5796, area/man=175.6
+A12: man=  8, t=100: area=  2806, area/man=350.8
+A12: man=  8, t=150: area=  2447, area/man=305.9
+A12: man=  8, t=200: area=  2196, area/man=274.5
+C10: man=116, t=100: area= 20041, area/man=172.8
+C10: man=116, t=150: area= 18573, area/man=160.1
+C10: man=116, t=200: area= 17467, area/man=150.6
+D01: man= 68, t=100: area= 11826, area/man=173.9
+D01: man= 68, t=150: area= 11018, area/man=162.0
+D01: man= 68, t=200: area= 10409, area/man=153.1
+D12: man= 21, t=100: area=  8413, area/man=400.6
+D12: man= 21, t=150: area=  7724, area/man=367.8
+D12: man= 21, t=200: area=  7252, area/man=345.3
+G03: man=123, t=100: area= 21322, area/man=173.3
+G03: man=123, t=150: area= 19811, area/man=161.1
+G03: man=123, t=200: area= 18637, area/man=151.5
+G10: man= 33, t=100: area=  8887, area/man=269.3
+G10: man= 33, t=150: area=  7897, area/man=239.3
+G10: man= 33, t=200: area=  7135, area/man=216.2
+H12: man= 40, t=100: area= 12541, area/man=313.5
+H12: man= 40, t=150: area= 11595, area/man=289.9
+H12: man= 40, t=200: area= 10908, area/man=272.7
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import cellpose, cellpose.models, tifffile, time, numpy as np\nmodel = cellpose.models.Cellpose(gpu=False, model_type='nuclei')\nim = tifffile.imread('/task/input/images/A12_ch1.tif')\nt0 = time.time()\nmasks, flows, styles, diams = model.eval(im, diameter=14.0, channels=[0,0])\nprint('A12 eval time:', time.time()-t0, 'masks:', masks.max())\n'''; open('test_cp.py', 'w').write(code)" && python3 test_cp.py
+[?2004lA12 eval time: 12.801182985305786 masks: 2
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature, morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\n\n# Check LoG (Laplacian of Gaussian) or DoG (Difference of Gaussians)\nsm1 = ndi.gaussian_filter(im, sigma=2.0)\nsm2 = ndi.gaussian_filter(im, sigma=4.0)\ndog = sm1 - sm2\nprint('DoG min:', dog.min(), 'max:', dog.max(), 'mean:', dog.mean())\npeaks = feature.peak_local_max(dog, min_distance=6, threshold_abs=50)\nprint('C10 manual:', len(ann), 'DoG peaks:', len(peaks))\n'''; open('test_dog.py', 'w').write(code)" && python3 test_dog.py
+[?2004lDoG min: -507.86477285080446 max: 852.1256786726981 mean: -5.194067398406332e-14
+C10 manual: 116 DoG peaks: 110
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, glob, os, numpy as np, pandas as pd\nfrom skimage import measure, morphology, filters, segmentation, feature\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef eval_params(s1, s2, min_d, dog_thresh, int_thresh, min_minor, min_area):\n    all_pass = True\n    res = []\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm1 = ndi.gaussian_filter(im, sigma=s1)\n        sm2 = ndi.gaussian_filter(im, sigma=s2)\n        dog = sm1 - sm2\n        mask = ndi.gaussian_filter(im, sigma=1.0) > int_thresh\n        mask = morphology.remove_small_holes(mask, area_threshold=50)\n        peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=dog_thresh, labels=mask)\n        markers = np.zeros_like(mask, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n        labels = segmentation.watershed(-dog, markers, mask=mask)\n        cnt = 0\n        for p in measure.regionprops(labels):\n            coords = p.coords\n            if np.any(coords[:, 0] == 319) or np.any(coords[:, 1] == 319):\n                continue\n            if p.axis_minor_length < min_minor or p.area < min_area:\n                continue\n            cnt += 1\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        ok = diff <= tol\n        if not ok: all_pass = False\n        res.append((w, man, cnt, diff, tol, ok))\n    return all_pass, res\n\nfor s1 in [1.5, 2.0]:\n    for s2 in [3.5, 4.0, 4.5]:\n        for min_d in [4, 5, 6]:\n            for dog_t in [30, 50, 70]:\n                all_pass, res = eval_params(s1, s2, min_d, dog_t, int_thresh=150, min_minor=7.0, min_area=45)\n                if all_pass:\n                    print(f'PASS! s1={s1}, s2={s2}, min_d={min_d}, dog_t={dog_t}')\n                    for r in res:\n                        print(f'  {r[0]}: man={r[1]}, proc={r[2]}, diff={r[3]}, tol={r[4]}')\n                    break\n            if all_pass: break\n        if all_pass: break\n    if all_pass: break\nif not all_pass: print('None fully passed yet')\n'''; open('test_dog_grid.py', 'w').write(code)" && python3 test_dog_grid.py
+[?2004lNone fully passed yet
+[?2004hroot@ec77f99773e0:/task# python3 -c "import test_dog_grid as tdg; ok, res = tdg.eval_params(1.5, 3.5, 5, 30, 150, 7.0, 45); [print(r) for r in res]"
+[?2004l^CTraceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/task/test_dog_grid.py", line 46, in <module>
+    all_pass, res = eval_params(s1, s2, min_d, dog_t, int_thresh=150, min_minor=7.0, min_area=45)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/task/test_dog_grid.py", line 31, in eval_params
+    if p.axis_minor_length < min_minor or p.area < min_area:
+       ^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_regionprops.py", line 607, in axis_minor_length
+    l2 = self.inertia_tensor_eigvals[-1]
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_regionprops.py", line 243, in wrapper
+    cache[prop] = f(obj)
+                  ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_regionprops.py", line 544, in inertia_tensor_eigvals
+    return _moments.inertia_tensor_eigvals(self.image, T=self.inertia_tensor)
+                                                         ^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_regionprops.py", line 243, in wrapper
+    cache[prop] = f(obj)
+                  ^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_regionprops.py", line 539, in inertia_tensor
+    return _moments.inertia_tensor(self.image, mu, spacing=self._spacing)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/skimage/measure/_moments.py", line 454, in inertia_tensor
+    d[:] = (np.sum(mu[corners2]) - mu[corners2]) / mu0
+            ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/tools/lib/python3.12/site-packages/numpy/_core/fromnumeric.py", line 2250, in _sum_dispatcher
+    def _sum_dispatcher(a, axis=None, dtype=None, out=None, keepdims=None,
+    
+KeyboardInterrupt
+
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm1 = ndi.gaussian_filter(im, sigma=1.5)\n    sm2 = ndi.gaussian_filter(im, sigma=4.0)\n    dog = sm1 - sm2\n    mask = ndi.gaussian_filter(im, 1.0) > 150\n    peaks = feature.peak_local_max(dog, min_distance=5, threshold_abs=30, labels=mask)\n    print(f'{w}: manual={len(ann)}, peaks={len(peaks)}')\n'''; open('test_dog_fast.py', 'w').write(code)" && python3 test_dog_fast.py
+[?2004lA12: manual=8, peaks=36
+A08: manual=33, peaks=59
+D12: manual=21, peaks=67
+G10: manual=33, peaks=92
+H12: manual=40, peaks=80
+D01: manual=68, peaks=62
+C10: manual=116, peaks=126
+G03: manual=123, peaks=131
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor min_area in [50, 60, 70, 80]:\n    print(f'=== min_area={min_area} ===')\n    for w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n        ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm1 = ndi.gaussian_filter(im, sigma=1.5)\n        sm2 = ndi.gaussian_filter(im, sigma=4.0)\n        dog = sm1 - sm2\n        mask = ndi.gaussian_filter(im, 1.0) > 150\n        mask = morphology.remove_small_holes(mask, 50)\n        peaks = feature.peak_local_max(dog, min_distance=5, threshold_abs=30, labels=mask)\n        markers = np.zeros_like(mask, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n        labels = segmentation.watershed(-dog, markers, mask=mask)\n        \n        areas = np.bincount(labels.ravel())\n        bottom_right_labels = set(labels[319, :]).union(set(labels[:, 319]))\n        valid = [lbl for lbl in range(1, len(areas)) if lbl not in bottom_right_labels and areas[lbl] >= min_area]\n        cnt = len(valid)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        ok = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, cnt={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {ok}')\n'''; open('test_fast_filter.py', 'w').write(code)" && python3 test_fast_filter.py
+[?2004l=== min_area=50 ===
+A12: man=  8, cnt= 12, diff= 4, tol= 3 -> FAIL
+A08: man= 33, cnt= 43, diff=10, tol= 3 -> FAIL
+D12: man= 21, cnt= 47, diff=26, tol= 3 -> FAIL
+G10: man= 33, cnt= 42, diff= 9, tol= 3 -> FAIL
+H12: man= 40, cnt= 70, diff=30, tol= 4 -> FAIL
+D01: man= 68, cnt= 57, diff=11, tol= 6 -> FAIL
+C10: man=116, cnt=113, diff= 3, tol=11 -> PASS
+G03: man=123, cnt=116, diff= 7, tol=12 -> PASS
+=== min_area=60 ===
+A12: man=  8, cnt= 11, diff= 3, tol= 3 -> PASS
+A08: man= 33, cnt= 38, diff= 5, tol= 3 -> FAIL
+D12: man= 21, cnt= 47, diff=26, tol= 3 -> FAIL
+G10: man= 33, cnt= 34, diff= 1, tol= 3 -> PASS
+H12: man= 40, cnt= 67, diff=27, tol= 4 -> FAIL
+D01: man= 68, cnt= 55, diff=13, tol= 6 -> FAIL
+C10: man=116, cnt=111, diff= 5, tol=11 -> PASS
+G03: man=123, cnt=112, diff=11, tol=12 -> PASS
+=== min_area=70 ===
+A12: man=  8, cnt= 10, diff= 2, tol= 3 -> PASS
+A08: man= 33, cnt= 36, diff= 3, tol= 3 -> PASS
+D12: man= 21, cnt= 46, diff=25, tol= 3 -> FAIL
+G10: man= 33, cnt= 34, diff= 1, tol= 3 -> PASS
+H12: man= 40, cnt= 66, diff=26, tol= 4 -> FAIL
+D01: man= 68, cnt= 54, diff=14, tol= 6 -> FAIL
+C10: man=116, cnt=109, diff= 7, tol=11 -> PASS
+G03: man=123, cnt=110, diff=13, tol=12 -> FAIL
+=== min_area=80 ===
+A12: man=  8, cnt= 10, diff= 2, tol= 3 -> PASS
+A08: man= 33, cnt= 33, diff= 0, tol= 3 -> PASS
+D12: man= 21, cnt= 45, diff=24, tol= 3 -> FAIL
+G10: man= 33, cnt= 33, diff= 0, tol= 3 -> PASS
+H12: man= 40, cnt= 65, diff=25, tol= 4 -> FAIL
+D01: man= 68, cnt= 54, diff=14, tol= 6 -> FAIL
+C10: man=116, cnt=106, diff=10, tol=11 -> PASS
+G03: man=123, cnt=110, diff=13, tol=12 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/D12.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nprint('D12 annotations count:', len(ann))\nsm = ndi.gaussian_filter(im, 1.0)\nann_vals = [sm[int(r['y_px']), int(r['x_px'])] for _, r in ann.iterrows()]\nprint('D12 ann vals min:', min(ann_vals), 'med:', np.median(ann_vals))\nfor t in [150, 250, 350, 450, 550]:\n    lbl, n = ndi.label(sm > t)\n    print(f't={t}: n_components={n}')\n'''; open('inspect_d12.py', 'w').write(code)" && python3 inspect_d12.py
+[?2004lD12 annotations count: 21
+D12 ann vals min: 552.2549859989199 med: 1214.6971798380232
+t=150: n_components=38
+t=250: n_components=39
+t=350: n_components=39
+t=450: n_components=40
+t=550: n_components=40
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/D12.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nlbl, n = ndi.label(sm > 250)\nprops = measure.regionprops(lbl)\n\nann_pts = list(zip(ann['y_px'], ann['x_px']))\nprint('Total components:', len(props))\nfor p in props:\n    has_ann = any(lbl[int(y), int(x)] == p.label for y, x in ann_pts)\n    on_border_br = np.any(p.coords[:, 0] == 319) or np.any(p.coords[:, 1] == 319)\n    on_border_tl = np.any(p.coords[:, 0] == 0) or np.any(p.coords[:, 1] == 0)\n    print(f'lbl={p.label:2d}: area={p.area:4d}, minor={p.axis_minor_length:4.1f}, major={p.axis_major_length:4.1f}, br={on_border_br}, tl={on_border_tl}, has_ann={has_ann}')\n'''; open('match_d12.py', 'w').write(code)" && python3 match_d12.py
+[?2004lTotal components: 39
+Traceback (most recent call last):
+  File "/task/match_d12.py", line 21, in <module>
+    print(f'lbl={p.label:2d}: area={p.area:4d}, minor={p.axis_minor_length:4.1f}, major={p.axis_major_length:4.1f}, br={on_border_br}, tl={on_border_tl}, has_ann={has_ann}')
+                                   ^^^^^^^^^^^
+ValueError: Unknown format code 'd' for object of type 'float'
+[?2004hroot@ec77f99773e0:/task# sed -i 's/{p.area:4d}/{int(p.area):4d}/' match_d12.py && python3 match_d12.py
+[?2004lTotal components: 39
+lbl= 1: area= 184, minor=11.8, major=20.7, br=False, tl=True, has_ann=True
+lbl= 2: area=  13, minor= 3.8, major= 4.4, br=False, tl=False, has_ann=False
+lbl= 3: area= 221, minor=15.6, major=18.1, br=False, tl=False, has_ann=True
+lbl= 4: area= 362, minor=20.6, major=24.1, br=False, tl=False, has_ann=True
+lbl= 5: area=  14, minor= 4.1, major= 4.2, br=False, tl=False, has_ann=False
+lbl= 6: area= 269, minor=17.1, major=20.1, br=False, tl=False, has_ann=True
+lbl= 7: area=  13, minor= 3.7, major= 4.3, br=False, tl=False, has_ann=False
+lbl= 8: area=  35, minor= 6.5, major= 6.9, br=False, tl=False, has_ann=False
+lbl= 9: area=  37, minor= 6.8, major= 6.8, br=False, tl=False, has_ann=False
+lbl=10: area= 326, minor=18.6, major=22.3, br=False, tl=False, has_ann=True
+lbl=11: area= 367, minor=20.4, major=22.9, br=False, tl=False, has_ann=True
+lbl=12: area= 627, minor=22.5, major=37.8, br=False, tl=False, has_ann=True
+lbl=13: area=  51, minor= 7.9, major= 8.2, br=False, tl=False, has_ann=False
+lbl=14: area=  39, minor= 6.9, major= 7.2, br=False, tl=False, has_ann=False
+lbl=15: area= 339, minor=18.4, major=23.6, br=False, tl=False, has_ann=True
+lbl=16: area= 198, minor=12.7, major=20.6, br=False, tl=True, has_ann=True
+lbl=17: area= 321, minor=19.3, major=21.2, br=False, tl=False, has_ann=True
+lbl=18: area= 289, minor=19.0, major=19.4, br=False, tl=False, has_ann=True
+lbl=19: area=  30, minor= 6.1, major= 6.3, br=False, tl=False, has_ann=False
+lbl=20: area=  16, minor= 4.0, major= 4.9, br=False, tl=False, has_ann=False
+lbl=21: area= 301, minor=17.1, major=22.5, br=False, tl=False, has_ann=True
+lbl=22: area=  25, minor= 5.7, major= 5.7, br=False, tl=False, has_ann=False
+lbl=23: area= 309, minor=18.5, major=21.3, br=False, tl=False, has_ann=True
+lbl=24: area=  32, minor= 6.3, major= 6.3, br=False, tl=False, has_ann=False
+lbl=25: area= 160, minor=10.4, major=20.9, br=False, tl=True, has_ann=True
+lbl=26: area=  38, minor= 6.7, major= 7.2, br=False, tl=False, has_ann=False
+lbl=27: area= 370, minor=19.6, major=24.0, br=False, tl=False, has_ann=True
+lbl=28: area= 606, minor=20.4, major=39.9, br=False, tl=False, has_ann=True
+lbl=29: area=  27, minor= 5.7, major= 6.0, br=False, tl=False, has_ann=False
+lbl=30: area=  29, minor= 5.8, major= 6.3, br=False, tl=False, has_ann=False
+lbl=31: area=  29, minor= 5.8, major= 6.3, br=False, tl=False, has_ann=False
+lbl=32: area=  35, minor= 6.5, major= 6.9, br=False, tl=False, has_ann=False
+lbl=33: area= 348, minor=20.4, major=21.7, br=False, tl=False, has_ann=True
+lbl=34: area=  23, minor= 5.4, major= 5.4, br=False, tl=False, has_ann=False
+lbl=35: area= 308, minor=19.3, major=20.3, br=False, tl=False, has_ann=True
+lbl=36: area=  26, minor= 5.5, major= 6.0, br=False, tl=False, has_ann=False
+lbl=37: area=  23, minor= 5.0, major= 5.8, br=False, tl=False, has_ann=False
+lbl=38: area= 312, minor=17.2, major=23.1, br=False, tl=False, has_ann=True
+lbl=39: area= 112, minor= 8.5, major=17.5, br=True, tl=False, has_ann=False
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure, feature, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef count_cells(w):\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > 200\n    mask = morphology.remove_small_holes(mask, 50)\n    opened = morphology.binary_opening(mask, morphology.disk(4))\n    dist = ndi.distance_transform_edt(opened)\n    peaks = feature.peak_local_max(dist, min_distance=6, labels=opened)\n    markers = np.zeros_like(opened, dtype=int)\n    for i, (r, c) in enumerate(peaks, 1):\n        markers[r, c] = i\n    labels = segmentation.watershed(-dist, markers, mask=opened)\n    br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n    valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels and np.sum(labels == lbl) >= 50]\n    return len(valid)\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    proc = count_cells(w)\n    man = len(ann)\n    tol = max(3, int(0.1 * man))\n    diff = abs(proc - man)\n    print(f'{w}: man={man:3d}, proc={proc:3d}, diff={diff:2d}, tol={tol:2d} -> {"PASS" if diff <= tol else "FAIL"}')\n'''; open('test_opening.py', 'w').write(code)" && python3 test_opening.py
+[?2004lTraceback (most recent call last):
+  File "/task/test_opening.py", line 32, in <module>
+    print(f'{w}: man={man:3d}, proc={proc:3d}, diff={diff:2d}, tol={tol:2d} -> {PASS if diff <= tol else FAIL}')
+                                                                                                         ^^^^
+NameError: name 'FAIL' is not defined
+[?2004hroot@ec77f99773e0:/task# sed -i "s/{PASS if diff <= tol else FAIL}/{'PASS' if diff <= tol else 'FAIL'}/" test_opening.py && python3 test_opening.py
+[?2004lA08: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 68, diff=48, tol=11 -> FAIL
+D01: man= 68, proc= 38, diff=30, tol= 6 -> FAIL
+D12: man= 21, proc= 21, diff= 0, tol= 3 -> PASS
+G03: man=123, proc= 76, diff=47, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 37, diff= 3, tol= 4 -> PASS
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure, feature, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef count_cells(w, min_d=5, dog_t=30):\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm1 = ndi.gaussian_filter(im, sigma=1.5)\n    sm2 = ndi.gaussian_filter(im, sigma=4.0)\n    dog = sm1 - sm2\n    \n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > 150\n    mask = morphology.remove_small_holes(mask, 50)\n    opened = morphology.binary_opening(mask, morphology.disk(3))\n    \n    peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=dog_t, labels=opened)\n    markers = np.zeros_like(opened, dtype=int)\n    for i, (r, c) in enumerate(peaks, 1):\n        markers[r, c] = i\n    labels = segmentation.watershed(-dog, markers, mask=opened)\n    \n    br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n    valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels and np.sum(labels == lbl) >= 50]\n    return len(valid)\n\nfor min_d in [4, 5]:\n    for dog_t in [20, 30, 40]:\n        print(f'=== min_d={min_d}, dog_t={dog_t} ===')\n        for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n            w = os.path.basename(a).replace('.tsv', '')\n            ann = pd.read_csv(a, sep='\\t')\n            proc = count_cells(w, min_d, dog_t)\n            man = len(ann)\n            tol = max(3, int(0.1 * man))\n            diff = abs(proc - man)\n            status = 'PASS' if diff <= tol else 'FAIL'\n            print(f'{w}: man={man:3d}, proc={proc:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_dog_opened.py', 'w').write(code)" && python3 test_dog_opened.py
+[?2004l=== min_d=4, dog_t=20 ===
+A08: man= 33, proc= 45, diff=12, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=120, diff= 4, tol=11 -> PASS
+D01: man= 68, proc= 69, diff= 1, tol= 6 -> PASS
+D12: man= 21, proc= 54, diff=33, tol= 3 -> FAIL
+G03: man=123, proc=132, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 42, diff= 9, tol= 3 -> FAIL
+H12: man= 40, proc= 82, diff=42, tol= 4 -> FAIL
+=== min_d=4, dog_t=30 ===
+A08: man= 33, proc= 45, diff=12, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=120, diff= 4, tol=11 -> PASS
+D01: man= 68, proc= 69, diff= 1, tol= 6 -> PASS
+D12: man= 21, proc= 54, diff=33, tol= 3 -> FAIL
+G03: man=123, proc=132, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 42, diff= 9, tol= 3 -> FAIL
+H12: man= 40, proc= 82, diff=42, tol= 4 -> FAIL
+=== min_d=4, dog_t=40 ===
+A08: man= 33, proc= 45, diff=12, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=120, diff= 4, tol=11 -> PASS
+D01: man= 68, proc= 69, diff= 1, tol= 6 -> PASS
+D12: man= 21, proc= 54, diff=33, tol= 3 -> FAIL
+G03: man=123, proc=132, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 42, diff= 9, tol= 3 -> FAIL
+H12: man= 40, proc= 82, diff=42, tol= 4 -> FAIL
+=== min_d=5, dog_t=20 ===
+A08: man= 33, proc= 39, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=111, diff= 5, tol=11 -> PASS
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 47, diff=26, tol= 3 -> FAIL
+G03: man=123, proc=114, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 35, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 68, diff=28, tol= 4 -> FAIL
+=== min_d=5, dog_t=30 ===
+A08: man= 33, proc= 39, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=111, diff= 5, tol=11 -> PASS
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 47, diff=26, tol= 3 -> FAIL
+G03: man=123, proc=114, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 35, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 68, diff=28, tol= 4 -> FAIL
+=== min_d=5, dog_t=40 ===
+A08: man= 33, proc= 39, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc= 11, diff= 3, tol= 3 -> PASS
+C10: man=116, proc=111, diff= 5, tol=11 -> PASS
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 47, diff=26, tol= 3 -> FAIL
+G03: man=123, proc=114, diff= 9, tol=12 -> PASS
+G10: man= 33, proc= 35, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 68, diff=28, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure, feature, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef count_cells(w, disk_r=4, min_d=4, dog_t=30):\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm1 = ndi.gaussian_filter(im, sigma=1.5)\n    sm2 = ndi.gaussian_filter(im, sigma=4.0)\n    dog = sm1 - sm2\n    \n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > 150\n    mask = morphology.remove_small_holes(mask, 50)\n    opened = morphology.binary_opening(mask, morphology.disk(disk_r))\n    \n    peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=dog_t, labels=opened)\n    markers = np.zeros_like(opened, dtype=int)\n    for i, (r, c) in enumerate(peaks, 1):\n        markers[r, c] = i\n    labels = segmentation.watershed(-dog, markers, mask=opened)\n    \n    br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n    valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels and np.sum(labels == lbl) >= 50]\n    return len(valid)\n\nfor disk_r in [4]:\n    for min_d in [4, 5]:\n        print(f'=== disk_r={disk_r}, min_d={min_d} ===')\n        for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n            w = os.path.basename(a).replace('.tsv', '')\n            ann = pd.read_csv(a, sep='\\t')\n            proc = count_cells(w, disk_r, min_d)\n            man = len(ann)\n            tol = max(3, int(0.1 * man))\n            diff = abs(proc - man)\n            status = 'PASS' if diff <= tol else 'FAIL'\n            print(f'{w}: man={man:3d}, proc={proc:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_disk4.py', 'w').write(code)" && python3 test_disk4.py
+[?2004l=== disk_r=4, min_d=4 ===
+A08: man= 33, proc= 43, diff=10, tol= 3 -> FAIL
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=119, diff= 3, tol=11 -> PASS
+D01: man= 68, proc= 69, diff= 1, tol= 6 -> PASS
+D12: man= 21, proc= 52, diff=31, tol= 3 -> FAIL
+G03: man=123, proc=131, diff= 8, tol=12 -> PASS
+G10: man= 33, proc= 41, diff= 8, tol= 3 -> FAIL
+H12: man= 40, proc= 81, diff=41, tol= 4 -> FAIL
+=== disk_r=4, min_d=5 ===
+A08: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=111, diff= 5, tol=11 -> PASS
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 46, diff=25, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 34, diff= 1, tol= 3 -> PASS
+H12: man= 40, proc= 67, diff=27, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nfor t in [150, 200, 250]:\n    for r in [3, 4, 5]:\n        opened = morphology.binary_opening(sm > t, morphology.disk(r))\n        lbl, n = ndi.label(opened)\n        print(f't={t}, r={r}: n_objects={n}')\n'''; open('test_d12_open.py', 'w').write(code)" && python3 test_d12_open.py
+[?2004lt=150, r=3: n_objects=30
+t=150, r=4: n_objects=19
+t=150, r=5: n_objects=19
+t=200, r=3: n_objects=27
+t=200, r=4: n_objects=19
+t=200, r=5: n_objects=19
+t=250, r=3: n_objects=26
+t=250, r=4: n_objects=20
+t=250, r=5: n_objects=20
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure, feature, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef count_cells(w, min_d):\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm1 = ndi.gaussian_filter(im, sigma=2.0)\n    sm2 = ndi.gaussian_filter(im, sigma=5.0)\n    dog = sm1 - sm2\n    sm = ndi.gaussian_filter(im, 1.0)\n    opened = morphology.binary_opening(sm > 200, morphology.disk(4))\n    peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=30, labels=opened)\n    markers = np.zeros_like(opened, dtype=int)\n    for i, (r, c) in enumerate(peaks, 1):\n        markers[r, c] = i\n    labels = segmentation.watershed(-dog, markers, mask=opened)\n    br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n    valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels and np.sum(labels == lbl) >= 50]\n    return len(valid)\n\nfor min_d in [6, 7, 8]:\n    print(f'=== min_d={min_d} ===')\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n            w = os.path.basename(a).replace('.tsv', '')\n            ann = pd.read_csv(a, sep='\\t')\n            proc = count_cells(w, min_d)\n            man = len(ann)\n            tol = max(3, int(0.1 * man))\n            diff = abs(proc - man)\n            status = 'PASS' if diff <= tol else 'FAIL'\n            print(f'{w}: man={man:3d}, proc={proc:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_dog_scale.py', 'w').write(code)" && python3 test_dog_scale.py
+[?2004l=== min_d=6 ===
+A08: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 91, diff=25, tol=11 -> FAIL
+D01: man= 68, proc= 49, diff=19, tol= 6 -> FAIL
+D12: man= 21, proc= 35, diff=14, tol= 3 -> FAIL
+G03: man=123, proc= 92, diff=31, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 43, diff= 3, tol= 4 -> PASS
+=== min_d=7 ===
+A08: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 82, diff=34, tol=11 -> FAIL
+D01: man= 68, proc= 49, diff=19, tol= 6 -> FAIL
+D12: man= 21, proc= 29, diff= 8, tol= 3 -> FAIL
+G03: man=123, proc= 85, diff=38, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 40, diff= 0, tol= 4 -> PASS
+=== min_d=8 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 68, diff=48, tol=11 -> FAIL
+D01: man= 68, proc= 45, diff=23, tol= 6 -> FAIL
+D12: man= 21, proc= 25, diff= 4, tol= 3 -> FAIL
+G03: man=123, proc= 77, diff=46, tol=12 -> FAIL
+G10: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+H12: man= 40, proc= 37, diff= 3, tol= 4 -> PASS
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'D12', 'C10']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > 150\n    mask = morphology.remove_small_holes(mask, 30)\n    dist = ndi.distance_transform_edt(mask)\n    # Combine distance transform and smoothed intensity!\n    # At nucleus centers, both dist and intensity are high!\n    combined = dist * (sm / sm.max())\n    peaks = feature.peak_local_max(combined, min_distance=5, threshold_abs=1.0)\n    print(f'{w}: manual={len(ann)}, combined peaks={len(peaks)}')\n'''; open('test_combined.py', 'w').write(code)" && python3 test_combined.py
+[?2004lbash: !\n: event not found
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'D12', 'C10']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > 150\n    mask = morphology.remove_small_holes(mask, 30)\n    dist = ndi.distance_transform_edt(mask)\n    combined = dist * (sm / sm.max())\n    peaks = feature.peak_local_max(combined, min_distance=5, threshold_abs=1.0)\n    print(f'{w}: manual={len(ann)}, combined peaks={len(peaks)}')\n'''; open('test_combined.py', 'w').write(code)" && python3 test_combined.py
+[?2004lA12: manual=8, combined peaks=27
+D12: manual=21, combined peaks=29
+C10: manual=116, combined peaks=83
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nfor sigma in [1.0, 1.2, 1.5]:\n    sm = ndi.gaussian_filter(im, sigma)\n    for d in [4, 5, 6]:\n        peaks = feature.peak_local_max(sm, min_distance=d, threshold_abs=200)\n        print(f'sigma={sigma}, d={d}: peaks={len(peaks)}')\n'''; open('test_c10_peaks.py', 'w').write(code)" && python3 test_c10_peaks.py
+[?2004lsigma=1.0, d=4: peaks=112
+sigma=1.0, d=5: peaks=98
+sigma=1.0, d=6: peaks=89
+sigma=1.2, d=4: peaks=106
+sigma=1.2, d=5: peaks=97
+sigma=1.2, d=6: peaks=85
+sigma=1.5, d=4: peaks=101
+sigma=1.5, d=5: peaks=94
+sigma=1.5, d=6: peaks=83
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\npeaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200)\n\nann_pts = ann[['y_px', 'x_px']].values\ndists = cdist(ann_pts, peaks)\nmin_dists = dists.min(axis=1)\nprint('C10 manual to nearest peak: mean=', min_dists.mean(), 'median=', np.median(min_dists), 'max=', min_dists.max(), 'fraction <= 3px:', (min_dists <= 3).mean())\n'''; open('match_c10.py', 'w').write(code)" && python3 match_c10.py
+[?2004lC10 manual to nearest peak: mean= 4.8365918578248825 median= 3.3637637624681447 max= 50.93338787082595 fraction <= 3px: 0.3620689655172414
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\npeaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200)\n\nann_pts = ann[['y_px', 'x_px']].values\ndists = cdist(ann_pts, peaks)\nmin_dists = dists.min(axis=1)\nfar_idx = np.where(min_dists > 10)[0]\nfor i in far_idx:\n    y, x = ann_pts[i]\n    print(f'far ann: y={y:.1f}, x={x:.1f}, im={im[int(y), int(x)]:.1f}, sm={sm[int(y), int(x)]:.1f}, min_dist={min_dists[i]:.1f}')\n'''; open('check_far.py', 'w').write(code)" && python3 check_far.py
+[?2004lfar ann: y=2.7, x=46.2, im=1728.0, sm=1664.6, min_dist=21.6
+far ann: y=10.1, x=1.0, im=1865.7, sm=1796.4, min_dist=50.9
+far ann: y=8.9, x=253.9, im=554.0, sm=530.3, min_dist=11.1
+far ann: y=50.7, x=242.4, im=962.8, sm=994.6, min_dist=16.6
+far ann: y=136.5, x=169.0, im=474.5, sm=476.5, min_dist=11.8
+far ann: y=231.9, x=168.5, im=548.4, sm=599.5, min_dist=10.2
+far ann: y=217.0, x=278.4, im=616.4, sm=674.9, min_dist=10.1
+far ann: y=243.7, x=76.7, im=756.1, sm=769.8, min_dist=12.9
+far ann: y=258.6, x=1.0, im=611.1, sm=629.3, min_dist=13.8
+far ann: y=257.8, x=41.9, im=780.4, sm=816.7, min_dist=10.0
+far ann: y=296.2, x=20.6, im=946.7, sm=895.9, min_dist=10.4
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\npeaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\nprint('C10 with exclude_border=False: peaks=', len(peaks))\npeaks5 = feature.peak_local_max(sm, min_distance=5, threshold_abs=200, exclude_border=False)\nprint('C10 with min_d=5: peaks=', len(peaks5))\n'''; open('test_border.py', 'w').write(code)" && python3 test_border.py
+[?2004lC10 with exclude_border=False: peaks= 116
+C10 with min_d=5: peaks= 102
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\npeaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n\nann_pts = ann[['y_px', 'x_px']].values\ndists = cdist(ann_pts, peaks)\nmin_dists = dists.min(axis=1)\nprint('C10 match stats:')\nprint('manual count:', len(ann), 'peaks:', len(peaks))\nprint('mean dist:', min_dists.mean(), 'median:', np.median(min_dists), 'max:', min_dists.max())\nprint('matches <= 4px:', (min_dists <= 4).sum())\n'''; open('test_match_exact.py', 'w').write(code)" && python3 test_match_exact.py
+[?2004lC10 match stats:
+manual count: 116 peaks: 116
+mean dist: 4.156285801509222 median: 3.305204527220349 max: 16.58463143998081
+matches <= 4px: 76
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import feature, morphology, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    peaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n    br_peaks = sum(1 for r, c in peaks if r >= 318 or c >= 318)\n    print(f'{w}: manual={len(ann)}, raw peaks={len(peaks)}, br_peaks={br_peaks}')\n'''; open('test_raw_peaks.py', 'w').write(code)" && python3 test_raw_peaks.py
+[?2004lA08: manual=33, raw peaks=58, br_peaks=0
+A12: manual=8, raw peaks=36, br_peaks=0
+C10: manual=116, raw peaks=116, br_peaks=1
+D01: manual=68, raw peaks=69, br_peaks=4
+D12: manual=21, raw peaks=63, br_peaks=0
+G03: manual=123, raw peaks=129, br_peaks=0
+G10: manual=33, raw peaks=95, br_peaks=0
+H12: manual=40, raw peaks=78, br_peaks=1
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'D12']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    peaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n    lbl, n = ndi.label(sm > 150)\n    comp_areas = [np.sum(lbl == lbl[r, c]) for r, c in peaks]\n    print(f'{w}: peaks={len(peaks)}, man={len(ann)}')\n    print('  peaks in comp_area >= 100:', sum(1 for a in comp_areas if a >= 100))\n    print('  peaks in comp_area < 100:', sum(1 for a in comp_areas if a < 100))\n'''; open('test_frag_comp.py', 'w').write(code)" && python3 test_frag_comp.py
+[?2004lA12: peaks=36, man=8
+  peaks in comp_area >= 100: 10
+  peaks in comp_area < 100: 26
+D12: peaks=63, man=21
+  peaks in comp_area >= 100: 44
+  peaks in comp_area < 100: 19
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import pdist, squareform\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['C10', 'D12']:\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    peaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n    d = squareform(pdist(peaks))\n    np.fill_diagonal(d, 999)\n    nn = d.min(axis=1)\n    print(f'{w}: nn min={nn.min()}, <6: {(nn < 6).sum()}, <7: {(nn < 7).sum()}, <8: {(nn < 8).sum()}')\n'''; open('test_peak_dists.py', 'w').write(code)" && python3 test_peak_dists.py
+[?2004lC10: nn min=5.0, <6: 4, <7: 12, <8: 14
+D12: nn min=6.0, <6: 0, <7: 2, <8: 13
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/D12.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\npeaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n\nann_pts = ann[['y_px', 'x_px']].values\ndists = cdist(peaks, ann_pts)\nmin_dists = dists.min(axis=1)\nprint('D12 peaks: total=', len(peaks))\nfor idx, d in enumerate(min_dists):\n    r, c = peaks[idx]\n    if d > 10:\n        print(f'Unmatched peak at y={r}, c={c}: val={im[r, c]:.1f}, sm={sm[r, c]:.1f}, dist_to_ann={d:.1f}')\n'''; open('test_unmatched.py', 'w').write(code)" && python3 test_unmatched.py
+[?2004lD12 peaks: total= 63
+Unmatched peak at y=74, c=273: val=3157.7, sm=2422.4, dist_to_ann=42.9
+Unmatched peak at y=66, c=32: val=2670.0, sm=1808.2, dist_to_ann=38.2
+Unmatched peak at y=76, c=190: val=2625.9, sm=1796.5, dist_to_ann=25.6
+Unmatched peak at y=317, c=144: val=1841.0, sm=1720.2, dist_to_ann=34.6
+Unmatched peak at y=61, c=230: val=2453.5, sm=1707.4, dist_to_ann=19.7
+Unmatched peak at y=230, c=49: val=2486.0, sm=1644.4, dist_to_ann=41.2
+Unmatched peak at y=132, c=200: val=1883.6, sm=1442.4, dist_to_ann=48.4
+Unmatched peak at y=215, c=47: val=2106.1, sm=1385.2, dist_to_ann=54.9
+Unmatched peak at y=36, c=176: val=1953.9, sm=1350.9, dist_to_ann=11.9
+Unmatched peak at y=125, c=239: val=1856.5, sm=1252.2, dist_to_ann=45.0
+Unmatched peak at y=113, c=124: val=1945.6, sm=1246.5, dist_to_ann=30.5
+Unmatched peak at y=106, c=75: val=1763.9, sm=1232.3, dist_to_ann=15.1
+Unmatched peak at y=177, c=160: val=1854.0, sm=1229.7, dist_to_ann=84.5
+Unmatched peak at y=268, c=312: val=1594.8, sm=986.8, dist_to_ann=112.9
+Unmatched peak at y=261, c=113: val=1427.3, sm=978.5, dist_to_ann=52.5
+Unmatched peak at y=250, c=42: val=1503.6, sm=921.5, dist_to_ann=20.1
+Unmatched peak at y=163, c=81: val=1287.1, sm=895.3, dist_to_ann=17.6
+Unmatched peak at y=109, c=150: val=969.7, sm=603.2, dist_to_ann=26.4
+Unmatched peak at y=17, c=52: val=934.1, sm=584.5, dist_to_ann=48.9
+Unmatched peak at y=47, c=264: val=885.6, sm=562.2, dist_to_ann=47.5
+Unmatched peak at y=56, c=245: val=875.3, sm=555.9, dist_to_ann=28.7
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nlbl, n = ndi.label(sm > 250)\nprint('Pixel (74, 273) label:', lbl[74, 273])\nprops = measure.regionprops(lbl)\nfor p in props:\n    if p.label == lbl[74, 273]:\n        print('area:', p.area, 'minor:', p.axis_minor_length, 'major:', p.axis_major_length, 'bbox:', p.bbox)\n'''; open('check_d12_pt.py', 'w').write(code)" && python3 check_d12_pt.py
+[?2004lPixel (74, 273) label: 13
+area: 51.0 minor: 7.937818639955952 major: 8.188139570497205 bbox: (70, 269, 78, 277)
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation, morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef segment_plate(min_d=4, thresh_val=200, min_minor=8.0, min_area=70):\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = sm > thresh_val\n        mask = morphology.remove_small_holes(mask, 30)\n        \n        peaks = feature.peak_local_max(sm, min_distance=min_d, threshold_abs=thresh_val, exclude_border=False)\n        \n        markers = np.zeros_like(mask, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n            \n        labels = segmentation.watershed(-sm, markers, mask=mask)\n        \n        props = measure.regionprops(labels)\n        valid_count = 0\n        for p in props:\n            coords = p.coords\n            if np.any(coords[:, 0] == 319) or np.any(coords[:, 1] == 319):\n                continue\n            cut_tl = np.any(coords[:, 0] == 0) or np.any(coords[:, 1] == 0)\n            if cut_tl:\n                if p.area < min_area * 0.5:\n                    continue\n            else:\n                if p.axis_minor_length < min_minor or p.area < min_area:\n                    continue\n            valid_count += 1\n            \n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(valid_count - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={valid_count:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n\nsegment_plate()\n'''; open('test_seg_full.py', 'w').write(code)" && python3 test_seg_full.py
+[?2004lA08: man= 33, proc= 29, diff= 4, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 95, diff=21, tol=11 -> FAIL
+D01: man= 68, proc= 55, diff=13, tol= 6 -> FAIL
+D12: man= 21, proc= 37, diff=16, tol= 3 -> FAIL
+G03: man=123, proc=103, diff=20, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 52, diff=12, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation, morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef test_cc_filter(min_cc_area=80, min_d=4, thresh_val=150):\n    all_ok = True\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = sm > thresh_val\n        mask = morphology.remove_small_holes(mask, 30)\n        mask = morphology.remove_small_objects(mask, min_size=min_cc_area)\n        \n        peaks = feature.peak_local_max(sm, min_distance=min_d, threshold_abs=thresh_val, labels=mask, exclude_border=False)\n        \n        markers = np.zeros_like(mask, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n        labels = segmentation.watershed(-sm, markers, mask=mask)\n        \n        br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n        valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels]\n        cnt = len(valid)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        if status == 'FAIL': all_ok = False\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n    return all_ok\n\nfor t in [150, 180, 200]:\n    for min_cc in [70, 80, 90]:\n        for md in [4, 5]:\n            print(f'=== t={t}, min_cc={min_cc}, md={md} ===')\n            if test_cc_filter(min_cc, md, t):\n                print('ALL PASSED!')\n                exit(0)\n'''; open('test_cc.py', 'w').write(code)" && python3 test_cc.py
+[?2004lbash: !': event not found
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation, morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef test_cc_filter(min_cc_area=80, min_d=4, thresh_val=150):\n    all_ok = True\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = sm > thresh_val\n        mask = morphology.remove_small_holes(mask, 30)\n        mask = morphology.remove_small_objects(mask, min_size=min_cc_area)\n        \n        peaks = feature.peak_local_max(sm, min_distance=min_d, threshold_abs=thresh_val, labels=mask, exclude_border=False)\n        \n        markers = np.zeros_like(mask, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n        labels = segmentation.watershed(-sm, markers, mask=mask)\n        \n        br_labels = set(labels[319, :]).union(set(labels[:, 319]))\n        valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br_labels]\n        cnt = len(valid)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        if status == 'FAIL': all_ok = False\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n    return all_ok\n\nfor t in [150, 180, 200]:\n    for min_cc in [70, 80, 90]:\n        for md in [4, 5]:\n            print(f'=== t={t}, min_cc={min_cc}, md={md} ===')\n            if test_cc_filter(min_cc, md, t):\n                print('SUCCESS ALL PASSED')\n                exit(0)\n'''; open('test_cc.py', 'w').write(code)" && python3 test_cc.py
+[?2004l=== t=150, min_cc=70, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=101, diff=15, tol=11 -> FAIL
+D01: man= 68, proc= 60, diff= 8, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=150, min_cc=70, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 87, diff=29, tol=11 -> FAIL
+D01: man= 68, proc= 52, diff=16, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 96, diff=27, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=150, min_cc=80, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 60, diff= 8, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=150, min_cc=80, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 52, diff=16, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 96, diff=27, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=150, min_cc=90, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 58, diff=10, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=111, diff=12, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=150, min_cc=90, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 50, diff=18, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=180, min_cc=70, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 60, diff= 8, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=180, min_cc=70, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 52, diff=16, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 96, diff=27, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=180, min_cc=80, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 59, diff= 9, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=111, diff=12, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=180, min_cc=80, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 51, diff=17, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=180, min_cc=90, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 58, diff=10, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=111, diff=12, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=180, min_cc=90, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 50, diff=18, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=200, min_cc=70, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 60, diff= 8, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=200, min_cc=70, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 52, diff=16, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 96, diff=27, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=200, min_cc=80, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 58, diff=10, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=111, diff=12, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=200, min_cc=80, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 50, diff=18, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+=== t=200, min_cc=90, md=4 ===
+A08: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 58, diff=10, tol= 6 -> FAIL
+D12: man= 21, proc= 43, diff=22, tol= 3 -> FAIL
+G03: man=123, proc=111, diff=12, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== t=200, min_cc=90, md=5 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc= 86, diff=30, tol=11 -> FAIL
+D01: man= 68, proc= 50, diff=18, tol= 6 -> FAIL
+D12: man= 21, proc= 33, diff=12, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 51, diff=11, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation, morphology, filters\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    t_otsu = filters.threshold_otsu(sm)\n    t_li = filters.threshold_li(sm)\n    t_yen = filters.threshold_yen(sm)\n    print(f'{w}: man={len(ann):3d}, otsu={t_otsu:.1f}, li={t_li:.1f}, yen={t_yen:.1f}')\n'''; open('test_thresh_types.py', 'w').write(code)" && python3 test_thresh_types.py
+[?2004lA12: man=  8, otsu=442.4, li=149.5, yen=249.3
+A08: man= 33, otsu=529.3, li=187.8, yen=230.9
+D12: man= 21, otsu=615.8, li=211.2, yen=196.3
+G10: man= 33, otsu=498.3, li=178.4, yen=259.9
+H12: man= 40, otsu=526.6, li=198.8, yen=160.2
+D01: man= 68, otsu=566.0, li=209.6, yen=166.6
+C10: man=116, otsu=558.1, li=215.0, yen=204.0
+G03: man=123, otsu=548.3, li=215.3, yen=207.7
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nann = pd.read_csv('/task/input/annotations/D12.tsv', sep='\\t')\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 2.0)\nfor h in [20, 50, 100, 150, 200]:\n    hmax = morphology.h_maxima(sm, h=h)\n    lbl, n = ndi.label(hmax)\n    print(f'h={h}: n_peaks={n}')\n'''; open('test_hmax.py', 'w').write(code)" && python3 test_hmax.py
+[?2004lh=20: n_peaks=52
+h=50: n_peaks=46
+h=100: n_peaks=43
+h=150: n_peaks=42
+h=200: n_peaks=40
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 2.0)\nmask = sm > 200\nmask = morphology.remove_small_objects(mask, min_size=80)\nfor h in [20, 30, 40, 50, 70, 100]:\n    hmax = morphology.h_maxima(sm, h=h)\n    peaks_in_mask = hmax & mask\n    lbl, n = ndi.label(peaks_in_mask)\n    br = set(lbl[319, :]).union(set(lbl[:, 319]))\n    valid = n - len(br - {0})\n    print(f'h={h}: n_peaks_in_mask={n}, valid={valid}')\n'''; open('test_double_peaks.py', 'w').write(code)" && python3 test_double_peaks.py
+[?2004lh=20: n_peaks_in_mask=35, valid=34
+h=30: n_peaks_in_mask=31, valid=30
+h=40: n_peaks_in_mask=30, valid=29
+h=50: n_peaks_in_mask=29, valid=28
+h=70: n_peaks_in_mask=27, valid=26
+h=100: n_peaks_in_mask=26, valid=25
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nim = (tifffile.imread('/task/input/images/D12_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 2.0)\nmask = sm > 200\nmask = morphology.remove_small_objects(mask, min_size=80)\nfor h in [120, 150, 180, 200, 250, 300]:\n    hmax = morphology.h_maxima(sm, h=h)\n    peaks_in_mask = hmax & mask\n    lbl, n = ndi.label(peaks_in_mask)\n    br = set(lbl[319, :]).union(set(lbl[:, 319]))\n    valid = n - len(br - {0})\n    print(f'h={h}: n_peaks_in_mask={n}, valid={valid}')\n'''; open('test_double_peaks2.py', 'w').write(code)" && python3 test_double_peaks2.py
+[?2004lh=120: n_peaks_in_mask=26, valid=25
+h=150: n_peaks_in_mask=25, valid=24
+h=180: n_peaks_in_mask=23, valid=22
+h=200: n_peaks_in_mask=23, valid=22
+h=250: n_peaks_in_mask=22, valid=21
+h=300: n_peaks_in_mask=22, valid=21
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor h in [180, 200, 220, 250]:\n    print(f'=== h={h} ===')\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 2.0)\n        mask = sm > 200\n        mask = morphology.remove_small_objects(mask, min_size=80)\n        hmax = morphology.h_maxima(sm, h=h)\n        peaks = hmax & mask\n        lbl, n = ndi.label(peaks)\n        br_count = 0\n        for i in range(1, n+1):\n            coords = np.argwhere(lbl == i)\n            if np.any(coords[:, 0] >= 318) or np.any(coords[:, 1] >= 318):\n                br_count += 1\n        cnt = n - br_count\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_h_all.py', 'w').write(code)" && python3 test_h_all.py
+[?2004l=== h=180 ===
+A08: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 65, diff=51, tol=11 -> FAIL
+D01: man= 68, proc= 44, diff=24, tol= 6 -> FAIL
+D12: man= 21, proc= 22, diff= 1, tol= 3 -> PASS
+G03: man=123, proc= 71, diff=52, tol=12 -> FAIL
+G10: man= 33, proc= 29, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 33, diff= 7, tol= 4 -> FAIL
+=== h=200 ===
+A08: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 63, diff=53, tol=11 -> FAIL
+D01: man= 68, proc= 44, diff=24, tol= 6 -> FAIL
+D12: man= 21, proc= 22, diff= 1, tol= 3 -> PASS
+G03: man=123, proc= 70, diff=53, tol=12 -> FAIL
+G10: man= 33, proc= 29, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 33, diff= 7, tol= 4 -> FAIL
+=== h=220 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 61, diff=55, tol=11 -> FAIL
+D01: man= 68, proc= 43, diff=25, tol= 6 -> FAIL
+D12: man= 21, proc= 22, diff= 1, tol= 3 -> PASS
+G03: man=123, proc= 69, diff=54, tol=12 -> FAIL
+G10: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+H12: man= 40, proc= 32, diff= 8, tol= 4 -> FAIL
+=== h=250 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 58, diff=58, tol=11 -> FAIL
+D01: man= 68, proc= 40, diff=28, tol= 6 -> FAIL
+D12: man= 21, proc= 21, diff= 0, tol= 3 -> PASS
+G03: man=123, proc= 68, diff=55, tol=12 -> FAIL
+G10: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+H12: man= 40, proc= 31, diff= 9, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor s1, s2 in [(1.2, 3.5), (1.5, 4.0)]:\n    for min_d in [4, 5]:\n        for dog_t in [20, 30, 40]:\n            passes = []\n            for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n                w = os.path.basename(a).replace('.tsv', '')\n                ann = pd.read_csv(a, sep='\\t')\n                im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n                sm = ndi.gaussian_filter(im, 1.0)\n                mask = morphology.remove_small_objects(sm > 150, min_size=80)\n                dog = ndi.gaussian_filter(im, s1) - ndi.gaussian_filter(im, s2)\n                peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=dog_t, labels=mask, exclude_border=False)\n                valid = sum(1 for r, c in peaks if r < 318 and c < 318)\n                man = len(ann)\n                tol = max(3, int(0.1 * man))\n                diff = abs(valid - man)\n                passes.append(diff <= tol)\n            if all(passes):\n                print(f'ALL PASS! s1={s1}, s2={s2}, min_d={min_d}, dog_t={dog_t}')\n'''; open('test_dog_all_pass.py', 'w').write(code)" && python3 test_dog_all_pass.py
+[?2004l[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, measure, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ns1, s2 = 1.5, 4.0\nfor min_d in [4, 5]:\n    print(f'=== min_d={min_d} ===')\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = morphology.remove_small_objects(sm > 150, min_size=80)\n        dog = ndi.gaussian_filter(im, s1) - ndi.gaussian_filter(im, s2)\n        peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=30, labels=mask, exclude_border=False)\n        valid = sum(1 for r, c in peaks if r < 318 and c < 318)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(valid - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={valid:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_dog_print.py', 'w').write(code)" && python3 test_dog_print.py
+[?2004l=== min_d=4 ===
+A08: man= 33, proc= 43, diff=10, tol= 3 -> FAIL
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=119, diff= 3, tol=11 -> PASS
+D01: man= 68, proc= 70, diff= 2, tol= 6 -> PASS
+D12: man= 21, proc= 56, diff=35, tol= 3 -> FAIL
+G03: man=123, proc=138, diff=15, tol=12 -> FAIL
+G10: man= 33, proc= 43, diff=10, tol= 3 -> FAIL
+H12: man= 40, proc= 83, diff=43, tol= 4 -> FAIL
+=== min_d=5 ===
+A08: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+A12: man=  8, proc= 10, diff= 2, tol= 3 -> PASS
+C10: man=116, proc=111, diff= 5, tol=11 -> PASS
+D01: man= 68, proc= 58, diff=10, tol= 6 -> FAIL
+D12: man= 21, proc= 50, diff=29, tol= 3 -> FAIL
+G03: man=123, proc=116, diff= 7, tol=12 -> PASS
+G10: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+H12: man= 40, proc= 69, diff=29, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nim = (tifffile.imread('/task/input/images/C10_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nfor h in [20, 30, 40, 50, 70, 100]:\n    hmax = morphology.h_maxima(sm, h=h)\n    lbl, n = ndi.label(hmax)\n    print(f'sigma=1.0, h={h}: n_peaks={n}')\n'''; open('test_c10_h.py', 'w').write(code)" && python3 test_c10_h.py
+[?2004lsigma=1.0, h=20: n_peaks=161
+sigma=1.0, h=30: n_peaks=151
+sigma=1.0, h=40: n_peaks=141
+sigma=1.0, h=50: n_peaks=134
+sigma=1.0, h=70: n_peaks=124
+sigma=1.0, h=100: n_peaks=116
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor h in [80, 90, 100, 110, 120]:\n    print(f'=== h={h} ===')\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = morphology.remove_small_objects(sm > 150, min_size=80)\n        hmax = morphology.h_maxima(sm, h=h)\n        peaks = hmax & mask\n        lbl, n = ndi.label(peaks)\n        br_count = 0\n        for i in range(1, n+1):\n            coords = np.argwhere(lbl == i)\n            if np.any(coords[:, 0] >= 318) or np.any(coords[:, 1] >= 318):\n                br_count += 1\n        cnt = n - br_count\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_h100_all.py', 'w').write(code)" && python3 test_h100_all.py
+[?2004l=== h=80 ===
+A08: man= 33, proc= 39, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc=103, diff=13, tol=11 -> FAIL
+D01: man= 68, proc= 61, diff= 7, tol= 6 -> FAIL
+D12: man= 21, proc= 41, diff=20, tol= 3 -> FAIL
+G03: man=123, proc=124, diff= 1, tol=12 -> PASS
+G10: man= 33, proc= 40, diff= 7, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== h=90 ===
+A08: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc=102, diff=14, tol=11 -> FAIL
+D01: man= 68, proc= 59, diff= 9, tol= 6 -> FAIL
+D12: man= 21, proc= 41, diff=20, tol= 3 -> FAIL
+G03: man=123, proc=117, diff= 6, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 64, diff=24, tol= 4 -> FAIL
+=== h=100 ===
+A08: man= 33, proc= 34, diff= 1, tol= 3 -> PASS
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc=100, diff=16, tol=11 -> FAIL
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 39, diff=18, tol= 3 -> FAIL
+G03: man=123, proc=113, diff=10, tol=12 -> PASS
+G10: man= 33, proc= 37, diff= 4, tol= 3 -> FAIL
+H12: man= 40, proc= 59, diff=19, tol= 4 -> FAIL
+=== h=110 ===
+A08: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 96, diff=20, tol=11 -> FAIL
+D01: man= 68, proc= 56, diff=12, tol= 6 -> FAIL
+D12: man= 21, proc= 38, diff=17, tol= 3 -> FAIL
+G03: man=123, proc=109, diff=14, tol=12 -> FAIL
+G10: man= 33, proc= 36, diff= 3, tol= 3 -> PASS
+H12: man= 40, proc= 58, diff=18, tol= 4 -> FAIL
+=== h=120 ===
+A08: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 95, diff=21, tol=11 -> FAIL
+D01: man= 68, proc= 55, diff=13, tol= 6 -> FAIL
+D12: man= 21, proc= 38, diff=17, tol= 3 -> FAIL
+G03: man=123, proc=105, diff=18, tol=12 -> FAIL
+G10: man= 33, proc= 34, diff= 1, tol= 3 -> PASS
+H12: man= 40, proc= 56, diff=16, tol= 4 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import morphology, feature, segmentation, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef count_dt(min_d, disk_r=3, t=180):\n    passes = []\n    res = []\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        mask = sm > t\n        opened = morphology.binary_opening(mask, morphology.disk(disk_r))\n        dist = ndi.distance_transform_edt(opened)\n        peaks = feature.peak_local_max(dist, min_distance=min_d, labels=opened, exclude_border=False)\n        markers = np.zeros_like(opened, dtype=int)\n        for i, (r, c) in enumerate(peaks, 1):\n            markers[r, c] = i\n        labels = segmentation.watershed(-dist, markers, mask=opened)\n        br = set(labels[319, :]).union(set(labels[:, 319]))\n        valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br and np.sum(labels == lbl) >= 30]\n        cnt = len(valid)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        ok = diff <= tol\n        passes.append(ok)\n        res.append((w, man, cnt, diff, tol, ok))\n    return all(passes), res\n\nfor disk_r in [3, 4]:\n    for t in [150, 180, 200]:\n        for md in [3, 4, 5]:\n            all_ok, res = count_dt(md, disk_r, t)\n            if all_ok:\n                print(f'ALL PASSED: disk_r={disk_r}, t={t}, md={md}')\n                for r in res:\n                    print(f'  {r[0]}: man={r[1]}, proc={r[2]}, diff={r[3]}, tol={r[4]}')\n                exit(0)\n            else:\n                n_pass = sum(1 for r in res if r[5])\n                if n_pass >= 7:\n                    print(f'7/8 passed: disk_r={disk_r}, t={t}, md={md}')\n                    for r in res:\n                        print(f'  {r[0]}: man={r[1]}, proc={r[2]}, diff={r[3]}, tol={r[4]}')\n'''; open('test_dt_grid.py', 'w').write(code)" && python3 test_dt_grid.py
+[?2004l[?2004hroot@ec77f99773e0:/task# python3 -c "import test_dt_grid as td; ok, res = td.count_dt(3, 3, 180); [print(r) for r in res]"
+[?2004l('A08', 33, 40, 7, 3, False)
+('A12', 8, 11, 3, 3, True)
+('C10', 116, 96, 20, 11, False)
+('D01', 68, 49, 19, 6, False)
+('D12', 21, 24, 3, 3, True)
+('G03', 123, 105, 18, 12, False)
+('G10', 33, 47, 14, 3, False)
+('H12', 40, 45, 5, 4, False)
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n    w = os.path.basename(a).replace('.tsv', '')\n    ann = pd.read_csv(a, sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    vals = [sm[int(r['y_px']), int(r['x_px'])] for _, r in ann.iterrows()]\n    print(f'{w}: n={len(ann):3d}, min={min(vals):5.1f}, p10={np.percentile(vals, 10):5.1f}, med={np.median(vals):5.1f}')\n'''; open('ann_intensities.py', 'w').write(code)" && python3 ann_intensities.py
+[?2004lA08: n= 33, min=463.6, p10=779.0, med=1215.5
+A12: n=  8, min=542.4, p10=726.9, med=1064.4
+C10: n=116, min=476.5, p10=720.7, med=1199.1
+D01: n= 68, min=656.8, p10=832.8, med=1279.3
+D12: n= 21, min=552.3, p10=715.9, med=1214.7
+G03: n=123, min=507.4, p10=835.0, med=1168.6
+G10: n= 33, min=623.4, p10=708.0, med=1079.3
+H12: n= 40, min=561.3, p10=658.1, med=1066.9
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'D12', 'H12']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    peaks = feature.peak_local_max(sm, min_distance=4, threshold_abs=200, exclude_border=False)\n    ann_pts = ann[['y_px', 'x_px']].values\n    dists = cdist(peaks, ann_pts).min(axis=1)\n    matched = dists <= 6\n    unmatched = ~matched\n    matched_vals = sm[peaks[matched, 0], peaks[matched, 1]]\n    unmatched_vals = sm[peaks[unmatched, 0], peaks[unmatched, 1]]\n    print(f'{w}: matched={len(matched_vals)} (mean={matched_vals.mean():.1f}, min={matched_vals.min():.1f}) | unmatched={len(unmatched_vals)} (mean={unmatched_vals.mean():.1f}, min={unmatched_vals.min():.1f}, max={unmatched_vals.max():.1f})')\n'''; open('test_unmatched_stats.py', 'w').write(code)" && python3 test_unmatched_stats.py
+[?2004lA12: matched=10 (mean=1318.8, min=738.4) | unmatched=26 (mean=1062.1, min=563.1, max=2264.1)
+D12: matched=30 (mean=1691.6, min=762.0) | unmatched=33 (mean=1391.2, min=555.9, max=3176.3)
+H12: matched=53 (mean=1404.9, min=705.9) | unmatched=25 (mean=1335.2, min=748.7, max=2119.5)
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom scipy.spatial.distance import cdist\nfrom skimage import measure, morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nw = 'D12'\nann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\nim = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nann_pts = ann[['y_px', 'x_px']].values\n\n# For each annotation point, what is the area of the object > 200 it sits in?\nlbl, n = ndi.label(sm > 200)\nann_areas = [np.sum(lbl == lbl[int(y), int(x)]) for y, x in ann_pts]\nprint('D12 ann areas:', sorted(ann_areas))\n'''; open('test_ann_areas.py', 'w').write(code)" && python3 test_ann_areas.py
+[?2004lD12 ann areas: [np.int64(166), np.int64(191), np.int64(203), np.int64(241), np.int64(286), np.int64(324), np.int64(327), np.int64(327), np.int64(334), np.int64(342), np.int64(361), np.int64(364), np.int64(381), np.int64(381), np.int64(384), np.int64(627), np.int64(627), np.int64(633), np.int64(633), np.int64(651), np.int64(651)]
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nw = 'D12'\nim = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nlbl, n = ndi.label(sm > 200)\nareas = np.bincount(lbl.ravel())[1:]\nprint('All areas in D12:', sorted(areas))\n'''; open('test_all_areas.py', 'w').write(code)" && python3 test_all_areas.py
+[?2004lAll areas in D12: [np.int64(16), np.int64(18), np.int64(19), np.int64(20), np.int64(24), np.int64(27), np.int64(30), np.int64(31), np.int64(31), np.int64(32), np.int64(32), np.int64(35), np.int64(35), np.int64(37), np.int64(41), np.int64(41), np.int64(41), np.int64(44), np.int64(58), np.int64(117), np.int64(166), np.int64(191), np.int64(203), np.int64(241), np.int64(286), np.int64(324), np.int64(327), np.int64(327), np.int64(334), np.int64(342), np.int64(361), np.int64(364), np.int64(381), np.int64(381), np.int64(384), np.int64(627), np.int64(633), np.int64(651)]
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    lbl, n = ndi.label(sm > 200)\n    props = measure.regionprops(lbl)\n    valid_props = [p for p in props if not (np.any(p.coords[:, 0] >= 319) or np.any(p.coords[:, 1] >= 319))]\n    cells_props = [p for p in valid_props if p.area >= 100 or ((np.any(p.coords[:, 0] == 0) or np.any(p.coords[:, 1] == 0)) and p.area >= 50)]\n    total_area = sum(p.area for p in cells_props)\n    print(f'{w}: man={len(ann):3d}, n_comp={len(cells_props):3d}, total_area={total_area:6d}, area/man={total_area/len(ann):.1f}')\n'''; open('test_component_model.py', 'w').write(code)" && python3 test_component_model.py
+[?2004lTraceback (most recent call last):
+  File "/task/test_component_model.py", line 18, in <module>
+    print(f'{w}: man={len(ann):3d}, n_comp={len(cells_props):3d}, total_area={total_area:6d}, area/man={total_area/len(ann):.1f}')
+                                                                             ^^^^^^^^^^^^^^^
+ValueError: Unknown format code 'd' for object of type 'float'
+[?2004hroot@ec77f99773e0:/task# sed -i 's/{total_area:6d}/{int(total_area):6d}/' test_component_model.py && python3 test_component_model.py
+[?2004lA12: man=  8, n_comp=  8, total_area=  1404, area/man=175.5
+A08: man= 33, n_comp= 18, total_area=  5005, area/man=151.7
+D12: man= 21, n_comp= 18, total_area=  6523, area/man=310.6
+G10: man= 33, n_comp= 21, total_area=  4552, area/man=137.9
+H12: man= 40, n_comp= 20, total_area=  9837, area/man=245.9
+D01: man= 68, n_comp= 22, total_area=  8940, area/man=131.5
+C10: man=116, n_comp= 31, total_area= 16924, area/man=145.9
+G03: man=123, n_comp= 32, total_area= 18059, area/man=146.8
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import measure, feature, segmentation, morphology\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\ndef segment_well(w, t=180, min_d=5):\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    sm = ndi.gaussian_filter(im, 1.0)\n    mask = sm > t\n    mask = morphology.remove_small_holes(mask, 30)\n    mask = morphology.remove_small_objects(mask, min_size=80)\n    dist = ndi.distance_transform_edt(mask)\n    norm_sm = np.maximum(0, (sm - t) / (sm.max() - t))\n    metric = dist * (0.5 + norm_sm)\n    peaks = feature.peak_local_max(metric, min_distance=min_d, labels=mask, exclude_border=False)\n    markers = np.zeros_like(mask, dtype=int)\n    for i, (r, c) in enumerate(peaks, 1):\n        markers[r, c] = i\n    labels = segmentation.watershed(-metric, markers, mask=mask)\n    br = set(labels[319, :]).union(set(labels[:, 319]))\n    valid = [lbl for lbl in range(1, labels.max() + 1) if lbl not in br and np.sum(labels == lbl) >= 50]\n    return len(valid), len(ann)\n\nfor min_d in [4, 5, 6]:\n    print(f'=== min_d={min_d} ===')\n    for w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n        cnt, man = segment_well(w, t=180, min_d=min_d)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_metric_ws.py', 'w').write(code)" && python3 test_metric_ws.py
+[?2004l=== min_d=4 ===
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+A08: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+D12: man= 21, proc= 22, diff= 1, tol= 3 -> PASS
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 39, diff= 1, tol= 4 -> PASS
+D01: man= 68, proc= 49, diff=19, tol= 6 -> FAIL
+C10: man=116, proc= 77, diff=39, tol=11 -> FAIL
+G03: man=123, proc= 90, diff=33, tol=12 -> FAIL
+=== min_d=5 ===
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+A08: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+D12: man= 21, proc= 20, diff= 1, tol= 3 -> PASS
+G10: man= 33, proc= 30, diff= 3, tol= 3 -> PASS
+H12: man= 40, proc= 35, diff= 5, tol= 4 -> FAIL
+D01: man= 68, proc= 47, diff=21, tol= 6 -> FAIL
+C10: man=116, proc= 71, diff=45, tol=11 -> FAIL
+G03: man=123, proc= 83, diff=40, tol=12 -> FAIL
+=== min_d=6 ===
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+A08: man= 33, proc= 28, diff= 5, tol= 3 -> FAIL
+D12: man= 21, proc= 19, diff= 2, tol= 3 -> PASS
+G10: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+H12: man= 40, proc= 35, diff= 5, tol= 4 -> FAIL
+D01: man= 68, proc= 43, diff=25, tol= 6 -> FAIL
+C10: man=116, proc= 64, diff=52, tol=11 -> FAIL
+G03: man=123, proc= 76, diff=47, tol=12 -> FAIL
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import pandas as pd, numpy as np\nfrom scipy.spatial.distance import pdist, squareform\nann = pd.read_csv('/task/input/annotations/C10.tsv', sep='\\t')\npts = ann[['y_px', 'x_px']].values\nd = squareform(pdist(pts))\nnp.fill_diagonal(d, 999)\nfor thr in [5, 6, 7, 8, 9, 10]:\n    print(f'pairs < {thr}:', (d < thr).sum() // 2)\n'''; open('test_ann_pairs.py', 'w').write(code)" && python3 test_ann_pairs.py
+[?2004lpairs < 5: 0
+pairs < 6: 0
+pairs < 7: 0
+pairs < 8: 1
+pairs < 9: 9
+pairs < 10: 22
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nw = 'D12'\nim = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nlbl, n = ndi.label(sm > 200)\n\ndog = ndi.gaussian_filter(im, 1.5) - ndi.gaussian_filter(im, 4.0)\npeaks = feature.peak_local_max(dog, min_distance=5, threshold_abs=30, exclude_border=False)\nprint('Total peaks in D12:', len(peaks))\nareas = [np.sum(lbl == lbl[r, c]) for r, c in peaks]\nprint('Peaks with area < 100 (fragments):', sum(1 for a in areas if a < 100))\nprint('Peaks with area >= 100 (intact cells):', sum(1 for a in areas if a >= 100))\nfrom collections import Counter\ncomp_ids = [lbl[r, c] for r, c in peaks if np.sum(lbl == lbl[r, c]) >= 100]\ncounts = Counter(comp_ids)\nprint('Component peak counts for intact cells:', counts)\n'''; open('test_dog_d12_breakdown.py', 'w').write(code)" && python3 test_dog_d12_breakdown.py
+[?2004lTotal peaks in D12: 69
+Peaks with area < 100 (fragments): 19
+Peaks with area >= 100 (intact cells): 50
+Component peak counts for intact cells: Counter({np.int32(27): 5, np.int32(12): 4, np.int32(18): 4, np.int32(32): 3, np.int32(11): 3, np.int32(4): 3, np.int32(37): 3, np.int32(15): 3, np.int32(24): 3, np.int32(16): 2, np.int32(5): 2, np.int32(1): 2, np.int32(34): 2, np.int32(26): 2, np.int32(22): 2, np.int32(10): 2, np.int32(17): 2, np.int32(3): 2, np.int32(38): 1})
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nw = 'D12'\nim = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\nsm = ndi.gaussian_filter(im, 1.0)\nlbl, n = ndi.label(sm > 200)\n\nfor s1, s2 in [(2.5, 6.0), (3.0, 7.0), (3.0, 8.0)]:\n    dog = ndi.gaussian_filter(im, s1) - ndi.gaussian_filter(im, s2)\n    peaks = feature.peak_local_max(dog, min_distance=6, threshold_abs=10, exclude_border=False)\n    from collections import Counter\n    comp_ids = [lbl[r, c] for r, c in peaks if np.sum(lbl == lbl[r, c]) >= 100]\n    print(f's1={s1}, s2={s2}: intact peaks={len(comp_ids)}, counts={Counter(comp_ids)}')\n'''; open('test_dog_scale_d12.py', 'w').write(code)" && python3 test_dog_scale_d12.py
+[?2004ls1=2.5, s2=6.0: intact peaks=28, counts=Counter({np.int32(18): 3, np.int32(12): 2, np.int32(4): 2, np.int32(26): 2, np.int32(22): 2, np.int32(37): 2, np.int32(10): 2, np.int32(15): 2, np.int32(16): 1, np.int32(32): 1, np.int32(5): 1, np.int32(38): 1, np.int32(11): 1, np.int32(1): 1, np.int32(34): 1, np.int32(27): 1, np.int32(17): 1, np.int32(24): 1, np.int32(3): 1})
+s1=3.0, s2=7.0: intact peaks=23, counts=Counter({np.int32(18): 3, np.int32(12): 2, np.int32(37): 2, np.int32(16): 1, np.int32(32): 1, np.int32(5): 1, np.int32(1): 1, np.int32(38): 1, np.int32(11): 1, np.int32(34): 1, np.int32(4): 1, np.int32(22): 1, np.int32(26): 1, np.int32(10): 1, np.int32(27): 1, np.int32(17): 1, np.int32(24): 1, np.int32(15): 1, np.int32(3): 1})
+s1=3.0, s2=8.0: intact peaks=21, counts=Counter({np.int32(12): 2, np.int32(18): 2, np.int32(16): 1, np.int32(32): 1, np.int32(5): 1, np.int32(1): 1, np.int32(38): 1, np.int32(11): 1, np.int32(34): 1, np.int32(4): 1, np.int32(22): 1, np.int32(27): 1, np.int32(10): 1, np.int32(26): 1, np.int32(37): 1, np.int32(17): 1, np.int32(15): 1, np.int32(24): 1, np.int32(3): 1})
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np, glob, os\nfrom scipy import ndimage as ndi\nfrom skimage import feature, morphology, measure\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor s1, s2, min_d, dog_t in [(2.5, 7.0, 5, 5), (2.8, 7.5, 5, 5), (3.0, 8.0, 5, 5), (2.5, 6.5, 4, 5)]:\n    print(f'=== s1={s1}, s2={s2}, min_d={min_d}, dog_t={dog_t} ===')\n    passes = 0\n    for a in sorted(glob.glob('/task/input/annotations/*.tsv')):\n        w = os.path.basename(a).replace('.tsv', '')\n        ann = pd.read_csv(a, sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        sm = ndi.gaussian_filter(im, 1.0)\n        lbl, n = ndi.label(sm > 180)\n        \n        dog = ndi.gaussian_filter(im, s1) - ndi.gaussian_filter(im, s2)\n        peaks = feature.peak_local_max(dog, min_distance=min_d, threshold_abs=dog_t, exclude_border=False)\n        \n        valid_peaks = []\n        for r, c in peaks:\n            if r >= 318 or c >= 318:\n                continue\n            c_id = lbl[r, c]\n            if c_id == 0:\n                continue\n            c_area = np.sum(lbl == c_id)\n            if c_area < 80:\n                continue\n            valid_peaks.append((r, c))\n            \n        cnt = len(valid_peaks)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        if status == 'PASS': passes += 1\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n    print(f'Total passed: {passes}/8')\n'''; open('test_dog_scale_all.py', 'w').write(code)" && python3 test_dog_scale_all.py
+[?2004l=== s1=2.5, s2=7.0, min_d=5, dog_t=5 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 84, diff=32, tol=11 -> FAIL
+D01: man= 68, proc= 50, diff=18, tol= 6 -> FAIL
+D12: man= 21, proc= 28, diff= 7, tol= 3 -> FAIL
+G03: man=123, proc= 89, diff=34, tol=12 -> FAIL
+G10: man= 33, proc= 31, diff= 2, tol= 3 -> PASS
+H12: man= 40, proc= 41, diff= 1, tol= 4 -> PASS
+Total passed: 3/8
+=== s1=2.8, s2=7.5, min_d=5, dog_t=5 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 82, diff=34, tol=11 -> FAIL
+D01: man= 68, proc= 49, diff=19, tol= 6 -> FAIL
+D12: man= 21, proc= 24, diff= 3, tol= 3 -> PASS
+G03: man=123, proc= 85, diff=38, tol=12 -> FAIL
+G10: man= 33, proc= 30, diff= 3, tol= 3 -> PASS
+H12: man= 40, proc= 39, diff= 1, tol= 4 -> PASS
+Total passed: 4/8
+=== s1=3.0, s2=8.0, min_d=5, dog_t=5 ===
+A08: man= 33, proc= 26, diff= 7, tol= 3 -> FAIL
+A12: man=  8, proc=  8, diff= 0, tol= 3 -> PASS
+C10: man=116, proc= 80, diff=36, tol=11 -> FAIL
+D01: man= 68, proc= 48, diff=20, tol= 6 -> FAIL
+D12: man= 21, proc= 21, diff= 0, tol= 3 -> PASS
+G03: man=123, proc= 81, diff=42, tol=12 -> FAIL
+G10: man= 33, proc= 30, diff= 3, tol= 3 -> PASS
+H12: man= 40, proc= 39, diff= 1, tol= 4 -> PASS
+Total passed: 4/8
+=== s1=2.5, s2=6.5, min_d=4, dog_t=5 ===
+A08: man= 33, proc= 27, diff= 6, tol= 3 -> FAIL
+A12: man=  8, proc=  9, diff= 1, tol= 3 -> PASS
+C10: man=116, proc= 89, diff=27, tol=11 -> FAIL
+D01: man= 68, proc= 51, diff=17, tol= 6 -> FAIL
+D12: man= 21, proc= 34, diff=13, tol= 3 -> FAIL
+G03: man=123, proc= 95, diff=28, tol=12 -> FAIL
+G10: man= 33, proc= 33, diff= 0, tol= 3 -> PASS
+H12: man= 40, proc= 44, diff= 4, tol= 4 -> PASS
+Total passed: 3/8
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor w in ['C10', 'D12', 'A12', 'A08', 'G03', 'D01', 'G10', 'H12']:\n    ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n    im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n    im_norm = (im - im.min()) / (im.max() - im.min())\n    blobs = feature.blob_log(im_norm, min_sigma=2.0, max_sigma=5.0, num_sigma=7, threshold=0.03)\n    valid = [b for b in blobs if b[0] < 318 and b[1] < 318]\n    print(f'{w}: manual={len(ann)}, valid blobs={len(valid)}')\n'''; open('test_blob_log.py', 'w').write(code)" && python3 test_blob_log.py
+[?2004lC10: manual=116, valid blobs=146
+D12: manual=21, valid blobs=56
+A12: manual=8, valid blobs=34
+A08: manual=33, valid blobs=56
+G03: manual=123, valid blobs=151
+D01: manual=68, valid blobs=83
+G10: manual=33, valid blobs=93
+H12: manual=40, valid blobs=80
+[?2004hroot@ec77f99773e0:/task# python3 -c "code = '''import tifffile, pandas as pd, numpy as np\nfrom scipy import ndimage as ndi\nfrom skimage import feature\n\nf1 = tifffile.imread('/task/input/flatfield/flat_ch1.tif').astype(float)\ndk = tifffile.imread('/task/input/flatfield/dark.tif').astype(float)\nf1comp = (f1 - dk) / (f1 - dk).mean()\n\nfor s in [2.5, 2.7, 3.0]:\n    print(f'=== min_sigma={s} ===')\n    for w in ['A12', 'A08', 'D12', 'G10', 'H12', 'D01', 'C10', 'G03']:\n        ann = pd.read_csv(f'/task/input/annotations/{w}.tsv', sep='\\t')\n        im = (tifffile.imread(f'/task/input/images/{w}_ch1.tif').astype(float) - dk) / f1comp\n        im_norm = (im - im.min()) / (im.max() - im.min())\n        blobs = feature.blob_log(im_norm, min_sigma=s, max_sigma=6.0, num_sigma=8, threshold=0.03)\n        valid = [b for b in blobs if b[0] < 318 and b[1] < 318]\n        cnt = len(valid)\n        man = len(ann)\n        tol = max(3, int(0.1 * man))\n        diff = abs(cnt - man)\n        status = 'PASS' if diff <= tol else 'FAIL'\n        print(f'{w}: man={man:3d}, proc={cnt:3d}, diff={diff:2d}, tol={tol:2d} -> {status}')\n'''; open('test_blob_min_sigma.py', 'w').write(code)" && python3 test_blob_min_sigma.py
+[?2004l=== min_sigma=2.5 ===
+A12: man=  8, proc= 34, diff=26, tol= 3 -> FAIL
+A08: man= 33, proc= 53, diff=20, tol= 3 -> FAIL
+D12: man= 21, proc= 46, diff=25, tol= 3 -> FAIL
+G10: man= 33, proc= 90, diff=57, tol= 3 -> FAIL
+H12: man= 40, proc= 70, diff=30, tol= 4 -> FAIL
+D01: man= 68, proc= 63, diff= 5, tol= 6 -> PASS
+C10: man=116, proc=130, diff=14, tol=11 -> FAIL
+G03: man=123, proc=135, diff=12, tol=12 -> PASS
+=== min_sigma=2.7 ===
+A12: man=  8, proc= 34, diff=26, tol= 3 -> FAIL
+A08: man= 33, proc= 53, diff=20, tol= 3 -> FAIL
+D12: man= 21, proc= 46, diff=25, tol= 3 -> FAIL
+G10: man= 33, proc= 90, diff=57, tol= 3 -> FAIL
+H12: man= 40, proc= 68, diff=28, tol= 4 -> FAIL
+D01: man= 68, proc= 62, diff= 6, tol= 6 -> PASS
+C10: man=116, proc=128, diff=12, tol=11 -> FAIL
+G03: man=123, proc=130, diff= 7, tol=12 -> PASS
+=== min_sigma=3.0 ===
+A12: man=  8, proc= 34, diff=26, tol= 3 -> FAIL
+A08: man= 33, proc= 52, diff=19, tol= 3 -> FAIL
+D12: man= 21, proc= 45, diff=24, tol= 3 -> FAIL
+G10: man= 33, proc= 90, diff=57, tol= 3 -> FAIL
+H12: man= 40, proc= 62, diff=22, tol= 4 -> FAIL
+D01: man= 68, proc= 61, diff= 7, tol= 6 -> FAIL
+C10: man=116, proc=120, diff= 4, tol=11 -> PASS
+G03: man=123, proc=125, diff= 2, tol=12 -> PASS
+[?2004hroot@ec77f99773e0:/task# 

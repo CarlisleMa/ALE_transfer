@@ -27,6 +27,7 @@ A blank cell means that check has not been run; nothing here is estimated.
 | `hcs-dose-response-s0001-l4` | 3.3 Cell & Imaging Biology | Cellpose, scikit-image, scipy, tifffile, Python | Q_validated_counts, P_potency_shape, touching_nuclei, focus_qc, readout_confound, plate_position_effects, marker_background | no | 0.564 | full-spectrum |
 | `hcs-dose-response-s0001-l6` | 3.3 Cell & Imaging Biology | Cellpose, scikit-image, scipy, tifffile, Python | Q_validated_counts, P_potency_shape, touching_nuclei, focus_qc, readout_confound, plate_position_effects, marker_background | no | 0.564 | full-spectrum |
 | `hcs-dose-response-s0001-l7` | 3.3 Cell & Imaging Biology | Cellpose, scikit-image, scipy, tifffile, Python | Q_validated_counts, P_potency_shape, touching_nuclei, focus_qc, readout_confound, plate_position_effects, marker_background, T_plate_orientation | no | 0.576 | full-spectrum |
+| `hcs-dose-response-s0002-l6` | 3.3 Cell & Imaging Biology | Cellpose, scikit-image, scipy, tifffile, Python | Q_validated_counts, P_potency_shape, touching_nuclei, focus_qc, readout_confound, plate_position_effects, marker_background | no | 0.564 | full-spectrum |
 | `hcs-dose-response-s0002-l7` | 3.3 Cell & Imaging Biology | Cellpose, scikit-image, scipy, tifffile, Python | Q_validated_counts, P_potency_shape, touching_nuclei, focus_qc, readout_confound, plate_position_effects, marker_background, T_plate_orientation | no | 0.576 | full-spectrum |
 | `md-system-repair-s0001-l3` | 3.1 Biomolecular Structure & Design | AmberTools (tleap, pdb4amber), OpenMM, PDBFixer, ParmEd, Python | hidden_disulfides, additives_and_waters, modified_residue, missing_sidechains, chain_break, altlocs, numbering_insertion_codes | no | 0.682 | full-spectrum |
 | `rnaseq-confound-s0001-l3` | 3.2 Genomics & Sequence Analysis | salmon, pyDESeq2, statsmodels, Python, numpy/scipy/pandas | batch_confound, sample_swap | no | 0.569 | full-spectrum |
@@ -34,6 +35,7 @@ A blank cell means that check has not been run; nothing here is estimated.
 | `rnaseq-confound-s0001-l5` | 3.2 Genomics & Sequence Analysis | salmon, pyDESeq2, statsmodels, Python, numpy/scipy/pandas | batch_confound, sample_swap, H_inherited_project, Q_identity_control_mixed_library | no | 0.707 | last-exam |
 | `rnaseq-confound-s0001-l6` | 3.2 Genomics & Sequence Analysis | salmon, pyDESeq2, statsmodels, Python, numpy/scipy/pandas | batch_confound, sample_swap, H_inherited_project, Q_identity_control_mixed_library | no | 0.707 | last-exam |
 | `rnaseq-confound-s0003-l6` | 3.2 Genomics & Sequence Analysis | salmon, pyDESeq2, statsmodels, Python, numpy/scipy/pandas | batch_confound, sample_swap, H_inherited_project, Q_identity_control_mixed_library | no | 0.707 | last-exam |
+| `rnaseq-confound-s0005-l6` | 3.2 Genomics & Sequence Analysis | salmon, pyDESeq2, statsmodels, Python, numpy/scipy/pandas | batch_confound, sample_swap, H_inherited_project, Q_identity_control_mixed_library | no | 0.707 | last-exam |
 | `somatic-tn-s0001-l3` | 3.2 Genomics & Sequence Analysis | bwa, minimap2, samtools, bcftools, pysam, Python | sample_swap, duplicated_segment, orientation_artifacts | no | 0.702 | last-exam |
 | `somatic-tn-s0002-l3` | 3.2 Genomics & Sequence Analysis | bwa, minimap2, samtools, bcftools, pysam, Python | sample_swap, duplicated_segment, orientation_artifacts | no | 0.702 | last-exam |
 | `trio-liftover-s0001-l3` | 3.2 Genomics & Sequence Analysis | bcftools, bcftools +liftover, samtools/htslib, Picard, Python/pysam | build_mismatch, contig_naming, representation, genotype_quality_decoys, same_parent_pairs | no | 0.701 | last-exam |
@@ -71,14 +73,16 @@ For level-4 tasks the column `level-3 method` is the score of the level-3 refere
 | `hcs-dose-response-s0001-l3` | PASS | 1.0 | 2.11 | 4 (1.0) | 16 (0.8 / 0.82 on `counts_beyond_tolerance`) |  | [1.0] | [0.0] |
 | `hcs-dose-response-s0001-l4` | PASS | 1.0 | 0.14 | 3 (1.0) | 21 (0.71875 / 0.75 on `naive_global_background`) | 0.646875 | [1.0] | [0.0] |
 | `hcs-dose-response-s0001-l6` | PASS | 1.0 | 0.22 | 3 (1.0) | 21 (0.71875 / 0.75 on `naive_global_background`) | 0.646875 | [1.0] | [0.0] |
-| `hcs-dose-response-s0001-l7` | PASS | 1.0 | 0.16 | 5 (1.0) | 24 (0.825 / 0.85 on `naive_no_focus_qc`) | 0.05 | [1.0] | [0.0] |
-| `hcs-dose-response-s0002-l7` | PASS | 1.0 | 0.14 | 5 (1.0) | 24 (0.71875 / 0.75 on `one_potency_beyond_tolerance`) | 0.05 | [1.0] | [0.0] |
+| `hcs-dose-response-s0001-l7` | PASS | 1.0 | 0.26 | 5 (1.0) | 24 (0.71875 / 0.75 on `naive_global_background`) | 0.05 | [1.0] | [0.0] |
+| `hcs-dose-response-s0002-l6` | PASS | 1.0 | 0.15 | 3 (1.0) | 21 (0.71875 / 0.75 on `one_potency_beyond_tolerance`) | 0.7 | [1.0] | [0.0] |
+| `hcs-dose-response-s0002-l7` | PASS | 1.0 | 0.24 | 5 (1.0) | 24 (0.71875 / 0.75 on `one_potency_beyond_tolerance`) | 0.05 | [1.0] | [0.0] |
 | `md-system-repair-s0001-l3` | PASS | 1.0 | 1.6 | 2 (1.0) | 16 (0.685 / 0.75 on `naive_internal_numbering`) |  | [1.0] | [0.0] |
 | `rnaseq-confound-s0001-l3` | PASS | 1.0 | 0.14 | 4 (1.0) | 11 (0.85 / 0.86 on `lfc_attenuated_beyond_tolerance`) |  | [1.0] | [0.0] |
 | `rnaseq-confound-s0001-l4` | PASS | 1.0 | 0.39 | 4 (1.0) | 21 (0.87 / 0.89 on `lfc_attenuated_beyond_tolerance`) | 0.47 | [1.0] | [0.0] |
 | `rnaseq-confound-s0001-l5` | PASS | 1.0 | 0.3 | 4 (1.0) | 16 (0.8375 / 0.89 on `lfc_attenuated_beyond_tolerance`) | 0.5875 | [1.0] | [0.0] |
 | `rnaseq-confound-s0001-l6` | PASS | 1.0 | 0.49 | 4 (1.0) | 16 (0.8375 / 0.89 on `lfc_attenuated_beyond_tolerance`) | 0.5875 | [1.0] | [0.0] |
 | `rnaseq-confound-s0003-l6` | PASS | 1.0 | 0.59 | 4 (1.0) | 18 (0.8375 / 0.89 on `lfc_attenuated_beyond_tolerance`) | 0.5875 | [1.0] | [0.0] |
+| `rnaseq-confound-s0005-l6` | PASS | 1.0 | 0.26 | 4 (1.0) | 15 (0.8375 / 0.89 on `lfc_attenuated_beyond_tolerance`) | 0.5875 | [1.0] | [0.0] |
 | `somatic-tn-s0001-l3` | PASS | 1.0 | 0.24 | 3 (1.0) | 14 (0.7 / 0.75 on `missed_calls_beyond_tolerance`) |  | [1.0] | [0.0] |
 | `somatic-tn-s0002-l3` | PASS | 1.0 | 0.27 | 3 (1.0) | 14 (0.7 / 0.75 on `missed_calls_beyond_tolerance`) |  | [1.0] | [0.0] |
 | `trio-liftover-s0001-l3` | PASS | 1.0 | 0.05 | 3 (1.0) | 14 (0.785714 / 0.88 on `one_false_candidate`) |  | [1.0] | [0.0] |
@@ -112,6 +116,15 @@ Google Gemini API (OpenAI-compatible endpoint), default thinking settings. Up to
 | `xlms-model-selection-s0001-l4` | 1.000 | yes | 11 min 38 s | 43 | 2.49 M (2.30 M) | 65 k | $2.11 | - |
 | **10 tasks** | **mean 0.927** | **8/10** | 150 min | 863 | 53.5 M | 630 k | $42.51 | |
 
+Not counted (no valid score):
+
+- `hcs-dose-response-s0001-l7` (job `gemini-3.8-flash__hcs-dose-response-s0001-l7__r2__t300`; Harbor recorded reward 0.281, `no exception`, 48 min, 191 agent turns, $1.64): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+- `hcs-dose-response-s0001-l7` (job `gemini-3.8-flash__hcs-dose-response-s0001-l7__t300`; Harbor recorded reward 0.221, `no exception`, 50 min, 167 agent turns, $1.23): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+- `hcs-dose-response-s0002-l7` (job `gemini-3.8-flash__hcs-dose-response-s0002-l7__r2__t300`; Harbor recorded reward 0.281, `no exception`, 36 min, 142 agent turns, $1.53): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+- `hcs-dose-response-s0002-l7` (job `gemini-3.8-flash__hcs-dose-response-s0002-l7__t300`; Harbor recorded reward 0.100, `no exception`, 24 min, 123 agent turns, $1.25): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+
+Cost estimate of all trials of this model, counted or not: $117.49.
+
 ### `kimi-k3` (terminus-2)
 
 Moonshot Kimi API (international endpoint), default thinking settings; the key offers kimi-k3, kimi-k3.1-pro and kimi-k3.1-pro-highspeed, none is named flash, and kimi-k3 was the user's choice. Six tasks ran on the direct endpoint until the account ran out of balance at 09:55:30 UTC on 2026-11-12; the four tasks without a valid score were run again from scratch through OpenRouter with the provider pinned to Moonshot AI (jobs kimi-k3-or1, kimi-k3-or2), two at a time. The level-5 tasks also ran through OpenRouter.
@@ -133,11 +146,13 @@ Moonshot Kimi API (international endpoint), default thinking settings; the key o
 Not counted (no valid score):
 
 - `hcs-dose-response-s0001-l4` (job `kimi-k3-b`; Harbor recorded reward 0.000, `AgentTimeoutError`, 120 min, 83 agent turns, $3.22): the account ran out of balance about 6 minutes before the 2-hour limit. After about 100 minutes of tuning without getting all eight annotated fields within the SOP's tolerance, the agent started its full-plate run at 09:44; at 09:52 that run had finished 27 of 96 wells and the agent estimated 20 more minutes, with 9 minutes left, and no output file had been written. The outcome would very probably have been the same, but the trial did not get its full time. Run again from scratch through OpenRouter (job kimi-k3-or1, counted above).
+- `hcs-dose-response-s0001-l7` (job `kimi-k3__hcs-dose-response-s0001-l7__t300`; Harbor recorded reward 0.281, `AgentTimeoutError`, 120 min, 86 agent turns, $3.53): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+- `hcs-dose-response-s0002-l7` (job `kimi-k3__hcs-dose-response-s0002-l7__t300`; Harbor recorded reward 0.350, `AgentTimeoutError`, 120 min, 100 agent turns, $2.36): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
 - `rnaseq-confound-s0001-l4` (job `kimi-k3-b`; Harbor recorded no reward, `CancelledError`, 74 min, 0 agent turns, $0.00): started at 10:02, after the balance was gone: not one model call succeeded. Cancelled at 11:16; run again through OpenRouter (job kimi-k3-or2, counted above).
 - `somatic-tn-s0001-l3` (job `kimi-k3-c`; Harbor recorded no reward, `BadRequestError`, 5 min, 7 agent turns, $0.09): the provider rejected a history that contained an empty assistant turn (`BadRequestError`) after 6 minutes; the shim was changed to fill such turns and the task was run again (job kimi-k3-d, counted above).
 - `variant-review-s0001-l4` (job `kimi-k3-c`; Harbor recorded reward 0.000, `AgentTimeoutError`, 120 min, 76 agent turns, $4.13): the account ran out of balance about 9 minutes before the 2-hour limit. At that moment the agent had a complete draft of the review table in /tmp and was checking it; nothing had been copied to /task/output. Whether it would have finished in time is open, so the recorded 0.0 says nothing about the task. (It needed about 70 minutes to get at the reads: it built a JVM class file by hand to call the CRAM decoder inside IGV's htsjdk.) Run again from scratch through OpenRouter (job kimi-k3-or1, counted above).
 
-Cost estimate of all trials of this model, counted or not: $43.67.
+Cost estimate of all trials of this model, counted or not: $50.10.
 
 ### `deepseek-v4.1-flash` (terminus-2)
 
@@ -199,12 +214,15 @@ OpenRouter model `z-ai/glm-5.3-flash`, provider pinned to Z.AI (first party, fp8
 
 Not counted (no valid score):
 
+- `hcs-dose-response-s0001-l7` (job `glm-5.3-flash__hcs-dose-response-s0001-l7__t300`; Harbor recorded reward 0.000, `AgentTimeoutError`, 120 min, 129 agent turns, $0.39): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
+- `hcs-dose-response-s0002-l7` (job `glm-5.3-flash__hcs-dose-response-s0002-l7__t300`; Harbor recorded reward 0.161, `AgentTimeoutError`, 120 min, 120 agent turns, $0.60): run on the previous build of this instance (annotation files under their level-4 names); the instance was revised on 2026-11-14 and run again
 - `rnaseq-confound-s0001-l4` (job `glm-5.3-flash__rnaseq-confound-s0001-l4`; Harbor recorded no reward, `RuntimeError`, 20 min, 23 agent turns, $0.06): the agent's terminal session ended after 21 minutes (`tmux`: no server) and Harbor ended the trial without running the verifier; not run again.
 - `rnaseq-confound-s0001-l6` (job `glm-5.3-flash__rnaseq-confound-s0001-l6`; Harbor recorded no reward, `RuntimeError`, 3 min, 7 agent turns, $0.01): ended before the verifier ran.
 - `rnaseq-confound-s0003-l6` (job `glm-5.3-flash__rnaseq-confound-s0003-l6`; Harbor recorded reward 0.000, `no exception`, 1 min, 2 agent turns, $0.00): terminal session gone after two turns (no tmux server) although the agent typed neither exit nor set -e; the host was running 16 trials on 4 cores at that moment; cause unknown, not attributed to the model; run again as __r2
 - `somatic-tn-s0002-l3` (job `glm-5.3-flash__somatic-tn-s0002-l3`; Harbor recorded no reward, `RuntimeError`, 4 min, 5 agent turns, $0.01): ended before the verifier ran.
+- `trio-liftover-s0002-l4` (job `glm-5.3-flash__trio-liftover-s0002-l4`; Harbor recorded reward 0.000, `AgentTimeoutError`, 120 min, 74 agent turns, $0.46): reached the two-hour limit without output while the host ran 16 trials on 4 cores (load above 20); cannot be told apart from host overload; run again at low concurrency as __r2
 
-Cost estimate of all trials of this model, counted or not: $7.10.
+Cost estimate of all trials of this model, counted or not: $7.77.
 
 ### `minimax-m3.1-flash` (terminus-2)
 
@@ -276,11 +294,11 @@ Level 5: the authored task without stated acceptance criteria, verification proc
 | xlms_model_selection | `qwen3.8-flash` | 1.000 | 1.000 | - | not run | - |
 | xlms_model_selection | `glm-5.3-flash` | 1.000 | not run | - | not run | - |
 | xlms_model_selection | `minimax-m3.1-flash` | 1.000 | not run | - | 1.000 (16 min, 35 turns) | - |
-| hcs_dose_response | `gemini-3.8-flash` | 1.000 | 1.000 | - | 1.000 (36 min, 187 turns) | 0.221 (50 min, 167 turns; marker_potency = 0.00) |
-| hcs_dose_response | `kimi-k3` | 0.692 | 0.692 | - | 0.955 (100 min, 50 turns; count_potency = 0.78) | 0.281 (120 min, 86 turns; marker_potency = 0.00) |
+| hcs_dose_response | `gemini-3.8-flash` | 1.000 | 1.000 | - | 1.000 (36 min, 187 turns) | 0.050 (74 min, 300 turns; cell_counts = 0.00) |
+| hcs_dose_response | `kimi-k3` | 0.692 | 0.692 | - | 0.955 (100 min, 50 turns; count_potency = 0.78) | 0.350 (120 min, 100 turns; marker_potency = 0.00) |
 | hcs_dose_response | `deepseek-v4.1-flash` | 0.957 | 0.957 | - | 0.000 (64 min, 150 turns) | not run |
 | hcs_dose_response | `qwen3.8-flash` | 0.000 | 0.000 | - | not run | not run |
-| hcs_dose_response | `glm-5.3-flash` | 0.000 | 0.000 | - | 0.350 (80 min, 102 turns; marker_potency = 0.00) | 0.000 (120 min, 129 turns) |
+| hcs_dose_response | `glm-5.3-flash` | 0.000 | 0.000 | - | 0.350 (80 min, 102 turns; marker_potency = 0.00) | 0.000 (120 min, 123 turns) |
 | hcs_dose_response | `minimax-m3.1-flash` | 0.792 | 0.792 | - | 0.364 (70 min, 150 turns; marker_potency = 0.00) | not run |
 | amplicon_16s | `gemini-3.8-flash` | 1.000 | 1.000 | - | 1.000 (13 min, 100 turns) | 1.000 (17 min, 149 turns) |
 | amplicon_16s | `kimi-k3` | 1.000 | 1.000 | - | not run | not run |
@@ -323,14 +341,18 @@ Gate G8 (alegen/g8.py): an instance that passed G1-G7 is kept as hard only if th
 | `flow-compensation-s0002-l7` | 2 | 0.472, 0.472 | 0/2 | keep |
 | `hcs-dose-response-s0001-l4` | 1 | 1.000 | 1/1 | pending |
 | `hcs-dose-response-s0001-l6` | 3 | 0.000, 0.000, 1.000 | 1/3 | unstable |
-| `hcs-dose-response-s0001-l7` | 2 | 0.281, 0.221 | 0/2 | keep |
-| `hcs-dose-response-s0002-l7` | 2 | 0.281, 0.100 | 0/2 | keep |
+| `hcs-dose-response-s0001-l7` | 2 | 0.236, 0.050 | 0/2 | keep |
+| `hcs-dose-response-s0002-l6` | 2 | 0.000, 1.000 | 1/2 | unstable |
+| `hcs-dose-response-s0002-l7` | 2 | 0.350, 0.251 | 0/2 | keep |
+| `hcs-dose-response-s0003-l6` | 2 | 0.901, 1.000 | 2/2 | drop |
 | `md-system-repair-s0001-l3` | 2 | 1.000, 1.000 | 2/2 | drop |
 | `rnaseq-confound-s0001-l4` | 1 | 1.000 | 1/1 | pending |
 | `rnaseq-confound-s0001-l5` | 1 | 0.706 | 0/1 | pending |
 | `rnaseq-confound-s0001-l6` | 2 | 0.706, 0.706 | 0/2 | keep |
 | `rnaseq-confound-s0002-l6` | 2 | 0.787, 1.000 | 1/2 | unstable |
 | `rnaseq-confound-s0003-l6` | 2 | 0.514, 0.514 | 0/2 | keep |
+| `rnaseq-confound-s0004-l6` | 2 | 1.000, 1.000 | 2/2 | drop |
+| `rnaseq-confound-s0005-l6` | 2 | 0.664, 0.664 | 0/2 | keep |
 | `somatic-tn-s0001-l3` | 2 | 0.556, 0.556 | 0/2 | keep |
 | `somatic-tn-s0002-l3` | 2 | 0.554, 0.554 | 0/2 | keep |
 | `trio-liftover-s0001-l4` | 2 | 0.718, 0.000 | 0/2 | keep |
@@ -462,8 +484,9 @@ Evidence that a family is a generator, not a single task. `harbor` = G6 was run 
 | hcs_dose_response | 1 | 7 | PASS | 37 | 1.0 | yes |
 | hcs_dose_response | 2 | 3 | PASS | 23 | 1.0 | no |
 | hcs_dose_response | 2 | 4 | PASS | 29 | 1.0 | no |
-| hcs_dose_response | 2 | 6 | PASS | 29 | 1.0 | no |
+| hcs_dose_response | 2 | 6 | PASS | 31 | 1.0 | yes |
 | hcs_dose_response | 2 | 7 | PASS | 37 | 1.0 | yes |
+| hcs_dose_response | 3 | 6 | PASS | 31 | 1.0 | yes |
 | md_system_repair | 1 | 1 | PASS | 13 | 1.0 | no |
 | md_system_repair | 1 | 3 | PASS | 24 | 1.0 | yes |
 | md_system_repair | 2 | 3 | PASS | 21 | 1.0 | no |
@@ -478,6 +501,8 @@ Evidence that a family is a generator, not a single task. `harbor` = G6 was run 
 | rnaseq_confound | 2 | 5 | PASS | 26 | 1.0 | no |
 | rnaseq_confound | 2 | 6 | PASS | 26 | 1.0 | no |
 | rnaseq_confound | 3 | 6 | PASS | 29 | 1.0 | yes |
+| rnaseq_confound | 4 | 6 | PASS | 26 | 1.0 | yes |
+| rnaseq_confound | 5 | 6 | PASS | 26 | 1.0 | yes |
 | somatic_tn | 1 | 1 | PASS | 15 | 1.0 | no |
 | somatic_tn | 1 | 2 | PASS | 17 | 1.0 | no |
 | somatic_tn | 1 | 3 | PASS | 23 | 1.0 | yes |
@@ -1067,18 +1092,47 @@ Evidence that a family is a generator, not a single task. `harbor` = G6 was run 
 | attack `layout_by_name_everything_else_right` | 0.35 | <= 0.75 | yes |  |
 | attack `controls_swapped_only` | 0.35 | <= 0.75 | yes |  |
 | attack `l3_reference` | 0.05 | <= 0.75 | yes |  |
-| attack `l3_reference_classical` | 0.075 | <= 0.75 | yes |  |
-| attack `l3_independent_solution` | 0.0625 | <= 0.75 | yes |  |
-| attack `counts_scaled_to_annotation` | 0.075 | <= 0.75 | yes |  |
-| attack `counts_scaled_to_annotation_log` | 0.118374 | <= 0.75 | yes |  |
+| attack `l3_reference_classical` | 0.05 | <= 0.75 | yes |  |
+| attack `l3_independent_solution` | 0.05 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation` | 0.05 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation_log` | 0.05 | <= 0.75 | yes |  |
 | attack `manual_counts_copied` | 0.1 | <= 0.75 | yes |  |
-| attack `naive_fragments_counted` | 0.510467 | <= 0.75 | yes |  |
+| attack `naive_fragments_counted` | 0.48125 | <= 0.75 | yes |  |
 | attack `naive_free_plateau_fit` | 0.35 | <= 0.75 | yes |  |
-| attack `naive_no_focus_qc` | 0.825 | <= 0.85 | yes |  |
+| attack `naive_no_focus_qc` | 0.54375 | <= 0.75 | yes |  |
 | attack `naive_whole_well_readout` | 0.55 | <= 0.75 | yes |  |
 | attack `naive_no_plate_model` | 0.35 | <= 0.75 | yes |  |
 | attack `naive_no_background` | 0.55 | <= 0.75 | yes |  |
 | attack `naive_global_background` | 0.71875 | <= 0.75 | yes |  |
+| attack `prior_only` | 0.0 | <= 0.1 | yes |  |
+| attack `all_potencies_beyond_tolerance` | 0.35 | <= 0.4 | yes |  |
+| attack `one_potency_beyond_tolerance` | 0.71875 | <= 0.75 | yes |  |
+| attack `counts_beyond_tolerance` | 0.7 | <= 0.75 | yes |  |
+
+### `hcs-dose-response-s0002-l6`
+
+| check | score | bound | ok | note |
+|---|---|---|---|---|
+| probe `planted_truth` | 1.0 | >= 0.999 | yes |  |
+| probe `within_tolerance` | 1.0 | >= 0.99 | yes |  |
+| probe `independent_solution` | 1.0 | >= 0.99 | yes |  |
+| attack `empty_output` | 0.0 | <= 0.0 | yes | required output file missing: well_measurements.tsv |
+| attack `inputs_copied` | 0.0 | <= 0.1 | yes | required output file missing: well_measurements.tsv |
+| attack `zero_byte_files` | 0.0 | <= 0.0 | yes | well_measurements.tsv is empty |
+| attack `header_only` | 0.0 | <= 0.1 | yes | gate failed: well_measurements.tsv lists every well of the layout exactly once |
+| attack `l3_reference` | 0.7 | <= 0.75 | yes |  |
+| attack `l3_reference_classical` | 0.226434 | <= 0.75 | yes |  |
+| attack `l3_independent_solution` | 0.05 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation` | 0.226434 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation_log` | 0.05 | <= 0.75 | yes |  |
+| attack `manual_counts_copied` | 0.276434 | <= 0.75 | yes |  |
+| attack `naive_fragments_counted` | 0.48125 | <= 0.75 | yes |  |
+| attack `naive_free_plateau_fit` | 0.35 | <= 0.75 | yes |  |
+| attack `naive_no_focus_qc` | 0.54375 | <= 0.75 | yes |  |
+| attack `naive_whole_well_readout` | 0.55 | <= 0.75 | yes |  |
+| attack `naive_no_plate_model` | 0.512935 | <= 0.75 | yes |  |
+| attack `naive_no_background` | 0.55 | <= 0.75 | yes |  |
+| attack `naive_global_background` | 0.55 | <= 0.75 | yes |  |
 | attack `prior_only` | 0.0 | <= 0.1 | yes |  |
 | attack `all_potencies_beyond_tolerance` | 0.35 | <= 0.4 | yes |  |
 | attack `one_potency_beyond_tolerance` | 0.71875 | <= 0.75 | yes |  |
@@ -1101,14 +1155,14 @@ Evidence that a family is a generator, not a single task. `harbor` = G6 was run 
 | attack `layout_by_name_everything_else_right` | 0.35 | <= 0.75 | yes |  |
 | attack `controls_swapped_only` | 0.35 | <= 0.75 | yes |  |
 | attack `l3_reference` | 0.05 | <= 0.75 | yes |  |
-| attack `l3_reference_classical` | 0.0625 | <= 0.75 | yes |  |
-| attack `l3_independent_solution` | 0.075 | <= 0.75 | yes |  |
-| attack `counts_scaled_to_annotation` | 0.160994 | <= 0.75 | yes |  |
-| attack `counts_scaled_to_annotation_log` | 0.151054 | <= 0.75 | yes |  |
+| attack `l3_reference_classical` | 0.05 | <= 0.75 | yes |  |
+| attack `l3_independent_solution` | 0.05 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation` | 0.05 | <= 0.75 | yes |  |
+| attack `counts_scaled_to_annotation_log` | 0.05 | <= 0.75 | yes |  |
 | attack `manual_counts_copied` | 0.1 | <= 0.75 | yes |  |
-| attack `naive_fragments_counted` | 0.510467 | <= 0.75 | yes |  |
+| attack `naive_fragments_counted` | 0.48125 | <= 0.75 | yes |  |
 | attack `naive_free_plateau_fit` | 0.35 | <= 0.75 | yes |  |
-| attack `naive_no_focus_qc` | 0.54375 | <= 0.85 | yes |  |
+| attack `naive_no_focus_qc` | 0.54375 | <= 0.75 | yes |  |
 | attack `naive_whole_well_readout` | 0.55 | <= 0.75 | yes |  |
 | attack `naive_no_plate_model` | 0.512935 | <= 0.75 | yes |  |
 | attack `naive_no_background` | 0.55 | <= 0.75 | yes |  |
@@ -1267,6 +1321,30 @@ Evidence that a family is a generator, not a single task. `harbor` = G6 was run 
 | attack `defect_kept_matrix_all_reads` | 0.7875 | <= 0.8 | yes |  |
 | attack `defect_kept_de_session_term` | 0.689534 | <= 0.8 | yes |  |
 | attack `defect_kept_de_contrast_direction` | 0.4 | <= 0.8 | yes |  |
+
+### `rnaseq-confound-s0005-l6`
+
+| check | score | bound | ok | note |
+|---|---|---|---|---|
+| probe `planted_truth` | 1.0 | >= 0.999 | yes |  |
+| probe `within_tolerance` | 1.0 | >= 0.99 | yes |  |
+| probe `independent_solution` | 1.0 | >= 0.99 | yes |  |
+| probe `oracle_exclude_resolution` | 1.0 | >= 0.99 | yes |  |
+| attack `empty_output` | 0.0 | <= 0.0 | yes | required output file missing: gene_counts.tsv |
+| attack `inputs_copied` | 0.0 | <= 0.1 | yes | required output file missing: gene_counts.tsv |
+| attack `zero_byte_files` | 0.0 | <= 0.0 | yes | gene_counts.tsv is empty |
+| attack `header_only` | 0.0 | <= 0.1 | yes | gate failed: gene_counts.tsv lists every gene exactly once |
+| attack `l3_reference` | 0.5875 | <= 0.75 | yes |  |
+| attack `trust_inherited` | 0.7875 | <= 0.8 | yes |  |
+| attack `q_identity_not_applied` | 0.5875 | <= 0.75 | yes |  |
+| attack `sheet_copied_no_analysis` | 0.0 | <= 0.1 | yes |  |
+| attack `everything_significant` | 0.2125 | <= 0.45 | yes |  |
+| attack `erratum_all_confirmed` | 0.8125 | <= 0.89 | yes |  |
+| attack `fdp_beyond_tolerance` | 0.694823 | <= 0.85 | yes |  |
+| attack `lfc_attenuated_beyond_tolerance` | 0.8375 | <= 0.89 | yes |  |
+| attack `naive_labels_as_given` | 0.174135 | <= 0.75 | yes |  |
+| attack `defect_kept_matrix_all_reads` | 0.7875 | <= 0.8 | yes |  |
+| attack `defect_kept_de_session_term` | 0.663993 | <= 0.8 | yes |  |
 
 ### `somatic-tn-s0001-l3`
 

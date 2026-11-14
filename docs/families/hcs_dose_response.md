@@ -516,7 +516,7 @@ free-plateau fit 0.35 / 0.35. The Cellpose routes were not run on these seeds.
   Cellpose on the whole plate instead of the annotated fields will spend most of its time waiting.
 - **Level 4 was validated on seeds 1 and 2 only.**
 
-# Level 7 - the plate lay on the stage the other way round (added 2026-11-12)
+# Level 7 - the plate lay on the stage the other way round (added 2026-11-12, annotated fields revised 2026-11-14)
 
 Spec: `docs/specs/l7/hcs_dose_response.md`. Code: `l7.py` (generator, battery, task card),
 `assets/hcs_l7_voting.py` (reference solution and the by-name variants), `assets/hcs_l7_cellpose.py`
@@ -528,10 +528,21 @@ the family returns the level-7 build with the level-4 texts and `descaffold.appl
 four remarks of the assay notes exactly as for level 6. `descaffold.py` was not changed and every edit
 applied.
 
-All numbers in this section were measured on 2026-11-12. "Gate" = inside the task images during
-`python -m alegen make`. "Dev run" = the same script in a container of the level-4 agent image
-(`--network none`, input directory of the generated task mounted) and scored with the task's own
-`tests/score.py` on the host; where both exist they agree.
+"Gate" = inside the task images during `python -m alegen make`. "Dev run" = the same script in a container
+of the level-4 agent image (`--network none`, input directory of the generated task mounted) and scored
+with the task's own `tests/score.py` on the host; where both exist they agree.
+
+**Revision of 2026-11-14 (maintainer decision).** In the first version (2026-11-12) the annotation files
+kept their level-4 names and held the cells of whatever image lay under those names. That changed which
+phenotypes the manual counts cover, i.e. it made the counting part easier to pass on the annotated fields
+and harder to get right elsewhere. The maintainer reported that the yardstick model, in two attempts on
+each of seeds 1 and 2, never questioned the orientation (both potency components 0 every time) but met the
+SOP criterion on those annotated fields with a quick Cellpose setting and then failed on the other wells
+(`cell_counts` 0.0-0.73); I have not read the trial records myself. Now the lab annotated the same physical
+fields as at level 4, so that level 7 differs from level 6 only by the re-filing. Everything in this
+section that depends on the annotated fields was measured again on 2026-11-14 and both seeds were gated
+again; numbers that do not depend on them are those of 2026-11-12 (the planted control statistics; the
+potency tables of the by-name analyses, which I checked to be the same files on seeds 1, 2, 3 and 10).
 
 ## What was planted
 
@@ -548,12 +559,15 @@ task of the seed:
   edges mirror each other, fragments keep the same margin on all sides) and the illumination falls off
   radially, so the level-4 rendering of a well is a draw from the same distribution as its turned image.
   What is not symmetric is the SOP's counting frame, and that is applied to the image as it is filed.
-- Annotations: the eight file names of level 4 (the lab picks fields by the layout it believes in); each
-  file holds the planted counted nuclei of the image that now carries the name, with its own jitter stream.
-  If the image under a level-4 name is out of focus (19% of the usable seeds among 1-400) a technician
-  cannot count it; the name is replaced by another vehicle well of the same plate area, or by the
-  neighbouring concentration of the same series (`plants.plate_orientation.annotated_names_replaced` in
-  truth.json; seeds 1 and 2: none; seed 10: `B05` -> `F06`).
+- Annotations: the lab counted the same eight physical fields as at level 4, the plate wells that
+  `sim4.choose_annotated` picks for coverage (two dense and one sparse untreated field, the top and a middle
+  concentration of the cytotoxic compound, the top concentrations of the two compounds that enlarge the
+  nuclei, a high concentration of the dual compound). The acquisition software names by stage position, so
+  each annotation file carries the name of the image that shows its field: level-7 `annotations/H01.tsv`
+  is level-4/6 `annotations/A12.tsv`, byte for byte (same clicks, same manual count), and its coordinates
+  are those of level-7 `images/H01_ch*.tif`, which is level-4 `images/A12_ch*.tif`. Level 4 never
+  annotates an out-of-focus field (`choose_annotated` draws from the in-focus wells and `generate_l4`
+  asserts it); `l7.py` raises if it ever did. The replacement rule of the first version is gone.
 - Truth: `truth.wells[<image name>]` holds what that image shows (cell number, focus state, annotated or
   not, plus `shows_plate_well` and the layout entry of the name); `truth.compounds` is untouched.
 
@@ -566,7 +580,8 @@ under the image name. The orientation itself is not a deliverable and is not sco
 ## What goes wrong without the step
 
 Measured with the level-4 reference solution, unchanged, on the level-7 inputs (`l6_reference`), seeds
-1 / 2 (gate and dev run), 3 and 10 (dev run):
+1 / 2 (gate and dev run), 3 and 10 (dev run). Measured again on 2026-11-14 with the revised annotation
+files: same scores, and `dose_response.tsv` of all four seeds is identical to that of 2026-11-12:
 
 | seed | score | counts within tolerance | validation | focus flags | marker entries right | count entries right | reported |
 |---|---|---|---|---|---|---|---|
@@ -590,8 +605,9 @@ Measured with the level-4 reference solution, unchanged, on the level-7 inputs (
   in between. Seed 2 (few vehicle wells are off, so the plate model is nearly right): smooth curves that
   rise with the nominal concentration (0.04, 0.08, 0.23, 0.54, 0.81, 0.95, 1.02, 0.90; reported
   `inactive`) and single wells at 0.05 inside otherwise flat series. Seed 1 (13 of 23 vehicle wells off,
-  plate model distorted): jagged series with responses up to 1.9 (0.09, 1.48, 0.76, 0.08, 1.59, 1.53,
-  1.44, 0.93; reported `inactive`). The SOP model has its upper asymptote fixed at 1 and falls with the
+  plate model distorted): jagged series with responses up to 2.0 (0.09, 1.47, 0.75, 0.08, 1.59, 1.53,
+  1.44, 0.94; reported `inactive`; values of 2026-11-14, on 2026-11-12 three of them were 0.01 different
+  and the largest response was 1.9). The SOP model has its upper asymptote fixed at 1 and falls with the
   concentration, so a rising series is fitted by a flat line (`inactive`) or by a step at the lower end
   of the search range. A pipeline that only writes the table never shows this.
 
@@ -622,8 +638,11 @@ the wells called vehicle, responses relative to it):
 | wells called reference, median marker response | 1.32 | 0.044 | 1.00 | 0.046 |
 | wells called reference below half | 1 of 7 | 8 of 8 | 1 of 7 | 8 of 8 |
 | wells called vehicle more than a factor 1.3 off the plate model | 13 of 23 | 0 of 23 | 4 of 24 | 0 of 23 |
-| marker response of the wells called vehicle, range | 0.05-1.47 | 0.91-1.08 | 0.72-1.19 | 0.91-1.09 |
-| count response of the wells called vehicle, range | 0.31-1.68 | 0.93-1.05 | 0.15-1.04 | 0.94-1.06 |
+| marker response of the wells called vehicle, range | 0.05-1.46 | 0.91-1.08 | 0.72-1.19 | 0.91-1.09 |
+| count response of the wells called vehicle, range | 0.32-1.75 | 0.93-1.07 | 0.15-1.04 | 0.94-1.06 |
+
+(2026-11-14, revised annotation files. On seed 1 the voting parameters are now those of level 4, which
+moves three of the ranges in the second decimal against 2026-11-12; seed 2 is unchanged.)
 
 Seeds 3 / 10 (dev run): reference median 2.06 / 0.89 by name and 0.046 / 0.046 turned; vehicle wells off
 15 of 22 / 11 of 22 by name and 0 of 23 turned.
@@ -632,14 +651,52 @@ The second solution does not use the controls. It normalises the marker per cell
 through log(marker) against the image column over all in-focus fields and the cell number by the median
 of the outer ring / of the inner fields (both sets are the same in either orientation), and counts dose
 series whose readout falls or rises with the concentration (Spearman rho beyond 0.7, 16 series-readouts).
-Seed 1 (dev run): by name 0 falling / 2 rising, turned 9 falling / 1 rising. Seed 2: the probe passed in the
-gate; its series counts were not recorded (the gate keeps the outputs, not the log, and I did not repeat the
-run by hand).
+Dev runs of 2026-11-14 on the gated tasks, falling / rising: seed 1 by name 0 / 2 (balance -2), turned
+9 / 1 (balance 8); seed 2 by name 1 / 5 (balance -4), turned 10 / 1 (balance 9). Seed 1 gave the same
+counts on 2026-11-12.
 
-Other evidence that is in the inputs without being a pointer: the manual counts. Seed 1: `A12`, which the
-layout calls the top concentration (30 uM) of the cytotoxic compound, holds 68 manually counted cells, as
-many as `A11` next to it, which the layout calls a vehicle well (64); at level 4 the file of the same name
-holds 10.
+A second sign in the inputs, not a pointer in any text: the manual counts. Since the revision the
+annotation files carry names under which the layout lists something else than what was counted. The
+assay notes say how the fields were picked (untreated wells of the inner and outer plate area, wells of
+the highest and of intermediate concentrations); the files of level 7 (`truth.json`:
+`plants.plate_orientation.annotated_fields_as_the_layout_names_them`; "untreated" = median planted cell
+number of the in-focus vehicle wells of the same plate area):
+
+Seed 1:
+
+| file | manual count | the layout calls this name | the field counted (plate well) | count / untreated |
+|---|---|---|---|---|
+| `A01.tsv` | 38 | CPD-8550 at 0.0137 uM | CPD-7827 at 30 uM (H12) | 0.58 of 66 |
+| `B06.tsv` | 127 | reference | vehicle (G07) | 1.06 of 120 |
+| `D08.tsv` | 113 | vehicle | vehicle (E05) | 0.94 of 120 |
+| `E03.tsv` | 31 | reference | CPD-4184 at 10 uM (D10) | 0.26 of 120 |
+| `F01.tsv` | 18 | CPD-9526 at 0.0137 uM | CPD-9251 at 30 uM (C12) | 0.27 of 66 |
+| `H01.tsv` | 10 | vehicle | CPD-8550 at 30 uM (A12) | 0.15 of 66 |
+| `H02.tsv` | 66 | CPD-7827 at 0.0137 uM | vehicle (A11) | 1.00 of 66 |
+| `H07.tsv` | 34 | CPD-7827 at 0.37 uM | CPD-8550 at 0.37 uM (A06) | 0.52 of 66 |
+
+3 of 8 files below half of an untreated field, 2 of them under a name the layout calls vehicle or reference; 7 of 8 names stand for something else in the layout than the field that was counted.
+
+Seed 2:
+
+| file | manual count | the layout calls this name | the field counted (plate well) | count / untreated |
+|---|---|---|---|---|
+| `A01.tsv` | 40 | reference | CPD-5484 at 30 uM (H12) | 0.61 of 66 |
+| `B03.tsv` | 33 | CPD-2467 at 0.0412 uM | CPD-1987 at 10 uM (G10) | 0.28 of 118 |
+| `B10.tsv` | 123 | vehicle | vehicle (G03) | 1.04 of 118 |
+| `E01.tsv` | 21 | CPD-1142 at 0.0137 uM | CPD-1550 at 30 uM (D12) | 0.32 of 66 |
+| `E12.tsv` | 68 | vehicle | vehicle (D01) | 1.03 of 66 |
+| `F03.tsv` | 116 | CPD-7090 at 0.123 uM | vehicle (C10) | 0.98 of 118 |
+| `H01.tsv` | 8 | vehicle | CPD-3353 at 30 uM (A12) | 0.12 of 66 |
+| `H05.tsv` | 33 | vehicle | CPD-3353 at 1.11 uM (A08) | 0.50 of 66 |
+
+3 of 8 files below half of an untreated field, 1 of them under a name the layout calls vehicle or reference; 6 of 8 names stand for something else in the layout than the field that was counted.
+
+An analyst who puts the eight manual counts next to the layout sees untreated-looking counts under
+concentrations and very low counts under vehicle or reference names. I count this as evidence in the data.
+It is a second route to the decision point besides the control wells. In the first version the names
+were those of level 4 and the files held what lay under them (seed 1: `A12`, which the layout calls 30 uM
+of the cytotoxic compound, held 68 cells).
 
 The two mirror maps of the grid (rows only, columns only) are not orientations a plate can take. On the
 planted values of seeds 1 / 2 they leave 6 of 6 / 6 of 7 (rows) and 5 of 7 / 5 of 7 (columns) wells called
@@ -673,7 +730,20 @@ exactly four wells.
 - Second (`hcs_l7_cellpose.py`): the level-4 Cellpose pipeline (intensity scale from all fields instead
   of the vehicle wells), a new stage `orient` (series direction, see above; stops unless the balance is
   at least 4 and at least 4 above the other orientation), then the level-4 statistics.
-- No code is shared. Gate, seeds 1 / 2: reference 1.000 / 1.000, second solution 1.000 / 1.000.
+- No code is shared. Gate of 2026-11-14, seeds 1 / 2: reference 1.000 / 1.000, second solution 1.000 / 1.000.
+- Tuning on the annotated fields (dev runs of 2026-11-14 on the gated tasks; seeds 1 and 2 also passed
+  in the gate). Reference solution: outline threshold 0.12, vote sigma 1.2 on both seeds, worst annotated
+  field at 0.76 / 0.33 of the SOP limit; every well without annotation inside the count tolerance. On
+  seed 1 that is the level-4 result to the digit. Second solution: `nuclei`, diameter 12, flow check off
+  on both seeds, worst annotated field at 0.63 / 0.67 of the limit (the two other settings it tries fail
+  with 1.97-2.50); 96.4% / 100% of the wells without annotation inside the tolerance; largest potency
+  error 0.053 / 0.085 log10. The level-4 notes give 0.71 / 0.67 for the worst field of the second solution;
+  the seed-1 difference goes with the intensity scale, which is now taken over all fields.
+- One variant shows the same code difference in the reference pipeline: `naive_fragments_counted` scores
+  0.481 on seed 1 where the level-4 gate has 0.3125. Measured on the level-4 inputs of seed 1: level-4
+  code 0.3125, level-7 code with the layout by name 0.481 (worst annotated field at 12.9 against 12.3 of
+  the limit; both choose threshold 0.15, sigma 1.5). The full solution and the variant without focus QC
+  give identical scores and potency errors with both codes on those inputs.
 
 ## Scorer
 
@@ -697,7 +767,9 @@ by-name submissions score 0.35 under the naming they use and 0.0 under the three
 
 ## Battery
 
-Pass threshold 0.9. Gate runs: seed 1 with Harbor, seed 2 without.
+Pass threshold 0.9. Gate runs of 2026-11-14 with the revised annotation files, both seeds with Harbor
+(`python -m alegen make hcs_dose_response --seed N --level 7`). The records of the first version are
+kept in `<scratch>/hcs_l7_check/prev_l7/`.
 
 | check | bound | seed 1 | seed 2 |
 |---|---|---|---|
@@ -720,14 +792,14 @@ Pass threshold 0.9. Gate runs: seed 1 with Harbor, seed 2 without.
 | layout_by_name_everything_else_right | <= 0.75 | 0.350 | 0.350 |
 | controls_swapped_only | <= 0.75 | 0.350 | 0.350 |
 | l3_reference | <= 0.75 | 0.050 | 0.050 |
-| l3_reference_classical | <= 0.75 | 0.075 | 0.062 |
-| l3_independent_solution | <= 0.75 | 0.062 | 0.075 |
-| counts_scaled_to_annotation | <= 0.75 | 0.075 | 0.161 |
-| counts_scaled_to_annotation_log | <= 0.75 | 0.118 | 0.151 |
+| l3_reference_classical | <= 0.75 | 0.050 | 0.050 |
+| l3_independent_solution | <= 0.75 | 0.050 | 0.050 |
+| counts_scaled_to_annotation | <= 0.75 | 0.050 | 0.050 |
+| counts_scaled_to_annotation_log | <= 0.75 | 0.050 | 0.050 |
 | manual_counts_copied | <= 0.75 | 0.100 | 0.100 |
-| naive_fragments_counted | <= 0.75 | 0.510 | 0.510 |
+| naive_fragments_counted | <= 0.75 | 0.481 | 0.481 |
 | naive_free_plateau_fit | <= 0.75 | 0.350 | 0.350 |
-| naive_no_focus_qc | <= 0.85 | 0.825 | 0.544 |
+| naive_no_focus_qc | <= 0.75 | 0.544 | 0.544 |
 | naive_whole_well_readout | <= 0.75 | 0.550 | 0.550 |
 | naive_no_plate_model | <= 0.75 | 0.350 | 0.513 |
 | naive_no_background | <= 0.75 | 0.550 | 0.550 |
@@ -736,9 +808,9 @@ Pass threshold 0.9. Gate runs: seed 1 with Harbor, seed 2 without.
 | all_potencies_beyond_tolerance | <= 0.4 | 0.350 | 0.350 |
 | one_potency_beyond_tolerance | <= 0.75 | 0.719 | 0.719 |
 | counts_beyond_tolerance | <= 0.75 | 0.700 | 0.700 |
-| G6 harbor_oracle | | ok [1.0] | - |
-| G6 harbor_nop | | ok [0.0] | - |
-| all gates | | ok (37 checks, 13.38 min) | ok (35 checks, 12.11 min) |
+| G6 harbor_oracle | | ok [1.0] | ok [1.0] |
+| G6 harbor_nop | | ok [0.0] | ok [0.0] |
+| all gates | | ok (37 checks, 12.36 min) | ok (37 checks, 12.99 min) |
 
 - `l6_reference`, `layout_by_name_everything_else_right` and `controls_swapped_only` are the three
   additions the spec asks for. `layout_by_name_everything_else_right` hands the planted per-image values
@@ -752,19 +824,32 @@ Pass threshold 0.9. Gate runs: seed 1 with Harbor, seed 2 without.
 - Truth-derived probes and attacks are re-filed: every per-well row moves with its image.
 - Two new probes file the planted truth by plate well (both tables; well table only).
 
-## One ceiling of the level-4 battery is raised: `naive_no_focus_qc`
+## `naive_no_focus_qc`: ceiling 0.75 again, and what the first version showed
 
-The first gate run of seed 1 failed on exactly one check: `naive_no_focus_qc` (reference solution with the
-focus QC switched off, everything else including the orientation right) scored 0.825 against the ceiling
-of 0.75 it has at level 4, where it scores 0.544. The record of that run is kept in
-`<scratch>/hcs_l7_check/first_gate_run_s0001_l7_ceiling_0.75.json`. What I measured (dev runs, 2026-11-12):
+With the revised annotation files the reference solution tunes on the level-4 fields and selects the
+level-4 parameters. Measured on 2026-11-14 (dev runs; seeds 1 and 2 also in the gate):
+
+| inputs (revised annotation files) | outline threshold chosen by the tuning | worst annotated field / SOP limit | `--qc none` | full solution | `l6_reference` |
+|---|---|---|---|---|---|
+| level 7, seed 1 | 0.12 | 0.76 | 0.544 | 1.000 | 0.350 |
+| level 7, seed 2 | 0.12 | 0.33 | 0.544 | 1.000 | 0.350 |
+| level 7, seed 3 | 0.12 | 0.54 | 0.669 | 1.000 | 0.350 |
+| level 7, seed 10 | 0.12 | 0.79 | 0.581 | 1.000 | 0.350 |
+
+All four are under 0.75, so the attack has its level-4 ceiling again and the task card no longer carries
+an exception. Seed 1 reproduces the level-4 numbers exactly (0.12, 0.76, 0.544).
+
+History, because it says something about levels 4 and 6 too. In the first version the first gate run of
+seed 1 failed on exactly this check (0.825 against 0.75; record in
+`<scratch>/hcs_l7_check/first_gate_run_s0001_l7_ceiling_0.75.json`) and I had raised the ceiling to 0.85.
+What I measured then (dev runs, 2026-11-12, first-version annotation files unless the row says level 4):
 
 | inputs | outline threshold of the voting step | how it was set | worst annotated field / SOP limit | `--qc none` | full solution |
 |---|---|---|---|---|---|
-| level 7, seed 1 | 0.15 | chosen by the tuning | 0.25 | 0.825 | 1.000 |
-| level 7, seed 1 | 0.12 | forced | 0.31 | 0.544 | 1.000 |
-| level 7, seed 2 | 0.12 | chosen by the tuning | 0.29 | 0.544 | 1.000 |
-| level 7, seed 10 | 0.15 | chosen by the tuning | 0.50 | 0.825 | 1.000 |
+| level 7 first version, seed 1 | 0.15 | chosen by the tuning | 0.25 | 0.825 | 1.000 |
+| level 7 first version, seed 1 | 0.12 | forced | 0.31 | 0.544 | 1.000 |
+| level 7 first version, seed 2 | 0.12 | chosen by the tuning | 0.29 | 0.544 | 1.000 |
+| level 7 first version, seed 10 | 0.15 | chosen by the tuning | 0.50 | 0.825 | 1.000 |
 | level 4, seed 1 | 0.12 | chosen by the tuning (first of a tie) | 0.76 | 0.544 | 1.000 |
 | level 4, seed 1 | 0.15 | forced | 0.76 | 0.825 | 1.000 |
 
@@ -773,37 +858,53 @@ With the threshold at 0.15 the voting step finds no nucleus in any of the five o
 low. In the first case the wells drop out of the marker fit by themselves and enter the count fit with
 zero cells: the marker IC50s stay right (largest error 0.03 log10), one GI50 is 1.4 log10 units low, and
 the submission loses the QC flags (0.05) and 0.125 of the count component. In the second case both
-potencies of the affected compounds are pulled down by more than a log10 unit, as the level-3 design
-intended. Which case occurs is decided by a parameter that both settings of the tuning grid satisfy, and
-at level 7 the annotated images are different, so the tuning lands on the other side for some seeds.
+potencies of the affected compounds are pulled down, as the level-3 design intended.
 
-This is a property of the level-4 weights and of the level-4 task as well (last row: same score on the
-level-4 inputs), not of the new decision point. I did not change weights or tolerances (the spec forbids
-it). I raised the ceiling of this one attack to 0.85 at level 7 and wrote the reason into its entry of the
-task card. The submission stays under the pass line (0.9) by 0.075 instead of 0.15. If that margin is not
-acceptable, the consequence is that seeds whose tuning picks 0.15 (1 and 10 of the four I ran) have no
-level 7 under the present scorer, and that the level-4 ceiling holds through a tie-break.
+What remains true after the revision: on the level-4 fields of seed 1 both thresholds are equally good
+(0.76 of the limit), the reference tuning takes the first, and a counting procedure that finds nothing
+in an out-of-focus field, combined with no focus QC, scores 0.825. Measured with the threshold forced to
+0.15 on the level-4 inputs (2026-11-12) and on the revised level-7 task (2026-11-14) of seed 1; the full
+solution with that threshold scores 1.000 on both. Level 6 has the images and annotation files of level
+4. That is under the pass line by 0.075 and it is a property of the level-4 weights (QC flags 0.05, count
+potency 0.20), not of level 7. The battery does not contain that submission any more; I list it under
+the limitations.
 
 ## Levels 1-6 after the change
 
 `__init__.py` checks `level == 7` before the existing `level >= 4` branch; `level4.generate_l4` has one
 more optional argument. Levels 1-6 do not import `l7.py` (checked: importing the family loads neither
-`l7` nor `level4`). With the final code, regenerated into a scratch directory with `--no-validate` and
-compared with `diff -r`, nothing ignored:
+`l7` nor `level4`). The revision of 2026-11-14 touched `l7.py` only. With the final code, regenerated
+into a scratch directory with `--no-validate` and compared with `diff -r`, nothing ignored (2026-11-14):
 
-| task | files | result |
+| comparison | files | result |
 |---|---|---|
-| `hcs-dose-response-s0001-l3` | 211 | no difference |
-| `hcs-dose-response-s0001-l4` | 219 | no difference |
-| `hcs-dose-response-s0001-l6` | 219 | no difference |
-| `hcs-dose-response-s0002-l6` | 219 | no difference |
-| `hcs-dose-response-s0001-l7` (after the gate run, to show that the gated task is what the final code writes) | 220 | no difference |
+| `hcs-dose-response-s0001-l4` regenerated against `tasks/` | 219 | no difference |
+| `hcs-dose-response-s0001-l6` regenerated against `tasks/` | 219 | no difference |
+| `hcs-dose-response-s0001-l7` regenerated after its gate against `tasks/` (the gated task is what the final code writes) | 220 | no difference |
+| `hcs-dose-response-s0002-l7` regenerated after its gate against `tasks/` | 220 | no difference |
 
-Levels 1 and 2 have no task directory in `tasks/` to compare with; their code path is that of level 3.
-The agent image of both level-7 tasks was derived from `alegen-hcs-dose-response-s0001-l4-agent:local`
-(`environment/Dockerfile` is byte-identical to that of levels 3-6).
+The revised level-7 tasks in `tasks/` against the first version (sha256 manifests of the first version taken
+before anything was changed, `<scratch>/hcs_l7_check/prev_l7/`) and against level 6 of the same seed
+(`tasks/hcs-dose-response-s0001-l6`; `tasks/hcs-dose-response-s0002-l6` as the maintainer's gate of
+2026-11-14 wrote it), seeds 1 / 2:
 
-One slip of mine: while scoring dev runs on the host I ran `tests/score.py` of
+| what | seed 1 | seed 2 |
+|---|---|---|
+| files identical to the first version | 210 of 220 | 210 of 220 |
+| images identical to the first version | 192 of 192 | 192 of 192 |
+| files with other content | `README.md`, `tests/reference/truth.json` | `README.md`, `tests/reference/truth.json` |
+| annotation files, first version -> revised | A06 A11 A12 C12 D10 E05 G07 H12 -> A01 B06 D08 E03 F01 H01 H02 H07 | A08 A12 C10 D01 D12 G03 G10 H12 -> A01 B03 B10 E01 E12 F03 H01 H05 |
+| each level-7 annotation file byte-identical to the level-6 file of the turned name (e.g. level-7 `H01.tsv` = level-6 `A12.tsv`) | 8 of 8 | 8 of 8 |
+| level-6 images found byte-identical under the turned name | 192 of 192 | 192 of 192 |
+| layout, SOP, notes, instruction, Dockerfile, the three reference frames identical to level 6 | 8 of 8 | 8 of 8 |
+
+2026-11-12, first version: `hcs-dose-response-s0001-l3` (211 files), `-s0001-l4`, `-s0001-l6` and
+`-s0002-l6` (219 files each) regenerated without a difference. Levels 1 and 2 have no task directory in
+`tasks/` to compare with; their code path is that of level 3. The agent image of both level-7 tasks is
+derived from `alegen-hcs-dose-response-s0001-l4-agent:local` (`environment/Dockerfile` is byte-identical
+to that of levels 3-6).
+
+One slip of mine on 2026-11-12: while scoring dev runs on the host I ran `tests/score.py` of
 `tasks/hcs-dose-response-s0001-l4` in place, which left a `tests/__pycache__/_scoring.cpython-313.pyc`
 there from 22:11 to 22:33. I removed it; the directory is byte-identical to a fresh level-4 build again. A
 verifier image built from that directory in those 22 minutes would contain the stray file (it is not read by
@@ -811,23 +912,17 @@ the Python 3.12 of the image).
 
 ## Known limitations and things I am unsure about (level 7)
 
-- **No agent pilot.** Whether a model looks at the controls is untested.
-- **The annotated fields lost their design.** At level 4 the eight fields were chosen to cover dense and
-  sparse untreated fields, fragment-rich fields and fields with enlarged nuclei, and the level-4 notes
-  measured that meeting the criterion on them predicts the other wells. At level 7 the names are the same
-  and the images are whatever lies opposite. Seed 1: two vehicle wells, two reference wells, four wells at
-  low or intermediate concentration (51-119 cells); no fragment-rich field and no field with enlarged
-  nuclei. Seed 2: four vehicle wells, one reference well, three wells at low concentration (63-123 cells);
-  again nothing fragment-rich or enlarged. On seeds 1, 2, 3 and 10 the reference solution has every well
-  without annotation inside the tolerance, and the second solution 96.4% on seed 1 (seed 2: the probe scored
-  1.000 in the gate, so at least 85%; the fraction was not recorded); that is four seeds for one method and
-  two for the other, not a property of the generator. A procedure that fails on
-  enlarged nuclei could pass the criterion on such a seed and fail the hidden wells.
-- **The manual counts are themselves a hint.** A field named as a top concentration with the cell number of
-  an untreated well contradicts the layout. This is evidence in the data, not text, and I left it in.
-- **Rejection rate.** About one seed in ten has no level 7 (see above); another 19% get one replaced
-  annotated field. The thresholds of the check (half of the reference wells, four vehicle wells, factor
-  1.3, five series) are mine; seed 2 passes the vehicle criterion at exactly four.
+- **Model runs.** I ran none. The maintainer's report on the first version is quoted at the top of this
+  section; the revised tasks have not been run by a model as far as I know.
+- **The manual counts are a second route to the decision point** (see "How it is discovered"): eight
+  files whose names mean something else in the layout than what they hold, three of them per seed with
+  fewer than half the cells of an untreated field. This is evidence in the data and follows from the
+  decision that the lab counted the same physical fields. It makes the turn easier to notice than in the
+  first version for an analyst who compares the manual counts with the layout; whether a model does that
+  is untested.
+- **Rejection rate.** About one seed in ten has no level 7 (see above). The thresholds of the check (half
+  of the reference wells, four vehicle wells, factor 1.3, five series) are mine; seed 2 passes the vehicle
+  criterion at exactly four. The check does not use the annotated fields.
 - **A reference inhibitor that "did not work" is a competing explanation** for reference wells at vehicle
   level. The generator requires at least four off vehicle wells in addition, which that explanation does
   not cover, but an analyst may still stop at it. `controls_swapped_only` is the nearest thing in the
@@ -842,7 +937,10 @@ the Python 3.12 of the image).
 - **`task.toml` says "same inputs and planted truth as level 7" and `derived_from = ...-l7`.** That text
   comes from `descaffold.apply`, which treats the level-7 build as its own source; the same happens for
   the other two families and I did not change the core.
-- **`naive_no_focus_qc` is 0.075 under the pass line on seed 1** (see the section on the raised ceiling).
-  Ignoring the focus QC alone does not pass, but the margin rule of AUTHORING.md is not met for it.
-- **Validated on seeds 1 and 2 only**; seeds 3 and 10 were run by hand with the reference solution and
-  `l6_reference`.
+- **Focus QC is enforced through a tie-break** (levels 4, 6 and 7 alike; see the section on
+  `naive_no_focus_qc`). With the outline threshold 0.15, which meets the SOP criterion on the annotated
+  fields of seed 1 as well as 0.12 does, a submission without focus QC scores 0.825 instead of 0.544. It
+  does not pass, but it is nearer to the pass line than the 0.15 margin of AUTHORING.md. Not in the
+  battery; not fixable without touching the level-4 weights.
+- **Gated on seeds 1 and 2 only**; seeds 3 and 10 were run by hand with the reference solution, its
+  variant without focus QC and `l6_reference`. The second solution was not run on seeds 3 and 10.
